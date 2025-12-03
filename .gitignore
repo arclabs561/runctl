@@ -1,0 +1,44 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config (may contain secrets)
+.trainctl.toml
+*.toml.local
+
+# Logs
+*.log
+logs/
+
+# Checkpoints (large files)
+checkpoints/
+*.ckpt
+*.pth
+*.pt
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Test artifacts
+test-results/
+coverage/

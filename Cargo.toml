@@ -1,0 +1,77 @@
+[package]
+name = "trainctl"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <you@example.com>"]
+description = "Modern training orchestration CLI for ML workloads"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "trainctl"
+path = "src/main.rs"
+
+[lib]
+name = "trainctl"
+path = "src/lib.rs"
+
+[dependencies]
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json"] }
+
+# AWS SDK
+aws-sdk-ec2 = "1.0"
+aws-sdk-ssm = "1.0"
+aws-sdk-s3 = "1.0"
+aws-config = "1.0"
+
+# Regex for pod ID extraction
+regex = "1.10"
+
+# Utilities
+anyhow = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+pathdiff = "0.2"
+notify = "6.1"
+indicatif = { version = "0.17", features = ["rayon"] }
+console = "0.15"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# TUI
+ratatui = "0.27"
+crossterm = "0.28"
+tui-textarea = "0.4"
+comfy-table = "7.1"
+
+# Process management
+which = "5.0"
+duct = "0.13"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+mockito = "1.2"
+tokio-test = "0.4"
+
+[features]
+default = []
+e2e = []  # Enable end-to-end tests that require AWS credentials
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+

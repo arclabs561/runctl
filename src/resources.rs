@@ -1,0 +1,1529 @@
+use anyhow::{Context, Result};
+use aws_config::BehaviorVersion;
+use aws_sdk_ec2::Client as Ec2Client;
+use clap::Subcommand;
+use crate::config::Config;
+use crate::checkpoint;
+use crate::utils::{format_runtime, calculate_accumulated_cost, is_old_instance};
+use std::process::Command;
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use chrono::{DateTime, TimeZone, Utc};
+use console::{style, Style};
+use comfy_table::{Table, Cell, presets::UTF8_FULL};
+
+#[derive(Subcommand, Clone)]
+pub enum ResourceCommands {
+    /// List all running resources (AWS, RunPod, local)
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        detailed: bool,
+        /// Filter by platform (aws, runpod, local, all)
+        #[arg(long, default_value = "all")]
+        platform: String,
+        /// Output format (table, compact, detailed)
+        #[arg(long, default_value = "compact")]
+        format: String,
+        /// Filter by state (running, stopped, terminated, all)
+        #[arg(long, default_value = "running")]
+        filter: String,
+        /// Sort by field (cost, age, type, state)
+        #[arg(long)]
+        sort: Option<String>,
+        /// Limit number of results
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Show terminated instances (default: hidden)
+        #[arg(long)]
+        show_terminated: bool,
+        /// Interactive TUI mode
+        #[arg(short, long)]
+        interactive: bool,
+        /// Watch mode (auto-refresh)
+        #[arg(short, long)]
+        watch: bool,
+        /// Refresh interval for watch mode (seconds)
+        #[arg(long, default_value = "5")]
+        interval: u64,
+        /// Export format (csv, html, json)
+        #[arg(long)]
+        export: Option<String>,
+        /// Export output file
+        #[arg(long)]
+        export_file: Option<String>,
+    },
+    /// Show resource summary and costs
+    Summary,
+    /// Cleanup zombie/orphaned resources
+    Cleanup {
+        /// Dry run (don't actually delete)
+        #[arg(long)]
+        dry_run: bool,
+        /// Force cleanup (skip confirmation)
+        #[arg(short, long)]
+        force: bool,
+    },
+    /// Show resource insights and recommendations
+    Insights,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ResourceSummary {
+    pub aws_instances: Vec<AwsInstance>,
+    pub runpod_pods: Vec<RunPodPod>,
+    pub local_processes: Vec<LocalProcess>,
+    pub total_cost_estimate: f64,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AwsInstance {
+    pub instance_id: String,
+    pub instance_type: String,
+    pub state: String,
+    pub launch_time: Option<DateTime<Utc>>,
+    pub tags: Vec<(String, String)>,
+    pub cost_per_hour: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RunPodPod {
+    pub pod_id: String,
+    pub name: String,
+    pub status: String,
+    pub gpu_type: String,
+    pub created_at: Option<DateTime<Utc>>,
+    pub cost_per_hour: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LocalProcess {
+    pub pid: u32,
+    pub command: String,
+    pub started: Option<DateTime<Utc>>,
+    pub cpu_percent: f32,
+    pub memory_mb: f32,
+}
+
+pub async fn handle_command(cmd: ResourceCommands, config: &Config, output_format: &str) -> Result<()> {
+    match cmd {
+        ResourceCommands::List { 
+            detailed, 
+            platform, 
+            format,
+            filter,
+            sort,
+            limit,
+            show_terminated,
+            interactive,
+            watch,
+            interval,
+            export,
+            export_file,
+        } => {
+            if interactive {
+                list_resources_interactive(config, &platform, &filter, sort.as_deref()).await
+            } else if watch {
+                list_resources_watch(config, &platform, &filter, sort.as_deref(), interval).await
+            } else {
+                list_resources(detailed, &platform, config, output_format, &format, &filter, sort.as_deref(), limit, show_terminated, export.as_deref(), export_file.as_deref()).await
+            }
+        }
+        ResourceCommands::Summary => {
+            show_summary(config, output_format).await
+        }
+        ResourceCommands::Cleanup { dry_run, force } => {
+            cleanup_zombies(dry_run, force, config).await
+        }
+        ResourceCommands::Insights => {
+            show_insights(config, output_format).await
+        }
+    }
+}
+
+pub async fn show_quick_status(_detailed: bool, config: &Config, output_format: &str) -> Result<()> {
+    if output_format == "json" {
+        let summary = get_resource_summary_json(config).await?;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        return Ok(());
+    }
+
+    // Text output with better formatting
+    let header_style = Style::new().bold().cyan();
+    println!("{}", header_style.apply_to("=".repeat(80)));
+    println!("{}", header_style.apply_to("trainctl Status"));
+    println!("{}", header_style.apply_to("=".repeat(80)));
+    
+    // Quick resource summary
+    println!("\n{}", style("📊 Resources:").bold());
+    show_summary(config, "text").await?;
+    
+    // Recent checkpoints
+    println!("\n{}", style("💾 Recent Checkpoints:").bold());
+    if let Some(checkpoint_dir) = config.local.as_ref().map(|c| &c.checkpoint_dir) {
+        if checkpoint_dir.exists() {
+            let checkpoints = checkpoint::get_checkpoint_paths(checkpoint_dir).await?;
+            let recent: Vec<_> = checkpoints.into_iter().take(5).collect();
+            if recent.is_empty() {
+                println!("  No checkpoints found");
+            } else {
+                for cp in recent {
+                    println!("  {}", cp.display());
+                }
+            }
+        } else {
+            println!("  Checkpoint directory not found: {}", checkpoint_dir.display());
+        }
+    } else {
+        println!("  No checkpoint directory configured");
+    }
+    
+    Ok(())
+}
+
+async fn get_resource_summary_json(config: &Config) -> Result<serde_json::Value> {
+    let aws_instances = list_aws_instances_json(config).await?;
+    let runpod_pods = list_runpod_pods_json(config).await?;
+    let local_processes = list_local_processes_json().await?;
+    
+    Ok(serde_json::json!({
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "aws": {
+            "instances": aws_instances,
+        },
+        "runpod": {
+            "pods": runpod_pods,
+        },
+        "local": {
+            "processes": local_processes,
+        },
+    }))
+}
+
+async fn list_aws_instances_json(_config: &Config) -> Result<Vec<serde_json::Value>> {
+    let mut instances = Vec::new();
+    let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Ec2Client::new(&aws_config);
+    
+    let response = client
+        .describe_instances()
+        .send()
+        .await
+        .context("Failed to list EC2 instances")?;
+    
+    let reservations = response.reservations();
+    for reservation in reservations {
+        for instance in reservation.instances() {
+            let state_str = instance.state()
+                .and_then(|s| s.name())
+                .map(|s| format!("{}", s))
+                .unwrap_or_else(|| "unknown".to_string());
+            let instance_type_str = instance.instance_type()
+                .map(|t| format!("{}", t))
+                .unwrap_or_else(|| "unknown".to_string());
+            let launch_time = instance.launch_time()
+                .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single())
+                .map(|dt| dt.to_rfc3339());
+            
+            let cost_per_hour = estimate_instance_cost(&instance_type_str);
+            
+            let mut tags_json = serde_json::Map::new();
+            let tags = instance.tags();
+            for tag in tags {
+                if let (Some(key), Some(value)) = (tag.key(), tag.value()) {
+                    tags_json.insert(key.to_string(), serde_json::Value::String(value.to_string()));
+                }
+            }
+            
+            let is_spot = instance.spot_instance_request_id().is_some();
+            let spot_request_id = instance.spot_instance_request_id().map(|s| s.to_string());
+            let public_ip = instance.public_ip_address().map(|s| s.to_string());
+            let private_ip = instance.private_ip_address().map(|s| s.to_string());
+            let launch_time_dt = instance.launch_time()
+                .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single());
+            let accumulated_cost = if state_str == "running" {
+                calculate_accumulated_cost(cost_per_hour, launch_time_dt)
+            } else {
+                0.0
+            };
+            let runtime = format_runtime(launch_time_dt);
+            let is_old = is_old_instance(launch_time_dt, 24);
+            
+            instances.push(serde_json::json!({
+                "instance_id": instance.instance_id().unwrap_or("unknown"),
+                "instance_type": instance_type_str,
+                "state": state_str,
+                "launch_time": launch_time,
+                "runtime": runtime,
+                "cost_per_hour": cost_per_hour,
+                "accumulated_cost": accumulated_cost,
+                "is_spot": is_spot,
+                "spot_request_id": spot_request_id,
+                "public_ip": public_ip,
+                "private_ip": private_ip,
+                "is_old": is_old && state_str == "running",
+                "tags": tags_json,
+            }));
+        }
+    }
+    
+    Ok(instances)
+}
+
+async fn list_runpod_pods_json(_config: &Config) -> Result<Vec<serde_json::Value>> {
+    let mut pods = Vec::new();
+    
+    if which::which("runpodctl").is_err() {
+        return Ok(pods);
+    }
+    
+    let output = Command::new("runpodctl")
+        .args(&["get", "pod"])
+        .output()
+        .context("Failed to run runpodctl")?;
+    
+    if !output.status.success() {
+        return Ok(pods);
+    }
+    
+    // Parse runpodctl output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        // Skip empty lines, headers, and help text
+        if trimmed.is_empty() 
+            || trimmed.starts_with("NAME") 
+            || trimmed.starts_with("ID")
+            || trimmed.contains("Available Commands")
+            || trimmed.contains("Usage:")
+            || trimmed.contains("Flags:")
+            || trimmed.contains("Use \"runpodctl") {
+            continue;
+        }
+        
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 2 {
+            pods.push(serde_json::json!({
+                "id": parts[0],
+                "status": parts.get(1).unwrap_or(&""),
+                "name": parts.get(2).unwrap_or(&""),
+            }));
+        }
+    }
+    
+    Ok(pods)
+}
+
+async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
+    let mut processes = Vec::new();
+    
+    let output = Command::new("ps")
+        .arg("aux")
+        .output()
+        .context("Failed to run ps")?;
+    
+    let current_pid = std::process::id().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 11 {
+            continue;
+        }
+        
+        // Skip trainctl commands themselves
+        if line.contains("trainctl") {
+            continue;
+        }
+        
+        // Skip the current process
+        if parts[1] == current_pid {
+            continue;
+        }
+        
+        let cmd = parts[10..].join(" ");
+        
+        // Filter out non-training processes
+        if cmd.contains("ripgrep") 
+            || cmd.contains("mypy") 
+            || cmd.contains("lsp_server")
+            || cmd.contains("Cursor.app")
+            || cmd.contains("zsh") && !cmd.contains(".py")
+            || cmd.contains("ps aux")
+            || cmd.contains("runpodctl") {
+            continue;
+        }
+        
+        // Look for actual training scripts
+        let is_training = (cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch") || cmd.contains("training"))) ||
+                          (cmd.contains("python") && cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch")));
+        
+        if is_training {
+            processes.push(serde_json::json!({
+                "pid": parts[1],
+                "cpu": parts[2],
+                "mem": parts[3],
+                "command": cmd,
+            }));
+        }
+    }
+    
+    Ok(processes)
+}
+
+async fn list_resources(
+    detailed: bool, 
+    platform: &str, 
+    config: &Config, 
+    output_format: &str,
+    format: &str,
+    filter: &str,
+    sort: Option<&str>,
+    limit: Option<usize>,
+    show_terminated: bool,
+    export: Option<&str>,
+    export_file: Option<&str>,
+) -> Result<()> {
+    if output_format == "json" {
+        let summary = get_resource_summary_json(config).await?;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        return Ok(());
+    }
+    
+    // Handle exports
+    if let Some(export_format) = export {
+        return export_resources(config, platform, export_format, export_file).await;
+    }
+    
+    let header_style = Style::new().bold().cyan();
+    println!("{}", header_style.apply_to("=".repeat(80)));
+    println!("{}", header_style.apply_to("Resource Overview"));
+    println!("{}", header_style.apply_to("=".repeat(80)));
+    
+    if platform == "all" || platform == "aws" {
+        list_aws_instances(detailed, config, format, filter, sort, limit, show_terminated).await?;
+    }
+    
+    if platform == "all" || platform == "runpod" {
+        list_runpod_pods(detailed, config).await?;
+    }
+    
+    if platform == "all" || platform == "local" {
+        list_local_processes(detailed).await?;
+    }
+    
+    Ok(())
+}
+
+#[derive(Debug, Clone)]
+struct InstanceInfo {
+    id: String,
+    instance_type: String,
+    state: String,
+    launch_time: Option<DateTime<Utc>>,
+    cost_per_hour: f64,
+    accumulated_cost: f64,
+    runtime: Option<String>,
+    is_spot: bool,
+    spot_request_id: Option<String>,
+    public_ip: Option<String>,
+    private_ip: Option<String>,
+    tags: Vec<(String, String)>,
+    is_old: bool,
+}
+
+async fn list_aws_instances(
+    detailed: bool, 
+    _config: &Config,
+    format: &str,
+    filter: &str,
+    sort: Option<&str>,
+    limit: Option<usize>,
+    show_terminated: bool,
+) -> Result<()> {
+    let section_style = Style::new().bold().yellow();
+    println!("\n{}", section_style.apply_to("📦 AWS EC2 Instances:"));
+    println!("{}", "-".repeat(80));
+    
+    let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Ec2Client::new(&aws_config);
+    
+    let response = client
+        .describe_instances()
+        .send()
+        .await
+        .with_context(|| "Failed to list EC2 instances")?;
+    
+    // Collect all instance info
+    let mut instances: Vec<InstanceInfo> = Vec::new();
+    let mut total_instances = 0;
+    let mut running_instances = 0;
+    let mut total_hourly_cost = 0.0;
+    let mut total_accumulated_cost = 0.0;
+    let mut old_instances = 0;
+    
+    let reservations = response.reservations();
+    for reservation in reservations {
+        for instance in reservation.instances() {
+            total_instances += 1;
+            let state_str = instance.state()
+                .and_then(|s| s.name())
+                .map(|s| format!("{}", s))
+                .unwrap_or_else(|| "unknown".to_string());
+            
+            if state_str == "running" {
+                running_instances += 1;
+            }
+            
+            let instance_id = instance.instance_id().unwrap_or("unknown").to_string();
+            let instance_type_str = instance.instance_type()
+                .map(|t| format!("{}", t))
+                .unwrap_or_else(|| "unknown".to_string());
+            let launch_time = instance.launch_time()
+                .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single());
+            
+            let cost_per_hour = estimate_instance_cost(&instance_type_str);
+            let accumulated_cost = if state_str == "running" {
+                calculate_accumulated_cost(cost_per_hour, launch_time)
+            } else {
+                0.0
+            };
+            
+            if state_str == "running" {
+                total_hourly_cost += cost_per_hour;
+                total_accumulated_cost += accumulated_cost;
+            }
+            
+            // Check if spot instance
+            let is_spot = instance.spot_instance_request_id().is_some();
+            let spot_request_id = instance.spot_instance_request_id().map(|s| s.to_string());
+            
+            // Get IP addresses
+            let public_ip = instance.public_ip_address().map(|s| s.to_string());
+            let private_ip = instance.private_ip_address().map(|s| s.to_string());
+            
+            // Get tags
+            let mut tags = Vec::new();
+            for tag in instance.tags() {
+                if let (Some(key), Some(value)) = (tag.key(), tag.value()) {
+                    tags.push((key.to_string(), value.to_string()));
+                }
+            }
+            
+            // Check if old instance
+            let is_old = is_old_instance(launch_time, 24);
+            if is_old && state_str == "running" {
+                old_instances += 1;
+            }
+            
+            instances.push(InstanceInfo {
+                id: instance_id,
+                instance_type: instance_type_str,
+                state: state_str,
+                launch_time,
+                cost_per_hour,
+                accumulated_cost,
+                runtime: format_runtime(launch_time),
+                is_spot,
+                spot_request_id,
+                public_ip,
+                private_ip,
+                tags,
+                is_old,
+            });
+        }
+    }
+    
+    // Apply filtering
+    let mut filtered_instances: Vec<&InstanceInfo> = instances.iter().collect();
+    
+    // Filter by state
+    if filter != "all" {
+        filtered_instances.retain(|inst| {
+            if filter == "running" {
+                inst.state == "running"
+            } else if filter == "stopped" {
+                inst.state == "stopped"
+            } else if filter == "terminated" {
+                inst.state == "terminated"
+            } else {
+                true
+            }
+        });
+    }
+    
+    // Hide terminated by default unless explicitly requested
+    if !show_terminated && filter == "running" {
+        filtered_instances.retain(|inst| inst.state != "terminated");
+    }
+    
+    // Apply sorting
+    if let Some(sort_field) = sort {
+        match sort_field {
+            "cost" | "cost_per_hour" => {
+                filtered_instances.sort_by(|a, b| b.cost_per_hour.partial_cmp(&a.cost_per_hour).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            "age" | "runtime" => {
+                filtered_instances.sort_by(|a, b| {
+                    let a_runtime = a.launch_time.map(|t| t.timestamp()).unwrap_or(0);
+                    let b_runtime = b.launch_time.map(|t| t.timestamp()).unwrap_or(0);
+                    a_runtime.cmp(&b_runtime) // Oldest first
+                });
+            }
+            "type" | "instance_type" => {
+                filtered_instances.sort_by(|a, b| a.instance_type.cmp(&b.instance_type));
+            }
+            "state" => {
+                filtered_instances.sort_by(|a, b| a.state.cmp(&b.state));
+            }
+            "accumulated" | "total" => {
+                filtered_instances.sort_by(|a, b| b.accumulated_cost.partial_cmp(&a.accumulated_cost).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            _ => {}
+        }
+    }
+    
+    // Apply limit
+    if let Some(limit_val) = limit {
+        filtered_instances.truncate(limit_val);
+    }
+    
+    // Table format
+    if format == "table" {
+        return display_table_format(&filtered_instances, detailed).await;
+    }
+    
+    // Group by instance type for better display (compact format)
+    let mut grouped: HashMap<String, Vec<&InstanceInfo>> = HashMap::new();
+    for inst in &filtered_instances {
+        grouped.entry(inst.instance_type.clone()).or_insert_with(Vec::new).push(inst);
+    }
+    
+    // Sort instance types by cost
+    let mut type_keys: Vec<_> = grouped.keys().collect();
+    type_keys.sort();
+    
+    // Display grouped by type
+    for instance_type in type_keys {
+        let type_instances = &grouped[instance_type];
+        let running_count = type_instances.iter().filter(|i| i.state == "running").count();
+        let type_hourly_cost: f64 = type_instances.iter()
+            .filter(|i| i.state == "running")
+            .map(|i| i.cost_per_hour)
+            .sum();
+        let type_accumulated: f64 = type_instances.iter()
+            .filter(|i| i.state == "running")
+            .map(|i| i.accumulated_cost)
+            .sum();
+        
+        if detailed {
+            println!("\n  {} ({} running, ${:.4}/hr, ${:.2} total)",
+                style(instance_type).bold().cyan(),
+                running_count,
+                type_hourly_cost,
+                type_accumulated
+            );
+        } else {
+            println!("\n  {} ({} running, ${:.4}/hr)",
+                style(instance_type).bold().cyan(),
+                running_count,
+                type_hourly_cost
+            );
+        }
+        
+        for inst in type_instances {
+            let state_style = match inst.state.as_str() {
+                "running" => Style::new().green(),
+                "stopped" => Style::new().yellow(),
+                "terminated" => Style::new().red(),
+                _ => Style::new(),
+            };
+            
+            let spot_indicator = if inst.is_spot {
+                style(" [SPOT]").yellow()
+            } else {
+                style(" [ON-DEMAND]").dim()
+            };
+            
+            let old_warning_str = if inst.is_old && inst.state == "running" {
+                " ⚠️ >24h"
+            } else {
+                ""
+            };
+            
+            if detailed {
+                let old_warning_display = if !old_warning_str.is_empty() {
+                    style(old_warning_str).red().bold()
+                } else {
+                    style("")
+                };
+                println!("    {}  {}  {}  {}  {}",
+                    inst.id,
+                    state_style.apply_to(&inst.state),
+                    spot_indicator,
+                    inst.runtime.as_ref().map(|r| format!("runtime: {}", r)).unwrap_or_else(|| "N/A".to_string()),
+                    old_warning_display
+                );
+                
+                if let Some(public_ip) = &inst.public_ip {
+                    println!("      {} {}", style("Public IP:").dim(), public_ip);
+                }
+                if let Some(private_ip) = &inst.private_ip {
+                    println!("      {} {}", style("Private IP:").dim(), private_ip);
+                }
+                
+                let cost_style = if inst.cost_per_hour > 5.0 { Style::new().red() } else { Style::new() };
+                println!("      {} {}  {} {}",
+                    style("Cost/hour:").dim(),
+                    cost_style.apply_to(format!("${:.4}", inst.cost_per_hour)),
+                    style("Total:").dim(),
+                    style(format!("${:.2}", inst.accumulated_cost)).yellow()
+                );
+                
+                if !inst.tags.is_empty() {
+                    let tag_str: String = inst.tags.iter()
+                        .map(|(k, v)| format!("{}={}", k, v))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!("      {} {}", style("Tags:").dim(), style(tag_str).cyan());
+                }
+            } else {
+                let runtime_str = if inst.state == "running" {
+                    inst.runtime.as_ref().map(|r| format!("({})", r)).unwrap_or_else(|| "".to_string())
+                } else {
+                    String::new()
+                };
+                let cost_str = if inst.state == "running" {
+                    format!("${:.4}/hr (${:.2} total)", inst.cost_per_hour, inst.accumulated_cost)
+                } else {
+                    format!("${:.4}/hr", inst.cost_per_hour)
+                };
+                
+                // Build IP display for running instances
+                let ip_display = if inst.state == "running" {
+                    let mut parts = Vec::new();
+                    if let Some(public) = &inst.public_ip {
+                        parts.push(format!("pub:{}", public));
+                    }
+                    if let Some(private) = &inst.private_ip {
+                        parts.push(format!("priv:{}", private));
+                    }
+                    if !parts.is_empty() {
+                        format!(" [{}]", parts.join(", "))
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                };
+                
+                let old_warning_display = if !old_warning_str.is_empty() {
+                    style(old_warning_str).red().bold()
+                } else {
+                    style("")
+                };
+                println!("    {}  {}  {}  {}  {}{}  {}",
+                    inst.id,
+                    state_style.apply_to(&inst.state),
+                    spot_indicator,
+                    runtime_str,
+                    cost_str,
+                    ip_display,
+                    old_warning_display
+                );
+                
+                // Show key tags in summary
+                if !inst.tags.is_empty() {
+                    let key_tags: Vec<String> = inst.tags.iter()
+                        .filter(|(k, _)| k == "Name" || k == "project" || k == "trainctl")
+                        .take(2)
+                        .map(|(k, v)| format!("{}={}", k, v))
+                        .collect();
+                    if !key_tags.is_empty() {
+                        println!("      {}", style(key_tags.join(", ")).cyan());
+                    }
+                }
+            }
+        }
+    }
+    
+    // Summary
+    println!("\n{}", "─".repeat(80));
+    let total_style = Style::new().bold();
+    let running_style = if running_instances > 0 { Style::new().green() } else { Style::new() };
+    println!("  {} {} instances ({} running)", 
+        total_style.apply_to("Total:"), total_instances, 
+        running_style.apply_to(running_instances));
+    
+    if running_instances > 0 {
+        let cost_style = if total_hourly_cost > 10.0 { Style::new().red().bold() } else { Style::new().yellow() };
+        println!("  {} {}  {} {}",
+            style("Hourly cost:").dim(),
+            cost_style.apply_to(format!("${:.2}/hour", total_hourly_cost)),
+            style("Accumulated:").dim(),
+            style(format!("${:.2}", total_accumulated_cost)).yellow()
+        );
+        
+        // Project daily/weekly costs
+        let daily_cost = total_hourly_cost * 24.0;
+        let weekly_cost = daily_cost * 7.0;
+        println!("  {} {}  {} {}",
+            style("Daily projection:").dim(),
+            style(format!("${:.2}", daily_cost)).yellow(),
+            style("Weekly:").dim(),
+            style(format!("${:.2}", weekly_cost)).yellow()
+        );
+    }
+    
+    if old_instances > 0 {
+        println!("  {} {} instance(s) running >24h - consider terminating",
+            style("⚠️").red().bold(),
+            old_instances
+        );
+    }
+    
+    Ok(())
+}
+
+async fn list_runpod_pods(detailed: bool, _config: &Config) -> Result<()> {
+    println!("\n🚀 RunPod Pods:");
+    println!("{}", "-".repeat(80));
+    
+    // Check for runpodctl
+    if which::which("runpodctl").is_err() {
+        println!("  ⚠️  runpodctl not found. Install from: https://github.com/runpod/runpodctl");
+        return Ok(());
+    }
+    
+    let output = Command::new("runpodctl")
+        .args(&["get", "pod"])
+        .output()
+        .with_context(|| "Failed to execute runpodctl")?;
+    
+    if !output.status.success() {
+        // Check if it's just no pods or an actual error
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        
+        // If stderr contains help text, it means the command structure might be wrong
+        if stderr.contains("Available Commands") || stdout.contains("Available Commands") {
+            // Try alternative: maybe it's just empty
+            println!("  No pods found");
+            return Ok(());
+        }
+        
+        println!("  ⚠️  Failed to list pods: {}", stderr);
+        return Ok(());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    
+    if lines.is_empty() || (lines.len() == 1 && lines[0].trim().is_empty()) {
+        println!("  No pods found");
+        return Ok(());
+    }
+    
+    // Filter out header lines and help text
+    let mut found_pods = false;
+    for line in lines.iter() {
+        let trimmed = line.trim();
+        // Skip empty lines, headers, and help text
+        if trimmed.is_empty() 
+            || trimmed.starts_with("ID") && trimmed.contains("NAME")  // Header row
+            || trimmed.starts_with("NAME") && !trimmed.contains("ID")  // Alternative header
+            || trimmed.contains("Available Commands")
+            || trimmed.contains("Usage:")
+            || trimmed.contains("Flags:")
+            || trimmed.contains("Use \"runpodctl")
+            || trimmed == "---" {
+            continue;
+        }
+        
+        // Check if this looks like a pod row (has ID-like pattern)
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.is_empty() {
+            continue;
+        }
+        
+        // Pod IDs are typically alphanumeric, 10+ chars
+        let first_part = parts[0];
+        if first_part.len() >= 10 && first_part.chars().all(|c| c.is_alphanumeric() || c == '-') {
+            found_pods = true;
+            if detailed {
+                println!("  {}", line);
+            } else {
+                // Extract pod ID, name, and status
+                // Format: ID NAME GPU IMAGE STATUS
+                let pod_id = parts[0];
+                let pod_name = parts.get(1).unwrap_or(&"");
+                let pod_status = parts.last().unwrap_or(&"");
+                println!("  {}  {}  {}", pod_id, pod_name, pod_status);
+            }
+        }
+    }
+    
+    if !found_pods {
+        println!("  No pods found");
+    }
+    
+    Ok(())
+}
+
+async fn list_local_processes(detailed: bool) -> Result<()> {
+    println!("\n💻 Local Training Processes:");
+    println!("{}", "-".repeat(80));
+    
+    // Use ps to find training-related processes
+    let output = Command::new("ps")
+        .args(&["aux"])
+        .output()
+        .with_context(|| "Failed to execute ps")?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut found = false;
+    
+    // Get current process info to exclude train-ops itself
+    let current_pid = std::process::id().to_string();
+    
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 11 {
+            continue;
+        }
+        
+        // Skip trainctl commands themselves
+        if line.contains("trainctl") {
+            continue;
+        }
+        
+        // Skip the current process
+        if parts[1] == current_pid {
+            continue;
+        }
+        
+        // Extract command
+        let cmd = parts[10..].join(" ");
+        
+        // Filter out non-training processes
+        if cmd.contains("ripgrep") 
+            || cmd.contains("mypy") 
+            || cmd.contains("lsp_server")
+            || cmd.contains("Cursor.app")
+            || cmd.contains("zsh") && !cmd.contains(".py")
+            || cmd.contains("ps aux")
+            || cmd.contains("runpodctl") {
+            continue;
+        }
+        
+        // Look for actual training scripts: Python scripts with train/epoch keywords, or .py files
+        let is_training = (cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch") || cmd.contains("training"))) ||
+                          (cmd.contains("python") && cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch")));
+        
+        if is_training {
+            found = true;
+            if detailed {
+                println!("  {}", line);
+            } else {
+                println!("  PID: {}  CMD: {}", parts[1], cmd);
+            }
+        }
+    }
+    
+    if !found {
+        println!("  No training processes found");
+    }
+    
+    Ok(())
+}
+
+async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
+    if output_format == "json" {
+        let summary = get_resource_summary_json(_config).await?;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        return Ok(());
+    }
+    let mut summary = ResourceSummary {
+        aws_instances: Vec::new(),
+        runpod_pods: Vec::new(),
+        local_processes: Vec::new(),
+        total_cost_estimate: 0.0,
+        timestamp: Utc::now(),
+    };
+    
+    // Collect AWS instances
+    let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Ec2Client::new(&aws_config);
+    
+    if let Ok(response) = client.describe_instances().send().await {
+        let reservations = response.reservations();
+        for reservation in reservations {
+            let instances = reservation.instances();
+            for instance in instances {
+                let state = instance.state()
+                    .and_then(|s| s.name())
+                    .map(|s| s.as_str().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                
+                if state == "running" {
+                    let instance_id = instance.instance_id().unwrap_or("unknown").to_string();
+                    let instance_type = instance.instance_type()
+                        .map(|t| format!("{}", t))
+                        .unwrap_or_else(|| "unknown".to_string());
+                    let cost = estimate_instance_cost(&instance_type);
+                    summary.total_cost_estimate += cost;
+                    
+                    summary.aws_instances.push(AwsInstance {
+                        instance_id,
+                        instance_type,
+                        state,
+                        launch_time: instance.launch_time()
+                            .map(|t| Utc.timestamp_opt(t.secs(), 0).single())
+                            .flatten(),
+                        tags: Vec::new(),
+                        cost_per_hour: cost,
+                    });
+                }
+            }
+        }
+    }
+    
+    println!("{}", "=".repeat(80));
+    println!("Resource Summary");
+    println!("{}", "=".repeat(80));
+    println!("Timestamp: {}", summary.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+    println!();
+    println!("AWS Instances: {} running", summary.aws_instances.len());
+    println!("RunPod Pods: {}", summary.runpod_pods.len());
+    println!("Local Processes: {}", summary.local_processes.len());
+    println!();
+    
+    // Calculate accumulated costs and breakdowns
+    let mut total_accumulated = 0.0;
+    let mut type_breakdown: HashMap<String, (usize, f64, f64)> = HashMap::new();
+    
+    for inst in &summary.aws_instances {
+        let accumulated = if let Some(lt) = inst.launch_time {
+            calculate_accumulated_cost(inst.cost_per_hour, Some(lt))
+        } else {
+            0.0
+        };
+        total_accumulated += accumulated;
+        
+        let entry = type_breakdown.entry(inst.instance_type.clone()).or_insert((0, 0.0, 0.0));
+        entry.0 += 1;
+        entry.1 += inst.cost_per_hour;
+        entry.2 += accumulated;
+    }
+    
+    let cost_style = if summary.total_cost_estimate > 10.0 { Style::new().red().bold() } else { Style::new().yellow() };
+    println!("💰 {} {}  {} {}",
+        style("Hourly cost:").dim(),
+        cost_style.apply_to(format!("${:.2}/hour", summary.total_cost_estimate)),
+        style("Accumulated:").dim(),
+        style(format!("${:.2}", total_accumulated)).yellow()
+    );
+    
+    let daily_cost = summary.total_cost_estimate * 24.0;
+    let weekly_cost = daily_cost * 7.0;
+    println!("   {} {}  {} {}",
+        style("Daily projection:").dim(),
+        style(format!("${:.2}", daily_cost)).yellow(),
+        style("Weekly:").dim(),
+        style(format!("${:.2}", weekly_cost)).yellow()
+    );
+    println!();
+    
+    if !type_breakdown.is_empty() {
+        println!("Cost Breakdown by Instance Type:");
+        let mut type_keys: Vec<_> = type_breakdown.keys().collect();
+        type_keys.sort();
+        for instance_type in type_keys {
+            let (count, hourly, accumulated) = &type_breakdown[instance_type];
+            println!("  {}: {} instance(s), ${:.4}/hr, ${:.2} total",
+                style(instance_type).cyan(),
+                count,
+                hourly,
+                accumulated
+            );
+        }
+        println!();
+    }
+    
+    if !summary.aws_instances.is_empty() {
+        println!("Running AWS Instances:");
+        for inst in &summary.aws_instances {
+            let accumulated = if let Some(lt) = inst.launch_time {
+                calculate_accumulated_cost(inst.cost_per_hour, Some(lt))
+            } else {
+                0.0
+            };
+            println!("  {} ({}) - ${:.4}/hr (${:.2} total)",
+                inst.instance_id, inst.instance_type, inst.cost_per_hour, accumulated);
+        }
+    }
+    
+    Ok(())
+}
+
+async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result<()> {
+    println!("{}", "=".repeat(80));
+    println!("Zombie Resource Cleanup");
+    println!("{}", "=".repeat(80));
+    
+    if dry_run {
+        println!("[DRY RUN MODE - No resources will be deleted]");
+    }
+    
+    // Find orphaned AWS instances (running > 24 hours without tags)
+    let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Ec2Client::new(&aws_config);
+    
+    let response = client
+        .describe_instances()
+        .send()
+        .await
+        .with_context(|| "Failed to list instances")?;
+    
+    let mut zombies = Vec::new();
+    let cutoff = Utc::now() - chrono::Duration::hours(24);
+    
+    let reservations = response.reservations();
+    for reservation in reservations {
+        let instances = reservation.instances();
+        for instance in instances {
+            let state_str = instance.state()
+                .and_then(|s| s.name())
+                .map(|s| format!("{}", s))
+                .unwrap_or_else(|| "unknown".to_string());
+            if state_str != "running" {
+                continue;
+            }
+            
+            let launch_time = instance.launch_time()
+                .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single());
+            
+            if let Some(lt) = launch_time {
+                if lt < cutoff {
+                    // Check if it has trainctl tags
+                    let has_trainctl_tag = instance.tags()
+                        .iter().any(|t| {
+                            t.key().map(|k| k.contains("trainctl")).unwrap_or(false)
+                        });
+                    
+                    if !has_trainctl_tag {
+                        zombies.push(instance.instance_id().unwrap_or("unknown").to_string());
+                    }
+                }
+            }
+        }
+    }
+    
+    if zombies.is_empty() {
+        println!("✅ No zombie resources found");
+        return Ok(());
+    }
+    
+    println!("\nFound {} potential zombie instance(s):", zombies.len());
+    for id in &zombies {
+        println!("  - {}", id);
+    }
+    
+    if dry_run {
+        println!("\n[DRY RUN] Would terminate these instances");
+        return Ok(());
+    }
+    
+    if !force {
+        println!("\n⚠️  This will terminate {} instance(s). Continue? (y/N): ", zombies.len());
+        // In real implementation, would read from stdin
+        println!("  (Use --force to skip confirmation)");
+        return Ok(());
+    }
+    
+    // Terminate zombies
+    for id in &zombies {
+        client
+            .terminate_instances()
+            .instance_ids(id.as_str())
+            .send()
+            .await
+            .with_context(|| format!("Failed to terminate {}", id))?;
+        println!("  ✓ Terminated {}", id);
+    }
+    
+    println!("\n✅ Cleanup complete");
+    Ok(())
+}
+
+async fn show_insights(_config: &Config, output_format: &str) -> Result<()> {
+    if output_format == "json" {
+        // For JSON, return structured insights
+        let summary = get_resource_summary_json(_config).await?;
+        println!("{}", serde_json::to_string_pretty(&summary)?);
+        return Ok(());
+    }
+    println!("{}", "=".repeat(80));
+    println!("Resource Insights & Recommendations");
+    println!("{}", "=".repeat(80));
+    
+    // Analyze resources and provide recommendations
+    let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+    let client = Ec2Client::new(&aws_config);
+    
+    let response = client
+        .describe_instances()
+        .send()
+        .await
+        .with_context(|| "Failed to list instances")?;
+    
+    let mut running = 0;
+    let mut stopped = 0;
+    let mut total_cost = 0.0;
+    let mut old_instances = 0;
+    
+    let reservations = response.reservations();
+    for reservation in reservations {
+        let instances = reservation.instances();
+        for instance in instances {
+            let state_str = instance.state()
+                .and_then(|s| s.name())
+                .map(|s| format!("{}", s))
+                .unwrap_or_else(|| "unknown".to_string());
+            match state_str.as_str() {
+                "running" => {
+                    running += 1;
+                    let instance_type_str = instance.instance_type()
+                        .map(|t| format!("{}", t))
+                        .unwrap_or_else(|| "unknown".to_string());
+                    total_cost += estimate_instance_cost(&instance_type_str);
+                    
+                    // Check age
+                    if let Some(lt) = instance.launch_time()
+                        .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single()) {
+                        if lt < Utc::now() - chrono::Duration::hours(24) {
+                            old_instances += 1;
+                        }
+                    }
+                }
+                "stopped" => stopped += 1,
+                _ => {}
+            }
+        }
+    }
+    
+    println!("\n📊 Current State:");
+    println!("  Running instances: {}", running);
+    println!("  Stopped instances: {}", stopped);
+    println!("  Estimated hourly cost: ${:.2}", total_cost);
+    
+    println!("\n💡 Recommendations:");
+    
+    if old_instances > 0 {
+        println!("  ⚠️  {} instance(s) running > 24 hours - consider terminating", old_instances);
+    }
+    
+    if stopped > 0 {
+        println!("  💰 {} stopped instance(s) - terminate to avoid storage costs", stopped);
+    }
+    
+    if total_cost > 10.0 {
+        println!("  💸 High hourly cost (${:.2}/hr) - review instance types", total_cost);
+    }
+    
+    if running == 0 {
+        println!("  ✅ No running instances - all good!");
+    }
+    
+    println!("\n🔧 Actions:");
+    println!("  trainctl resources list --detailed    # See all resources");
+    println!("  trainctl resources cleanup --dry-run  # Preview cleanup");
+    println!("  trainctl resources cleanup --force    # Cleanup zombies");
+    
+    Ok(())
+}
+
+// Table format display
+async fn display_table_format(instances: &[&InstanceInfo], detailed: bool) -> Result<()> {
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    
+    if detailed {
+        table.set_header(vec![
+            "Instance ID", "State", "Type", "Runtime", "Spot", "Cost/hr", "Total", "Public IP", "Tags"
+        ]);
+        
+        for inst in instances {
+            let state_cell = match inst.state.as_str() {
+                "running" => Cell::new(&inst.state).fg(comfy_table::Color::Green),
+                "stopped" => Cell::new(&inst.state).fg(comfy_table::Color::Yellow),
+                "terminated" => Cell::new(&inst.state).fg(comfy_table::Color::Red),
+                _ => Cell::new(&inst.state),
+            };
+            
+            let runtime = inst.runtime.as_ref().map(|s| s.as_str()).unwrap_or("N/A");
+            let spot = if inst.is_spot { "SPOT" } else { "ON-DEMAND" };
+            let public_ip = inst.public_ip.as_ref().map(|s| s.as_str()).unwrap_or("-");
+            let tags: String = inst.tags.iter()
+                .take(2)
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ");
+            
+            table.add_row(vec![
+                Cell::new(&inst.id),
+                state_cell,
+                Cell::new(&inst.instance_type),
+                Cell::new(runtime),
+                Cell::new(spot),
+                Cell::new(&format!("${:.4}", inst.cost_per_hour)),
+                Cell::new(&format!("${:.2}", inst.accumulated_cost)),
+                Cell::new(public_ip),
+                Cell::new(&tags),
+            ]);
+        }
+    } else {
+        table.set_header(vec![
+            "Instance ID", "State", "Type", "Runtime", "Cost/hr", "Total", "IP"
+        ]);
+        
+        for inst in instances {
+            if inst.state != "running" {
+                continue; // Skip non-running in compact view
+            }
+            
+            let state_cell = Cell::new(&inst.state).fg(comfy_table::Color::Green);
+            let runtime = inst.runtime.as_ref().map(|s| s.as_str()).unwrap_or("N/A");
+            let ip = inst.public_ip.as_ref().map(|s| s.as_str()).unwrap_or("-");
+            
+            table.add_row(vec![
+                Cell::new(&inst.id),
+                state_cell,
+                Cell::new(&inst.instance_type),
+                Cell::new(runtime),
+                Cell::new(&format!("${:.4}", inst.cost_per_hour)),
+                Cell::new(&format!("${:.2}", inst.accumulated_cost)),
+                Cell::new(ip),
+            ]);
+        }
+    }
+    
+    println!("{}", table);
+    Ok(())
+}
+
+// Interactive TUI mode
+async fn list_resources_interactive(
+    config: &Config,
+    _platform: &str,
+    filter: &str,
+    sort: Option<&str>,
+) -> Result<()> {
+    // For now, use ratatui for interactive mode
+    // This is a placeholder - full implementation would use ratatui
+    println!("Interactive mode - use arrow keys to navigate, 't' to terminate, 'q' to quit");
+    println!("(Full interactive TUI implementation in progress)");
+    
+    // Fall back to table format for now
+    list_resources(
+        false,
+        _platform,
+        config,
+        "text",
+        "table",
+        filter,
+        sort,
+        None,
+        false,
+        None,
+        None,
+    ).await
+}
+
+// Watch mode - auto-refresh
+async fn list_resources_watch(
+    config: &Config,
+    platform: &str,
+    filter: &str,
+    sort: Option<&str>,
+    interval: u64,
+) -> Result<()> {
+    use std::io::{self, Write};
+    
+    loop {
+        // Clear screen (ANSI escape code)
+        print!("\x1B[2J\x1B[1;1H");
+        io::stdout().flush()?;
+        
+        println!("🔄 Watching resources (refreshing every {}s) - Press Ctrl+C to stop", interval);
+        println!("Last update: {}\n", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
+        
+        list_resources(
+            false,
+            platform,
+            config,
+            "text",
+            "table",
+            filter,
+            sort,
+            None,
+            false,
+            None,
+            None,
+        ).await?;
+        
+        tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+    }
+}
+
+// Export resources
+async fn export_resources(
+    config: &Config,
+    _platform: &str,
+    format: &str,
+    file: Option<&str>,
+) -> Result<()> {
+    let summary = get_resource_summary_json(config).await?;
+    
+    match format {
+        "csv" => {
+            let csv = generate_csv(&summary)?;
+            if let Some(path) = file {
+                std::fs::write(path, csv)?;
+                println!("✅ Exported to {}", path);
+            } else {
+                print!("{}", csv);
+            }
+        }
+        "html" => {
+            let html = generate_html(&summary)?;
+            if let Some(path) = file {
+                std::fs::write(path, html)?;
+                println!("✅ Exported to {}", path);
+            } else {
+                print!("{}", html);
+            }
+        }
+        _ => {
+            anyhow::bail!("Unsupported export format: {}. Use 'csv' or 'html'", format);
+        }
+    }
+    
+    Ok(())
+}
+
+fn generate_csv(summary: &serde_json::Value) -> Result<String> {
+    let mut csv = String::from("Instance ID,Type,State,Cost/hr,Accumulated,Public IP,Private IP,Is Spot,Runtime\n");
+    
+    if let Some(aws) = summary.get("aws") {
+        if let Some(instances) = aws.get("instances").and_then(|v| v.as_array()) {
+            for inst in instances {
+                let id = inst.get("instance_id").and_then(|v| v.as_str()).unwrap_or("");
+                let inst_type = inst.get("instance_type").and_then(|v| v.as_str()).unwrap_or("");
+                let state = inst.get("state").and_then(|v| v.as_str()).unwrap_or("");
+                let cost = inst.get("cost_per_hour").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let total = inst.get("accumulated_cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let public_ip = inst.get("public_ip").and_then(|v| v.as_str()).unwrap_or("");
+                let private_ip = inst.get("private_ip").and_then(|v| v.as_str()).unwrap_or("");
+                let is_spot = inst.get("is_spot").and_then(|v| v.as_bool()).unwrap_or(false);
+                let runtime = inst.get("runtime").and_then(|v| v.as_str()).unwrap_or("");
+                
+                csv.push_str(&format!(
+                    "{},{},{},{:.4},{:.2},{},{},{},{}\n",
+                    id, inst_type, state, cost, total, public_ip, private_ip, is_spot, runtime
+                ));
+            }
+        }
+    }
+    
+    Ok(csv)
+}
+
+fn generate_html(summary: &serde_json::Value) -> Result<String> {
+    let mut html = String::from(r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>trainctl Resource Report</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .running { color: green; }
+        .stopped { color: orange; }
+        .terminated { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Resource Report</h1>
+    <p>Generated: "#);
+    
+    html.push_str(&Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string());
+    html.push_str(r#"</p>
+    <table>
+        <tr>
+            <th>Instance ID</th>
+            <th>Type</th>
+            <th>State</th>
+            <th>Cost/hr</th>
+            <th>Total</th>
+            <th>Public IP</th>
+            <th>Runtime</th>
+        </tr>"#);
+    
+    if let Some(aws) = summary.get("aws") {
+        if let Some(instances) = aws.get("instances").and_then(|v| v.as_array()) {
+            for inst in instances {
+                let id = inst.get("instance_id").and_then(|v| v.as_str()).unwrap_or("");
+                let inst_type = inst.get("instance_type").and_then(|v| v.as_str()).unwrap_or("");
+                let state = inst.get("state").and_then(|v| v.as_str()).unwrap_or("");
+                let state_class = match state {
+                    "running" => "running",
+                    "stopped" => "stopped",
+                    "terminated" => "terminated",
+                    _ => "",
+                };
+                let cost = inst.get("cost_per_hour").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let total = inst.get("accumulated_cost").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let public_ip = inst.get("public_ip").and_then(|v| v.as_str()).unwrap_or("");
+                let runtime = inst.get("runtime").and_then(|v| v.as_str()).unwrap_or("");
+                
+                html.push_str(&format!(
+                    r#"<tr>
+            <td>{}</td>
+            <td>{}</td>
+            <td class="{}">{}</td>
+            <td>${:.4}</td>
+            <td>${:.2}</td>
+            <td>{}</td>
+            <td>{}</td>
+        </tr>"#,
+                    id, inst_type, state_class, state, cost, total, public_ip, runtime
+                ));
+            }
+        }
+    }
+    
+    html.push_str(r#"
+    </table>
+</body>
+</html>"#);
+    
+    Ok(html)
+}
+
+fn estimate_instance_cost(instance_type: &str) -> f64 {
+    // Simplified cost estimation (would use AWS Pricing API in production)
+    // These are approximate on-demand prices per hour
+    match instance_type {
+        t if t.starts_with("t3.") => 0.0416,  // t3.medium ~$0.0416/hr
+        t if t.starts_with("t4g.") => 0.0336,
+        t if t.starts_with("m5.") => 0.192,
+        t if t.starts_with("c5.") => 0.17,
+        t if t.starts_with("g4dn.") => 0.526,  // GPU instance
+        t if t.starts_with("p3.") => 3.06,     // GPU instance
+        _ => 0.1,  // Default estimate
+    }
+}
+
