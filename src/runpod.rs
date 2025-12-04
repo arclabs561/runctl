@@ -58,7 +58,7 @@ async fn create_pod(
     }
 
     let pod_name = name.unwrap_or_else(|| {
-        format!("trainctl-{}", uuid::Uuid::new_v4().to_string()[..8].to_string())
+        format!("trainctl-{}", &uuid::Uuid::new_v4().to_string()[..8])
     });
 
     let runpod_config = config.runpod.as_ref()
@@ -68,7 +68,7 @@ async fn create_pod(
 
     // Create pod using runpodctl
     let mut cmd = std::process::Command::new("runpodctl");
-    cmd.args(&["create", "pod"]);
+    cmd.args(["create", "pod"]);
     cmd.arg("--name").arg(&pod_name);
     cmd.arg("--imageName").arg(image);
     cmd.arg("--gpuType").arg(&gpu);
@@ -90,13 +90,13 @@ async fn create_pod(
     let pod_id = extract_pod_id(&stdout)
         .context("Could not extract pod ID from output")?;
 
-    println!("✅ Pod created: {}", pod_id);
+    println!("Pod created: {}", pod_id);
     println!("   Waiting for pod to be ready...");
 
     // Wait for pod to be ready (simplified - in real impl would poll status)
     tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
 
-    println!("✅ Pod ready: {}", pod_id);
+    println!("Pod ready: {}", pod_id);
     Ok(())
 }
 
@@ -115,7 +115,7 @@ async fn train_on_pod(
     // Upload script to pod
     println!("📤 Uploading script to pod...");
     let mut upload_cmd = std::process::Command::new("runpodctl");
-    upload_cmd.args(&["send", pod_id.as_str()]);
+    upload_cmd.args(["send", pod_id.as_str()]);
     upload_cmd.arg(&script);
     upload_cmd.arg("/workspace/training_script");
 
@@ -128,24 +128,24 @@ async fn train_on_pod(
 
     // Execute training
     let exec_cmd = if background {
-        format!("nohup bash /workspace/training_script > /workspace/training.log 2>&1 &")
+        "nohup bash /workspace/training_script > /workspace/training.log 2>&1 &".to_string()
     } else {
-        format!("bash /workspace/training_script")
+        "bash /workspace/training_script".to_string()
     };
 
     let mut train_cmd = std::process::Command::new("runpodctl");
-    train_cmd.args(&["exec", &pod_id, "--"]);
-    train_cmd.args(&["bash", "-c", &exec_cmd]);
+    train_cmd.args(["exec", &pod_id, "--"]);
+    train_cmd.args(["bash", "-c", &exec_cmd]);
 
     if background {
         train_cmd.spawn()
             .context("Failed to start background training")?;
-        println!("✅ Training started in background");
+        println!("Training started in background");
         println!("   Monitor with: trainctl runpod monitor {} --follow", pod_id);
     } else {
         train_cmd.status()
             .context("Training failed")?;
-        println!("✅ Training completed");
+        println!("Training completed");
     }
 
     Ok(())
@@ -157,13 +157,13 @@ async fn monitor_pod(pod_id: String, follow: bool) -> Result<()> {
     if follow {
         println!("Following log on pod {} (Ctrl+C to stop)...", pod_id);
         let mut cmd = std::process::Command::new("runpodctl");
-        cmd.args(&["exec", &pod_id, "--"]);
-        cmd.args(&["tail", "-f", log_path]);
+        cmd.args(["exec", &pod_id, "--"]);
+        cmd.args(["tail", "-f", log_path]);
         cmd.status()?;
     } else {
         let mut cmd = std::process::Command::new("runpodctl");
-        cmd.args(&["exec", &pod_id, "--"]);
-        cmd.args(&["tail", "-n", "50", log_path]);
+        cmd.args(["exec", &pod_id, "--"]);
+        cmd.args(["tail", "-n", "50", log_path]);
         let output = cmd.output()?;
         print!("{}", String::from_utf8_lossy(&output.stdout));
     }
@@ -175,7 +175,7 @@ async fn download_from_pod(pod_id: String, remote: PathBuf, local: PathBuf) -> R
     println!("📥 Downloading from pod {}: {} -> {}", pod_id, remote.display(), local.display());
 
     let mut cmd = std::process::Command::new("runpodctl");
-    cmd.args(&["receive", &pod_id]);
+    cmd.args(["receive", &pod_id]);
     cmd.arg(&remote);
     cmd.arg(&local);
 
@@ -186,7 +186,7 @@ async fn download_from_pod(pod_id: String, remote: PathBuf, local: PathBuf) -> R
         anyhow::bail!("Download failed");
     }
 
-    println!("✅ Download complete");
+    println!("Download complete");
     Ok(())
 }
 

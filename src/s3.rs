@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client as S3Client;
 use clap::Subcommand;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::config::Config;
 use tracing::info;
 use which::which;
@@ -147,7 +147,7 @@ async fn upload_to_s3(
             anyhow::bail!("s5cmd upload failed: {}", stderr);
         }
         
-        println!("✅ Uploaded to {}", destination);
+        println!("Uploaded to {}", destination);
         return Ok(());
     }
     
@@ -171,10 +171,13 @@ async fn upload_to_s3(
             .await
             .with_context(|| "Failed to upload file")?;
         
-        println!("✅ Uploaded {} to {}", source.display(), destination);
+        println!("Uploaded {} to {}", source.display(), destination);
     } else if recursive && source.is_dir() {
         // Recursive directory upload
-        anyhow::bail!("Recursive directory upload not yet implemented with AWS SDK. Use s5cmd or implement directory walk");
+        info!("Uploading directory recursively: {}", source.display());
+        upload_directory_recursive(&client, &bucket, &key, &source).await?;
+        println!("Uploaded directory {} to {}", source.display(), destination);
+        return Ok(());
     } else {
         anyhow::bail!("Source must be a file or use --recursive for directories");
     }
@@ -208,7 +211,7 @@ async fn download_from_s3(
             anyhow::bail!("s5cmd download failed: {}", stderr);
         }
         
-        println!("✅ Downloaded from {} to {}", source, destination.display());
+        println!("Downloaded from {} to {}", source, destination.display());
         return Ok(());
     }
     
@@ -231,7 +234,7 @@ async fn download_from_s3(
     std::fs::write(&destination, data.into_bytes())
         .with_context(|| "Failed to write file")?;
     
-    println!("✅ Downloaded {} to {}", source, destination.display());
+    println!("Downloaded {} to {}", source, destination.display());
     Ok(())
 }
 
@@ -273,7 +276,7 @@ async fn sync_s3(
             anyhow::bail!("s5cmd sync failed: {}", stderr);
         }
         
-        println!("✅ Synced {} with {}", local.display(), s3_path);
+        println!("Synced {} with {}", local.display(), s3_path);
         return Ok(());
     }
     
@@ -389,7 +392,7 @@ async fn cleanup_s3(
     checkpoints.sort_by(|a, b| b.1.cmp(&a.1));
     
     if checkpoints.len() <= keep_last_n {
-        println!("✅ Only {} checkpoint(s), nothing to clean up", checkpoints.len());
+        println!("Only {} checkpoint(s), nothing to clean up", checkpoints.len());
         return Ok(());
     }
     
@@ -414,10 +417,10 @@ async fn cleanup_s3(
             .send()
             .await
             .with_context(|| format!("Failed to delete {}", key))?;
-        println!("  ✓ Deleted {}", key);
+        println!("  Deleted {}", key);
     }
     
-    println!("✅ Cleanup complete");
+    println!("Cleanup complete");
     Ok(())
 }
 
@@ -458,7 +461,7 @@ async fn watch_s3(
                     let modified_str = obj.last_modified()
                 .map(|dt| dt.to_string())
                 .unwrap_or_else(|| "unknown".to_string());
-                    println!("🆕 New file: {} ({} bytes, {})", key, size, modified_str);
+                    println!("New file: {} ({} bytes, {})", key, size, modified_str);
                     last_seen.insert(key.to_string());
                 }
             }
@@ -548,6 +551,90 @@ fn parse_s3_path(s3_path: &str) -> Result<(String, String)> {
     let key = if parts.len() > 1 { parts[1].to_string() } else { String::new() };
     
     Ok((bucket, key))
+}
+
+/// Recursively upload a directory to S3
+async fn upload_directory_recursive(
+    client: &S3Client,
+    bucket: &str,
+    prefix: &str,
+    source_dir: &PathBuf,
+) -> Result<()> {
+    use walkdir::WalkDir;
+    
+    let source_path = source_dir.canonicalize()
+        .context("Failed to canonicalize source path")?;
+    
+    if !source_path.is_dir() {
+        anyhow::bail!("Source path is not a directory: {}", source_path.display());
+    }
+    
+    let mut uploaded = 0;
+    let mut failed = 0;
+    
+    for entry in WalkDir::new(&source_path).follow_links(false) {
+        let entry = entry.context("Failed to read directory entry")?;
+        let path = entry.path();
+        
+        // Skip directories
+        if path.is_dir() {
+            continue;
+        }
+        
+        // Calculate relative path from source directory
+        let relative_path = path.strip_prefix(&source_path)
+            .context("Failed to calculate relative path")?;
+        
+        // Build S3 key
+        let key = if prefix.is_empty() {
+            relative_path.to_string_lossy().replace('\\', "/")
+        } else {
+            format!("{}/{}", prefix.trim_end_matches('/'), relative_path.to_string_lossy().replace('\\', "/"))
+        };
+        
+        // Upload file
+        match upload_file_to_s3(client, bucket, &key, path).await {
+            Ok(_) => {
+                uploaded += 1;
+                if uploaded % 10 == 0 {
+                    info!("Uploaded {} files...", uploaded);
+                }
+            }
+            Err(e) => {
+                failed += 1;
+                eprintln!("Failed to upload {}: {}", path.display(), e);
+            }
+        }
+    }
+    
+    if failed > 0 {
+        anyhow::bail!("Uploaded {} files, but {} failed", uploaded, failed);
+    }
+    
+    info!("Successfully uploaded {} files to s3://{}/{}", uploaded, bucket, prefix);
+    Ok(())
+}
+
+/// Upload a single file to S3
+async fn upload_file_to_s3(
+    client: &S3Client,
+    bucket: &str,
+    key: &str,
+    file_path: &std::path::Path,
+) -> Result<()> {
+    let body = aws_sdk_s3::primitives::ByteStream::from_path(file_path).await
+        .with_context(|| format!("Failed to read file: {}", file_path.display()))?;
+    
+    client
+        .put_object()
+        .bucket(bucket)
+        .key(key)
+        .body(body)
+        .send()
+        .await
+        .with_context(|| format!("Failed to upload file: {}", file_path.display()))?;
+    
+    Ok(())
 }
 
 fn format_size(bytes: u64) -> String {

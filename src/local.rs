@@ -24,8 +24,10 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
                 let mut suggestions = Vec::new();
                 for entry in entries.flatten() {
                     if let Some(name) = entry.file_name().to_str() {
-                        if name.contains(file_name.to_str().unwrap_or("")) {
-                            suggestions.push(name.to_string());
+                        if let Some(file_str) = file_name.to_str() {
+                            if name.contains(file_str) {
+                                suggestions.push(name.to_string());
+                            }
                         }
                     }
                 }

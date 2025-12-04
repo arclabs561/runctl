@@ -122,17 +122,15 @@ async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
     loop {
         let mut checkpoints = Vec::new();
         if let Ok(entries) = fs::read_dir(checkpoint_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("pt") {
-                        if let Ok(metadata) = fs::metadata(&path) {
-                            checkpoints.push((
-                                path.clone(),
-                                metadata.modified()?,
-                                metadata.len(),
-                            ));
-                        }
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("pt") {
+                    if let Ok(metadata) = fs::metadata(&path) {
+                        checkpoints.push((
+                            path.clone(),
+                            metadata.modified()?,
+                            metadata.len(),
+                        ));
                     }
                 }
             }
