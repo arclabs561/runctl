@@ -43,3 +43,18 @@ venv/
 # Test artifacts
 test-results/
 coverage/
+*.proptest-regressions
+
+# User-specific directories (not part of core project)
+experiments/
+extras/
+training/
+utils/
+
+# Python tooling
+pyproject.toml
+uv.lock
+
+# Temporary review files
+PROJECT_STATUS_REVIEW.md
+TEST_COVERAGE_SUMMARY.md
