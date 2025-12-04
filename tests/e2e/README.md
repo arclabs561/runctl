@@ -40,6 +40,9 @@ All E2E tests:
 - `aws_resources_test.rs` - AWS resource management tests
 - `checkpoint_test.rs` - Checkpoint operations tests
 - `local_training_test.rs` - Local training execution tests
+- `resource_tracking_test.rs` - Resource tracking and cost awareness
+- `safe_cleanup_test.rs` - Safe cleanup operations
+- `resource_cleanup_test.rs` - Orphaned resource detection
 
 ## Best Practices
 

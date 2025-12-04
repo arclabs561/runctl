@@ -148,7 +148,7 @@ async fn test_zombie_detection() {
     for reservation in response.reservations() {
         for instance in reservation.instances() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
-            let tags = instance.tags().unwrap_or(&[]);
+            let tags = instance.tags();
             
             // Check if instance has trainctl tags
             let has_trainctl_tag = tags.iter().any(|tag| {
@@ -209,7 +209,7 @@ async fn test_cleanup_dry_run() {
     for reservation in response.reservations() {
         for instance in reservation.instances() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
-            let tags = instance.tags().unwrap_or(&[]);
+            let tags = instance.tags();
             
             // Check if protected
             let is_protected = tags.iter().any(|tag| {
