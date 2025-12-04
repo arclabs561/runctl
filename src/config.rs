@@ -28,6 +28,10 @@ pub struct AwsConfig {
     pub spot_max_price: Option<String>,
     pub iam_instance_profile: Option<String>,
     pub s3_bucket: Option<String>,
+    /// Default project name (auto-detected from current directory if not set)
+    pub default_project_name: Option<String>,
+    /// User identifier for multi-user environments (auto-detected from username if not set)
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,6 +71,8 @@ impl Default for Config {
                 spot_max_price: None,
                 iam_instance_profile: None,
                 s3_bucket: None,
+                default_project_name: None, // Auto-detect from current directory
+                user_id: None, // Auto-detect from username
             }),
             local: Some(LocalConfig {
                 default_device: "auto".to_string(),
@@ -112,14 +118,14 @@ impl Config {
                     err.push_str("\n    - Invalid TOML syntax");
                     err.push_str("\n    - Missing required fields");
                     err.push_str("\n    - Incorrect value types");
-                    err.push_str(&format!("\n  Tip: Run 'trainctl init' to create a new config file"));
+                    err.push_str("\n  Tip: Run 'trainctl init' to create a new config file");
                     err
                 })?;
             Ok(config)
         } else {
             // Use defaults but warn if user explicitly provided a path
             if path.is_some() {
-                eprintln!("⚠️  Config file not found: {}", config_path.display());
+                eprintln!("WARNING: Config file not found: {}", config_path.display());
                 eprintln!("   Using default configuration. Run 'trainctl init' to create a config file.");
             }
             Ok(Config::default())
@@ -138,7 +144,70 @@ impl Config {
 pub fn init_config(output: &Path) -> Result<()> {
     let config = Config::default();
     config.save(output)?;
-    println!("✅ Created config file: {}", output.display());
+    println!("Created config file: {}", output.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_config_default() {
+        let config = Config::default();
+        assert!(config.runpod.is_some());
+        assert!(config.aws.is_some());
+        assert!(config.local.is_some());
+        assert_eq!(config.checkpoint.save_interval, 5);
+        assert_eq!(config.checkpoint.keep_last_n, 10);
+    }
+
+    #[test]
+    fn test_config_save_and_load() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("test_config.toml");
+        
+        let config = Config::default();
+        assert!(config.save(&config_path).is_ok());
+        assert!(config_path.exists());
+        
+        let loaded = Config::load(Some(&config_path)).unwrap();
+        assert_eq!(loaded.checkpoint.save_interval, config.checkpoint.save_interval);
+        assert_eq!(loaded.checkpoint.keep_last_n, config.checkpoint.keep_last_n);
+    }
+
+    #[test]
+    fn test_config_load_nonexistent() {
+        let temp_dir = TempDir::new().unwrap();
+        let fake_path = temp_dir.path().join("nonexistent.toml");
+        
+        // Should return default config
+        let config = Config::load(Some(&fake_path)).unwrap();
+        assert_eq!(config.checkpoint.save_interval, 5);
+    }
+
+    #[test]
+    fn test_config_load_invalid_toml() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("invalid.toml");
+        std::fs::write(&config_path, "invalid toml content {").unwrap();
+        
+        let result = Config::load(Some(&config_path));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_init_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("init_test.toml");
+        
+        assert!(init_config(&config_path).is_ok());
+        assert!(config_path.exists());
+        
+        // Verify it's valid TOML
+        let config = Config::load(Some(&config_path)).unwrap();
+        assert!(config.runpod.is_some());
+    }
 }
 

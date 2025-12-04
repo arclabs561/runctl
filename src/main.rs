@@ -4,10 +4,16 @@ use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
 mod aws;
+mod aws_utils;
 mod checkpoint;
 mod config;
+mod data_transfer;
+mod diagnostics;
+mod ebs;
 mod local;
 mod monitor;
+mod provider;
+mod providers;
 mod resources;
 mod runpod;
 mod s3;
@@ -18,7 +24,10 @@ use crate::config::Config;
 
 #[derive(Parser)]
 #[command(name = "trainctl")]
-#[command(about = "Modern training orchestration CLI for ML workloads", long_about = None)]
+#[command(
+    about = "Modern training orchestration CLI for ML workloads",
+    long_about = "trainctl is a unified CLI for managing ML training across multiple platforms.\n\nSupports:\n  - Local training (CPU/GPU)\n  - AWS EC2 (spot and on-demand instances)\n  - RunPod (GPU pods)\n\nFeatures:\n  - Checkpoint management and resumption\n  - Cost tracking and optimization\n  - Real-time monitoring\n  - Multi-platform resource management"
+)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -94,6 +103,25 @@ enum Commands {
         #[arg(short, long)]
         detailed: bool,
     },
+    /// Data transfer operations (local ↔ S3 ↔ training instances)
+    Transfer {
+        /// Source location (local path, s3://bucket/key, or instance:path)
+        source: String,
+        /// Destination location (local path, s3://bucket/key, or instance:path)
+        destination: String,
+        /// Number of parallel transfers
+        #[arg(long)]
+        parallel: Option<usize>,
+        /// Enable compression
+        #[arg(long)]
+        compress: bool,
+        /// Verify checksums
+        #[arg(long, default_value_t = true)]
+        verify: bool,
+        /// Resume interrupted transfers
+        #[arg(long, default_value_t = true)]
+        resume: bool,
+    },
 }
 
 
@@ -144,6 +172,9 @@ async fn main() -> Result<()> {
         }
         Commands::Status { detailed } => {
             resources::show_quick_status(detailed, &config, &cli.output).await?;
+        }
+        Commands::Transfer { source, destination, parallel, compress, verify, resume } => {
+            data_transfer::handle_transfer(source, destination, parallel, compress, verify, resume, &config).await?;
         }
     }
 
