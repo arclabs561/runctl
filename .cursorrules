@@ -1,0 +1,108 @@
+# Cursor Rules for trainctl
+
+## Project Overview
+trainctl is a Rust CLI tool for ML training orchestration across multiple cloud providers (AWS, RunPod, Lyceum AI) with unified checkpoint management, cost tracking, and resource lifecycle management.
+
+## Architecture Principles
+
+1. **Provider-Agnostic Design**: Core logic uses `TrainingProvider` trait, not provider-specific code
+2. **Error Handling**: Use `TrainctlError` from `src/error.rs` for structured errors
+3. **Retry Logic**: Use `ExponentialBackoffPolicy` from `src/retry.rs` for cloud API calls
+4. **Resource Tracking**: Always register resources with `ResourceTracker` for cost awareness
+5. **Safe Cleanup**: Use `CleanupSafety` before deleting resources
+
+## Code Style
+
+- Use `crate::error::Result<T>` for library code
+- Use `anyhow::Result<T>` for binary/CLI code (main.rs, aws.rs, ebs.rs, etc.)
+- Prefer `?` operator over `.unwrap()` or `.expect()`
+- Use `tracing::info!`, `warn!`, `error!` for logging
+- Add `#[instrument]` to async functions for tracing
+
+## Module Structure
+
+- `src/lib.rs` - Library exports (use for library code)
+- `src/main.rs` - CLI entry point (use `anyhow::Result`)
+- `src/error.rs` - Custom error types
+- `src/retry.rs` - Retry policies
+- `src/resource_tracking.rs` - Cost awareness
+- `src/safe_cleanup.rs` - Safe teardown
+- `src/data_transfer.rs` - Data pipeline
+- `src/fast_data_loading.rs` - Optimized data loading
+- `src/provider.rs` - Provider trait definitions
+- `src/providers/` - Provider implementations
+
+## Key Patterns
+
+### Error Handling
+```rust
+use crate::error::{Result, TrainctlError};
+
+fn example() -> Result<()> {
+    // Use TrainctlError for structured errors
+    Err(TrainctlError::ResourceNotFound {
+        resource_type: "instance".to_string(),
+        resource_id: "i-123".to_string(),
+    })
+}
+```
+
+### Retry Logic
+```rust
+use crate::retry::{RetryPolicy, ExponentialBackoffPolicy};
+
+let retry = ExponentialBackoffPolicy::for_cloud_api();
+let result = retry.execute_with_retry(|| async {
+    // Operation that might fail
+}).await?;
+```
+
+### Resource Tracking
+```rust
+use crate::resource_tracking::ResourceTracker;
+
+let tracker = ResourceTracker::new();
+tracker.register(resource_status).await?;
+let running = tracker.get_running().await;
+```
+
+## Testing
+
+- Unit tests: `cargo test --lib`
+- Integration tests: `cargo test --test integration_test`
+- E2E tests: `TRAINCTL_E2E=1 cargo test --features e2e`
+
+## Important Files
+
+- `docs/IMPLEMENTATION_PLAN.md` - Detailed implementation guide
+- `docs/MISSING_PARADIGMS.md` - Missing patterns analysis
+- `docs/PROVIDER_ARCHITECTURE.md` - Provider design
+- `Cargo.toml` - Dependencies
+
+## Common Tasks
+
+### Adding a New Provider
+1. Create `src/providers/new_provider.rs`
+2. Implement `TrainingProvider` trait
+3. Add to `src/providers/mod.rs`
+4. Add tests
+
+### Adding a New CLI Command
+1. Add to `Commands` enum in `src/main.rs`
+2. Implement handler function
+3. Add to command match in `main()`
+4. Add tests
+
+### Migrating to New Error Types
+1. Change `anyhow::Result` to `crate::error::Result`
+2. Replace `anyhow::bail!` with `TrainctlError`
+3. Update error handling
+
+## Don'ts
+
+- Don't use `unwrap()` in production code
+- Don't create resources without checking if they exist first
+- Don't delete resources without safety checks
+- Don't hardcode costs (use cost tracking)
+- Don't skip retry logic for cloud API calls
+
