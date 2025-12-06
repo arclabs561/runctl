@@ -6,6 +6,7 @@
 use crate::error::{Result, TrainctlError};
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use ignore::gitignore::{Gitignore, GitignoreBuilder};
 use ignore::WalkBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use ssh2::Session;
@@ -17,6 +18,10 @@ use tar::Builder;
 use tracing::info;
 
 /// Sync code to instance using native Rust SSH and tar
+///
+/// # Arguments
+/// * `include_patterns` - Patterns to include even if gitignored (e.g., `data/`, `datasets/`)
+///   These are added as negations to override `.gitignore` rules
 pub async fn sync_code_native(
     key_path: &str,
     ip: &str,
@@ -24,6 +29,7 @@ pub async fn sync_code_native(
     project_dir: &str,
     project_root: &Path,
     output_format: &str,
+    include_patterns: &[String],
 ) -> Result<()> {
     let pb = if output_format != "json" {
         let pb = ProgressBar::new_spinner();
@@ -44,6 +50,7 @@ pub async fn sync_code_native(
     let user = user.to_string();
     let project_dir = project_dir.to_string();
     let project_root = project_root.to_path_buf();
+    let include_patterns = include_patterns.to_vec();
     let pb_clone = pb.clone();
 
     tokio::task::spawn_blocking(move || {
@@ -88,7 +95,13 @@ pub async fn sync_code_native(
             }
 
             // Incremental sync: compare files and sync only changes
-            sync_incremental_blocking(&sess, &project_root, &project_dir, &pb_clone)?;
+            sync_incremental_blocking(
+                &sess,
+                &project_root,
+                &project_dir,
+                &pb_clone,
+                &include_patterns,
+            )?;
 
             if let Some(ref p) = pb_clone {
                 p.finish_with_message("Code synced (incremental)");
@@ -101,7 +114,13 @@ pub async fn sync_code_native(
             p.set_message("Performing full sync (tar archive)...");
         }
 
-        sync_full_tar_blocking(&sess, &project_root, &project_dir, &pb_clone)?;
+        sync_full_tar_blocking(
+            &sess,
+            &project_root,
+            &project_dir,
+            &pb_clone,
+            &include_patterns,
+        )?;
 
         if let Some(ref p) = pb_clone {
             p.finish_with_message("Code synced successfully");
@@ -135,30 +154,120 @@ fn check_remote_directory(sess: &Session, command: &str) -> Result<bool> {
     Ok(output.contains("EXISTS"))
 }
 
+/// Build a gitignore matcher with overrides for include_patterns
+fn build_gitignore_matcher(project_root: &Path, include_patterns: &[String]) -> Result<Gitignore> {
+    let mut builder = GitignoreBuilder::new(project_root);
+
+    // Add negations for patterns to include (even if gitignored)
+    // In gitignore, ! prefix negates a pattern
+    for pattern in include_patterns {
+        // Normalize pattern: ensure it ends with / if it's a directory pattern
+        let normalized_pattern = if pattern.ends_with('/') {
+            format!("!{}**", pattern)
+        } else {
+            format!("!{}", pattern)
+        };
+
+        builder.add_line(None, &normalized_pattern).map_err(|e| {
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to add include pattern '{}': {}",
+                pattern, e
+            )))
+        })?;
+    }
+
+    builder.build().map_err(|e| {
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to build gitignore matcher: {}",
+            e
+        )))
+    })
+}
+
+/// Check if a path matches any include pattern using proper path matching
+fn matches_include_pattern(path: &Path, pattern: &str, project_root: &Path) -> bool {
+    let rel_path = match path.strip_prefix(project_root) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    // Normalize pattern: remove leading/trailing slashes for comparison
+    let pattern = pattern.trim_matches('/');
+    if pattern.is_empty() {
+        return false;
+    }
+
+    // Check if pattern matches as a directory prefix
+    // "data/" should match "data/train.csv" but not "my_data_file.txt"
+    let pattern_path = Path::new(pattern);
+
+    // Match if:
+    // 1. Relative path starts with pattern (directory prefix match)
+    // 2. Pattern is a parent directory of the file
+    rel_path.starts_with(pattern_path)
+        || rel_path
+            .parent()
+            .map(|p| p == pattern_path || p.starts_with(pattern_path))
+            .unwrap_or(false)
+}
+
+/// Get list of files to sync (unified logic for both incremental and full sync)
+fn get_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Result<Vec<PathBuf>> {
+    // Build gitignore matcher with overrides
+    let gitignore = build_gitignore_matcher(project_root, include_patterns)?;
+
+    // Walk all files (we'll filter manually using the matcher)
+    let files: Vec<PathBuf> = WalkBuilder::new(project_root)
+        .git_ignore(false) // Don't use WalkBuilder's gitignore - we'll check manually
+        .git_global(false)
+        .git_exclude(false)
+        .build()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+
+            // Skip directories
+            if !path.is_file() {
+                return None;
+            }
+
+            let rel_path = match path.strip_prefix(project_root) {
+                Ok(p) => p,
+                Err(_) => return None,
+            };
+
+            // Check if this file matches any include pattern
+            let matches_include = include_patterns
+                .iter()
+                .any(|pattern| matches_include_pattern(path, pattern, project_root));
+
+            // Use gitignore matcher to check if file should be ignored
+            let matched = gitignore.matched(rel_path, false);
+
+            // Include if:
+            // 1. Matches include pattern (even if gitignored), OR
+            // 2. Not gitignored (normal case)
+            if matches_include || !matched.is_ignore() {
+                Some(path.to_path_buf())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(files)
+}
+
 /// Incremental sync: compare and sync only changed files (blocking)
 fn sync_incremental_blocking(
     sess: &Session,
     project_root: &Path,
     remote_dir: &str,
     pb: &Option<ProgressBar>,
+    include_patterns: &[String],
 ) -> Result<()> {
-    // Get list of files to sync (respecting .gitignore)
-    // Use ignore crate to parse .gitignore files and respect patterns
-    let files_to_sync: Vec<PathBuf> = WalkBuilder::new(project_root)
-        .git_ignore(true) // Respect .gitignore files
-        .git_global(false) // Don't use global gitignore (project-specific only)
-        .git_exclude(false) // Don't use .git/info/exclude
-        .build()
-        .filter_map(|entry| {
-            let entry = entry.ok()?;
-            // Only include files (not directories)
-            if entry.file_type()?.is_file() {
-                Some(entry.path().to_path_buf())
-            } else {
-                None
-            }
-        })
-        .collect();
+    // Get list of files to sync using unified logic
+    let files_to_sync = get_files_to_sync(project_root, include_patterns)?;
 
     if let Some(ref p) = pb {
         p.set_message(format!("Syncing {} files...", files_to_sync.len()));
@@ -262,9 +371,17 @@ fn sync_full_tar_blocking(
     project_root: &Path,
     remote_dir: &str,
     pb: &Option<ProgressBar>,
+    include_patterns: &[String],
 ) -> Result<()> {
     if let Some(ref p) = pb {
         p.set_message("Creating tar archive...");
+    }
+
+    // Get list of files to sync using unified logic
+    let files_to_sync = get_files_to_sync(project_root, include_patterns)?;
+
+    if let Some(ref p) = pb {
+        p.set_message(format!("Archiving {} files...", files_to_sync.len()));
     }
 
     // Create tar.gz archive in memory
@@ -273,36 +390,22 @@ fn sync_full_tar_blocking(
         let encoder = GzEncoder::new(&mut archive_data, Compression::default());
         let mut tar = Builder::new(encoder);
 
-        // Use ignore crate to respect .gitignore files
-        for entry in WalkBuilder::new(project_root)
-            .git_ignore(true) // Respect .gitignore files
-            .git_global(false) // Don't use global gitignore (project-specific only)
-            .git_exclude(false) // Don't use .git/info/exclude
-            .build()
-        {
-            let entry = entry.map_err(|e| {
-                TrainctlError::Io(std::io::Error::other(format!("WalkBuilder error: {}", e)))
+        // Add all files to archive
+        for file_path in &files_to_sync {
+            let relative_path = file_path.strip_prefix(project_root).map_err(|e| {
+                TrainctlError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Failed to get relative path: {}", e),
+                ))
             })?;
 
-            let path = entry.path();
-
-            // Only process files (directories are handled automatically by gitignore)
-            if path.is_file() {
-                let relative_path = path.strip_prefix(project_root).map_err(|e| {
-                    TrainctlError::Io(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!("Failed to get relative path: {}", e),
-                    ))
+            tar.append_file(relative_path, &mut File::open(file_path)?)
+                .map_err(|e| {
+                    TrainctlError::Io(std::io::Error::other(format!(
+                        "Failed to add file to archive: {}",
+                        e
+                    )))
                 })?;
-
-                tar.append_file(relative_path, &mut File::open(path)?)
-                    .map_err(|e| {
-                        TrainctlError::Io(std::io::Error::other(format!(
-                            "Failed to add file to archive: {}",
-                            e
-                        )))
-                    })?;
-            }
         }
 
         tar.finish().map_err(|e| {

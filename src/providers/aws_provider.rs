@@ -24,6 +24,7 @@ pub struct AwsProvider {
 }
 
 impl AwsProvider {
+    #[allow(dead_code)] // Reserved for future provider initialization
     pub async fn new(config: Config) -> Result<Self> {
         let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
         let ec2_client = Ec2Client::new(&aws_config);

@@ -7,6 +7,7 @@ use crate::error::{Result, TrainctlError};
 
 /// Use case for EBS volume optimization
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub enum VolumeUseCase {
     /// Data loading - high throughput for reading datasets
     DataLoading,
@@ -20,6 +21,7 @@ pub enum VolumeUseCase {
 
 /// Optimized EBS volume configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub struct OptimizedVolumeConfig {
     pub volume_type: String,
     pub iops: Option<i32>,
@@ -35,6 +37,7 @@ pub struct OptimizedVolumeConfig {
 /// For data loading: 500 IOPS/GB (up to max)
 /// For checkpoints: 300 IOPS/GB (up to max)
 /// For general: 100 IOPS/GB (up to max)
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn calculate_optimal_iops(size_gb: i32, use_case: VolumeUseCase) -> i32 {
     let iops_per_gb = match use_case {
         VolumeUseCase::DataLoading => 500, // Maximum performance for data loading
@@ -59,6 +62,7 @@ pub fn calculate_optimal_iops(size_gb: i32, use_case: VolumeUseCase) -> i32 {
 /// gp3 maximum: 2,000 MiB/s
 /// Formula: 0.25 MiB/s per provisioned IOPS
 /// For max throughput (2,000 MiB/s): need 8,000 IOPS
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn calculate_optimal_throughput(iops: i32) -> i32 {
     // Throughput = 0.25 MiB/s per IOPS
     // Max throughput: 2,000 MiB/s (requires 8,000 IOPS minimum)
@@ -67,6 +71,7 @@ pub fn calculate_optimal_throughput(iops: i32) -> i32 {
 }
 
 /// Get optimized volume configuration for a use case
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn optimize_volume_config(
     size_gb: i32,
     use_case: VolumeUseCase,
@@ -180,6 +185,7 @@ pub fn optimize_volume_config(
 }
 
 /// Get volume type recommendation based on use case
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn recommend_volume_type(use_case: VolumeUseCase, size_gb: i32) -> &'static str {
     match use_case {
         VolumeUseCase::DataLoading => {
@@ -208,6 +214,7 @@ pub fn recommend_volume_type(use_case: VolumeUseCase, size_gb: i32) -> &'static 
 }
 
 /// Format volume type description for help text
+#[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn volume_type_description() -> String {
     r#"Volume Types:
   gp3  - General Purpose SSD (default, recommended)

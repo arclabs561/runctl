@@ -19,6 +19,7 @@ pub struct LyceumProvider {
 }
 
 impl LyceumProvider {
+    #[allow(dead_code)] // Reserved for future provider initialization
     pub fn new(config: Config, api_key: Option<String>) -> Self {
         Self { config, api_key }
     }

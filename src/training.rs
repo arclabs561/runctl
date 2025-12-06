@@ -58,6 +58,7 @@ impl TrainingSession {
         Ok(())
     }
 
+    #[allow(dead_code)] // Reserved for future session loading
     pub fn load(sessions_dir: &Path, session_id: &str) -> Result<Self> {
         let session_file = sessions_dir
             .join("sessions")
@@ -79,6 +80,7 @@ impl TrainingSession {
         Ok(session)
     }
 
+    #[allow(dead_code)] // Reserved for future session listing
     pub fn list_sessions(sessions_dir: &Path) -> Result<Vec<Self>> {
         let sessions_path = sessions_dir.join("sessions");
         if !sessions_path.exists() {

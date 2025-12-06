@@ -136,7 +136,7 @@ pub enum EbsCommands {
     },
 }
 
-pub async fn handle_command(cmd: EbsCommands, config: &Config, output_format: &str) -> Result<()> {
+pub async fn handle_command(cmd: EbsCommands, config: &Config, _output_format: &str) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let ssm_client = SsmClient::new(&aws_config);

@@ -17,6 +17,7 @@ pub struct RunpodProvider {
 }
 
 impl RunpodProvider {
+    #[allow(dead_code)] // Reserved for future provider initialization
     pub fn new(config: Config) -> Self {
         Self { config }
     }

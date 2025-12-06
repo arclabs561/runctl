@@ -268,6 +268,15 @@ pub enum AwsCommands {
         #[arg(long, default_value = "true")]
         sync_code: bool,
 
+        /// Include patterns even if gitignored (e.g., data/, datasets/)
+        ///
+        /// Useful for syncing data directories that are typically gitignored.
+        /// Can be specified multiple times. Patterns are matched against file paths.
+        ///
+        /// Example: --include-pattern data/ --include-pattern datasets/
+        #[arg(long, value_name = "PATTERN")]
+        include_pattern: Vec<String>,
+
         /// Project directory name (default: current directory name)
         #[arg(long, value_name = "NAME")]
         project_name: Option<String>,
@@ -395,6 +404,7 @@ pub struct TrainInstanceOptions {
     #[allow(dead_code)] // Reserved for future S3 output support
     pub output_s3: Option<String>,
     pub sync_code: bool,
+    pub include_patterns: Vec<String>,
     pub project_name: String,
     pub script_args: Vec<String>,
 }
@@ -439,6 +449,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             data_s3,
             _output_s3,
             sync_code,
+            include_pattern,
             project_name,
             script_args,
         } => {
@@ -449,6 +460,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
                 data_s3,
                 output_s3: _output_s3,
                 sync_code,
+                include_patterns: include_pattern,
                 project_name: final_project_name,
                 script_args,
             };
@@ -1307,7 +1319,7 @@ async fn tag_instance(
 
 async fn train_on_instance(
     options: TrainInstanceOptions,
-    config: &Config,
+    _config: &Config,
     aws_config: &aws_config::SdkConfig,
     output_format: &str,
 ) -> Result<()> {
@@ -1411,6 +1423,7 @@ async fn train_on_instance(
             &project_dir,
             &options.script,
             output_format,
+            &options.include_patterns,
         )
         .await
         {
@@ -1686,6 +1699,7 @@ async fn sync_code_to_instance(
     project_dir: &str,
     script_path: &std::path::Path,
     output_format: &str,
+    include_patterns: &[String],
 ) -> Result<()> {
     // Get project root (parent of script's directory)
     let script_dir = script_path
@@ -1716,20 +1730,28 @@ async fn sync_code_to_instance(
     }
 
     // Use native Rust SSH sync
-    crate::ssh_sync::sync_code_native(key_path, ip, user, project_dir, project_root, output_format)
-        .await
-        .map_err(|e| {
-            TrainctlError::DataTransfer(format!(
-                "Native code sync failed: {}\n\n\
+    crate::ssh_sync::sync_code_native(
+        key_path,
+        ip,
+        user,
+        project_dir,
+        project_root,
+        output_format,
+        include_patterns,
+    )
+    .await
+    .map_err(|e| {
+        TrainctlError::DataTransfer(format!(
+            "Native code sync failed: {}\n\n\
             To resolve:\n\
               1. Check SSH key permissions: chmod 600 {}\n\
               2. Verify instance is accessible: ssh -i {} {}@{}\n\
               3. Check network connectivity and security groups\n\
               4. Ensure instance has sufficient disk space\n\
               5. Fallback: Use shell-based sync by setting TRAINCTL_USE_SHELL_SYNC=1",
-                e, key_path, key_path, user, ip
-            ))
-        })
+            e, key_path, key_path, user, ip
+        ))
+    })
 }
 
 // execute_via_ssm removed - use crate::aws_utils::execute_ssm_command instead

@@ -21,6 +21,7 @@ When you use `--sync-code` (or it's enabled by default), trainctl:
    - This includes common patterns like `.git/`, `__pycache__/`, `*.pyc`, `node_modules/`, `.venv/`, etc.
    - You can customize exclusions by adding patterns to your `.gitignore` file
    - The tool uses the `ignore` crate to parse `.gitignore` according to the gitignore spec
+   - **Override for data directories**: Use `--include-pattern` to sync gitignored files (e.g., `--include-pattern data/` to sync `data/` even if it's gitignored)
 
 4. **Transfers via SSH** using tar pipe:
    ```bash

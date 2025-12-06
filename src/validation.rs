@@ -45,6 +45,7 @@ pub fn validate_instance_id(instance_id: &str) -> Result<()> {
 /// Validate EBS volume ID format
 ///
 /// Volume IDs must start with "vol-" followed by hexadecimal characters.
+#[allow(dead_code)] // Reserved for future volume ID validation
 pub fn validate_volume_id(volume_id: &str) -> Result<()> {
     if !volume_id.starts_with("vol-") {
         return Err(TrainctlError::Validation {
@@ -70,6 +71,7 @@ pub fn validate_volume_id(volume_id: &str) -> Result<()> {
 /// Validate snapshot ID format
 ///
 /// Snapshot IDs must start with "snap-" followed by hexadecimal characters.
+#[allow(dead_code)] // Reserved for future snapshot ID validation
 pub fn validate_snapshot_id(snapshot_id: &str) -> Result<()> {
     if !snapshot_id.starts_with("snap-") {
         return Err(TrainctlError::Validation {
@@ -199,6 +201,7 @@ pub fn validate_s3_path(s3_path: &str) -> Result<()> {
 /// Validate volume size (in GB)
 ///
 /// Volume sizes must be between 1 GB and 16384 GB (16 TB).
+#[allow(dead_code)] // Reserved for future volume size validation
 pub fn validate_volume_size(size_gb: i32) -> Result<()> {
     if size_gb < 1 {
         return Err(TrainctlError::Validation {

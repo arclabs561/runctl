@@ -155,6 +155,7 @@ pub struct CreateResourceOptions {
 }
 
 /// Helper to convert provider-specific states to ResourceState
+#[allow(dead_code)] // Reserved for future state normalization
 pub fn normalize_state(state_str: &str) -> ResourceState {
     let state_lower = state_str.to_lowercase();
     match state_lower.as_str() {

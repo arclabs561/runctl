@@ -1086,6 +1086,7 @@ async fn upload_directory_recursive_parallel(
 }
 
 /// Recursively upload a directory to S3 (sequential, kept for compatibility)
+#[allow(dead_code)] // Reserved for future recursive upload functionality
 async fn upload_directory_recursive(
     client: &S3Client,
     bucket: &str,

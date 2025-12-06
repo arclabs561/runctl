@@ -43,6 +43,7 @@ pub enum TrainctlError {
     },
 
     #[error("Retryable error (attempt {attempt}/{max_attempts}): {reason}")]
+    #[allow(dead_code)] // Reserved for future retry logic
     Retryable {
         attempt: u32,
         max_attempts: u32,
@@ -67,9 +68,11 @@ pub enum TrainctlError {
     Validation { field: String, reason: String },
 
     #[error("Cost tracking error: {0}")]
+    #[allow(dead_code)] // Reserved for future cost tracking
     CostTracking(String),
 
     #[error("Cleanup error: {0}")]
+    #[allow(dead_code)] // Reserved for future cleanup features
     Cleanup(String),
 
     #[error("Data transfer error: {0}")]
@@ -83,6 +86,7 @@ pub enum TrainctlError {
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Invalid cloud provider: {0}")]
+    #[allow(dead_code)] // Reserved for future provider validation
     InvalidProvider(String),
 
     #[error("Missing required field: {0}")]
@@ -92,6 +96,7 @@ pub enum ConfigError {
     InvalidValue { field: String, reason: String },
 
     #[error("Config file not found: {0}")]
+    #[allow(dead_code)] // Reserved for future resource lookup
     NotFound(String),
 
     #[error("Failed to parse config: {0}")]
