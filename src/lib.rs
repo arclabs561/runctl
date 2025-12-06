@@ -17,6 +17,10 @@ pub mod fast_data_loading;
 pub mod retry;
 pub mod aws_utils;
 pub mod diagnostics;
+pub mod validation;
+pub mod dashboard;
+pub mod ssh_sync;
+pub mod ebs_optimization;
 
 // Re-export commonly used types
 pub use training::{TrainingSession, TrainingStatus};
