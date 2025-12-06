@@ -74,6 +74,9 @@ pub enum TrainctlError {
     
     #[error("Data transfer error: {0}")]
     DataTransfer(String),
+    
+    #[error("JSON serialization error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 /// Configuration-specific errors
@@ -99,6 +102,9 @@ pub enum ConfigError {
 pub type Result<T> = std::result::Result<T, TrainctlError>;
 
 /// Trait for determining if an error is retryable
+/// 
+/// Reserved for future retry logic integration with custom error types.
+#[allow(dead_code)]
 pub trait IsRetryable {
     fn is_retryable(&self) -> bool;
 }

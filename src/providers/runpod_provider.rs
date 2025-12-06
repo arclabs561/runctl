@@ -2,11 +2,17 @@
 
 use crate::provider::*;
 use crate::config::Config;
-use anyhow::Result;
+use crate::error::{Result, TrainctlError};
 use async_trait::async_trait;
 use std::path::Path;
 
+/// RunPod provider implementation
+/// 
+/// Currently a stub - not yet implemented.
+/// Kept for future RunPod integration.
+#[allow(dead_code)]
 pub struct RunpodProvider {
+    #[allow(dead_code)]
     config: Config,
 }
 
@@ -28,17 +34,29 @@ impl TrainingProvider for RunpodProvider {
         _options: CreateResourceOptions,
     ) -> Result<ResourceId> {
         // Implementation would use runpodctl
-        anyhow::bail!("RunPod resource creation not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "RunPod resource creation not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn get_resource_status(&self, _resource_id: &ResourceId) -> Result<ResourceStatus> {
         // Implementation would parse runpodctl output
-        anyhow::bail!("RunPod status not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "RunPod status not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn list_resources(&self) -> Result<Vec<ResourceStatus>> {
         // Implementation would parse runpodctl get pod output
-        anyhow::bail!("List resources not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "List resources not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn train(
@@ -47,7 +65,11 @@ impl TrainingProvider for RunpodProvider {
         _job: TrainingJob,
     ) -> Result<TrainingStatus> {
         // Implementation would use runpodctl exec
-        anyhow::bail!("Training not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Training not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn monitor(
@@ -56,7 +78,11 @@ impl TrainingProvider for RunpodProvider {
         _follow: bool,
     ) -> Result<()> {
         // Implementation would use runpodctl logs
-        anyhow::bail!("Monitoring not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Monitoring not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn download(
@@ -66,12 +92,20 @@ impl TrainingProvider for RunpodProvider {
         _local_path: &Path,
     ) -> Result<()> {
         // Implementation would use runpodctl download
-        anyhow::bail!("Download not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Download not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn terminate(&self, _resource_id: &ResourceId) -> Result<()> {
         // Implementation would use runpodctl remove pod
-        anyhow::bail!("Terminate not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Terminate not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     fn estimate_cost(&self, instance_type: &str, hours: f64) -> f64 {

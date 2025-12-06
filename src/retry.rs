@@ -5,15 +5,28 @@
 
 use crate::error::{Result, TrainctlError, IsRetryable};
 use std::time::Duration;
+use std::future::Future;
 use tracing::{warn, info};
 
+/// Default retry configuration constants
+const DEFAULT_INITIAL_RETRY_DELAY_MS: u64 = 100;
+const DEFAULT_MAX_RETRY_DELAY_SECS: u64 = 30;
+const DEFAULT_JITTER_FACTOR: f64 = 0.1;
+const DEFAULT_MAX_ATTEMPTS: u32 = 3;
+const CLOUD_API_MAX_ATTEMPTS: u32 = 5;
+
 /// Retry policy trait
+///
+/// Note: Using async fn in traits generates a clippy warning about auto trait bounds,
+/// but this is acceptable for our use case. The alternative (explicit Future return types)
+/// adds significant complexity without clear benefits for this API.
+#[allow(async_fn_in_trait)]
 pub trait RetryPolicy: Send + Sync {
     /// Execute a function with retry logic
     async fn execute_with_retry<F, Fut, T>(&self, f: F) -> Result<T>
     where
         F: Fn() -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<T>> + Send;
+        Fut: Future<Output = Result<T>> + Send;
 }
 
 /// Exponential backoff retry policy
@@ -29,20 +42,23 @@ impl ExponentialBackoffPolicy {
     pub fn new(max_attempts: u32) -> Self {
         Self {
             max_attempts,
-            initial_delay: Duration::from_millis(100),
-            max_delay: Duration::from_secs(30),
-            jitter_factor: 0.1,
+            initial_delay: Duration::from_millis(DEFAULT_INITIAL_RETRY_DELAY_MS),
+            max_delay: Duration::from_secs(DEFAULT_MAX_RETRY_DELAY_SECS),
+            jitter_factor: DEFAULT_JITTER_FACTOR,
         }
     }
     
     /// Create default policy (3 attempts)
-    pub fn default() -> Self {
-        Self::new(3)
+    ///
+    /// Note: This is not the `Default` trait implementation to avoid
+    /// confusion with the standard library's `Default::default()`.
+    pub fn default_policy() -> Self {
+        Self::new(DEFAULT_MAX_ATTEMPTS)
     }
     
     /// Create policy for cloud API calls (5 attempts)
     pub fn for_cloud_api() -> Self {
-        Self::new(5)
+        Self::new(CLOUD_API_MAX_ATTEMPTS)
     }
     
     /// Calculate backoff delay for given attempt number
@@ -61,7 +77,7 @@ impl RetryPolicy for ExponentialBackoffPolicy {
     async fn execute_with_retry<F, Fut, T>(&self, f: F) -> Result<T>
     where
         F: Fn() -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<T>> + Send,
+        Fut: Future<Output = Result<T>> + Send,
     {
         let mut last_error = None;
         
@@ -93,7 +109,8 @@ impl RetryPolicy for ExponentialBackoffPolicy {
                     
                     // Store error for potential return
                     last_error = Some(e);
-                    let err = last_error.as_ref().unwrap();
+                    // Safe: we just set last_error above, so unwrap is safe
+                    let err = last_error.as_ref().expect("last_error should be Some here");
                     
                     // Calculate and wait for backoff
                     let backoff = self.calculate_backoff(attempt);
@@ -126,7 +143,7 @@ impl RetryPolicy for NoRetryPolicy {
     async fn execute_with_retry<F, Fut, T>(&self, f: F) -> Result<T>
     where
         F: Fn() -> Fut + Send + Sync,
-        Fut: std::future::Future<Output = Result<T>> + Send,
+        Fut: Future<Output = Result<T>> + Send,
     {
         f().await
     }

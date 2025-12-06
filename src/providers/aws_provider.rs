@@ -2,7 +2,7 @@
 
 use crate::provider::*;
 use crate::config::Config;
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
@@ -10,9 +10,16 @@ use aws_sdk_ssm::Client as SsmClient;
 use chrono::DateTime;
 use std::path::Path;
 
+/// AWS EC2 provider implementation
+/// 
+/// Currently unused - CLI uses direct AWS implementations in aws.rs.
+/// Kept for potential future refactoring to use provider trait system.
+#[allow(dead_code)]
 pub struct AwsProvider {
     ec2_client: Ec2Client,
+    #[allow(dead_code)]
     ssm_client: SsmClient,
+    #[allow(dead_code)]
     config: Config,
 }
 
@@ -42,11 +49,15 @@ impl TrainingProvider for AwsProvider {
         _options: CreateResourceOptions,
     ) -> Result<ResourceId> {
         let _aws_cfg = self.config.aws.as_ref()
-            .context("AWS config not found")?;
+            .ok_or_else(|| TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string())))?;
 
         // Implementation would call create_instance logic
         // For now, return a placeholder
-        anyhow::bail!("AWS instance creation not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "AWS instance creation not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn get_resource_status(&self, resource_id: &ResourceId) -> Result<ResourceStatus> {
@@ -55,7 +66,7 @@ impl TrainingProvider for AwsProvider {
             .instance_ids(resource_id)
             .send()
             .await
-            .context("Failed to describe instance")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
         // Find the instance in reservations
         let instance = response
@@ -67,7 +78,10 @@ impl TrainingProvider for AwsProvider {
                     .map(|id| id == resource_id)
                     .unwrap_or(false)
             })
-            .context("Instance not found")?;
+            .ok_or_else(|| TrainctlError::ResourceNotFound {
+                resource_type: "instance".to_string(),
+                resource_id: resource_id.clone(),
+            })?;
 
         let state = instance
             .state()
@@ -118,7 +132,11 @@ impl TrainingProvider for AwsProvider {
     async fn list_resources(&self) -> Result<Vec<ResourceStatus>> {
         // Delegate to existing list_aws_instances logic
         // This would be refactored to use the provider trait
-        anyhow::bail!("List resources not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "List resources not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn train(
@@ -127,7 +145,11 @@ impl TrainingProvider for AwsProvider {
         _job: TrainingJob,
     ) -> Result<TrainingStatus> {
         // Implementation would use SSM to execute training
-        anyhow::bail!("Training not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "Training not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn monitor(
@@ -136,7 +158,11 @@ impl TrainingProvider for AwsProvider {
         _follow: bool,
     ) -> Result<()> {
         // Implementation would use SSM to tail logs
-        anyhow::bail!("Monitoring not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "Monitoring not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn download(
@@ -146,7 +172,11 @@ impl TrainingProvider for AwsProvider {
         _local_path: &Path,
     ) -> Result<()> {
         // Implementation would use SSM to download files
-        anyhow::bail!("Download not yet fully implemented in provider trait")
+        Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "Download not yet fully implemented in provider trait".to_string(),
+            source: None,
+        })
     }
 
     async fn terminate(&self, resource_id: &ResourceId) -> Result<()> {
@@ -155,7 +185,7 @@ impl TrainingProvider for AwsProvider {
             .instance_ids(resource_id)
             .send()
             .await
-            .context("Failed to terminate instance")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to terminate instance: {}", e)))?;
 
         Ok(())
     }

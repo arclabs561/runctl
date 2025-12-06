@@ -3,7 +3,7 @@
 //! This module defines traits that all cloud providers (AWS, RunPod, Lyceum AI, etc.)
 //! must implement, allowing trainctl to work with any provider through a unified interface.
 
-use anyhow::Result;
+use crate::error::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,9 @@ pub type ResourceId = String;
 
 /// Training script and configuration
 #[derive(Debug, Clone)]
+/// Training job configuration
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub struct TrainingJob {
     pub script: PathBuf,
     pub args: Vec<String>,
@@ -25,6 +28,9 @@ pub struct TrainingJob {
 
 /// Resource status information
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Status of a training resource (instance, pod, etc.)
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub struct ResourceStatus {
     pub id: ResourceId,
     pub name: Option<String>,
@@ -38,6 +44,9 @@ pub struct ResourceStatus {
 
 /// Resource states across all providers
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// State of a training resource
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub enum ResourceState {
     /// Resource is running and ready
     Running,
@@ -57,6 +66,9 @@ pub enum ResourceState {
 
 /// Training execution status
 #[derive(Debug, Clone)]
+/// Status of a running training job
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub struct TrainingStatus {
     pub job_id: Option<String>,
     pub status: ExecutionStatus,
@@ -66,6 +78,9 @@ pub struct TrainingStatus {
 
 /// Execution status
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Execution status of a training job
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub enum ExecutionStatus {
     Pending,
     Running,
@@ -76,6 +91,10 @@ pub enum ExecutionStatus {
 
 /// Main trait for cloud training providers
 #[async_trait]
+/// Trait for abstracting training operations across cloud providers
+/// 
+/// Currently unused by the CLI, but kept for future multi-cloud support.
+#[allow(dead_code)]
 pub trait TrainingProvider: Send + Sync {
     /// Provider name (e.g., "aws", "runpod", "lyceum")
     fn name(&self) -> &'static str;
@@ -123,6 +142,8 @@ pub trait TrainingProvider: Send + Sync {
 }
 
 /// Options for creating resources
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub struct CreateResourceOptions {
     /// Use spot/preemptible instances (if supported)
@@ -159,10 +180,13 @@ pub fn normalize_state(state_str: &str) -> ResourceState {
 }
 
 /// Registry of available providers
+/// Reserved for future provider trait implementation
+#[allow(dead_code)]
 pub struct ProviderRegistry {
     providers: Vec<Box<dyn TrainingProvider>>,
 }
 
+#[allow(dead_code)]
 impl ProviderRegistry {
     pub fn new() -> Self {
         Self {
