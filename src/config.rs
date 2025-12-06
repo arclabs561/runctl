@@ -329,17 +329,35 @@ pub async fn handle_command(cmd: ConfigCommands, config_path: Option<&Path>, out
             let config_path = config_file.as_deref().or(config_path);
             match Config::load(config_path) {
                 Ok(_config) => {
-                    println!("✓ Configuration is valid");
-                    if config_path.is_none() {
-                        println!("  Using default configuration (no config file found)");
+                    if output_format == "json" {
+                        let result = serde_json::json!({
+                            "valid": true,
+                            "message": "Configuration is valid",
+                            "config_path": config_path.map(|p| p.display().to_string()).unwrap_or_else(|| "default".to_string())
+                        });
+                        println!("{}", serde_json::to_string_pretty(&result)?);
                     } else {
-                        println!("  Loaded from: {}", config_path.unwrap().display());
+                        println!("✓ Configuration is valid");
+                        if config_path.is_none() {
+                            println!("  Using default configuration (no config file found)");
+                        } else {
+                            println!("  Loaded from: {}", config_path.unwrap().display());
+                        }
                     }
                     Ok(())
                 }
                 Err(e) => {
-                    eprintln!("✗ Configuration validation failed:");
-                    eprintln!("  {}", e);
+                    if output_format == "json" {
+                        let result = serde_json::json!({
+                            "valid": false,
+                            "error": format!("{}", e),
+                            "config_path": config_path.map(|p| p.display().to_string()).unwrap_or_else(|| "default".to_string())
+                        });
+                        eprintln!("{}", serde_json::to_string_pretty(&result)?);
+                    } else {
+                        eprintln!("✗ Configuration validation failed:");
+                        eprintln!("  {}", e);
+                    }
                     Err(e)
                 }
             }

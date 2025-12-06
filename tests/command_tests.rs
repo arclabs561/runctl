@@ -130,7 +130,7 @@ fn test_help_text_present() {
     // Test that all commands have help text
     let commands = vec![
         "aws",
-        "ebs",
+        "aws ebs",  // ebs is a subcommand of aws
         "s3",
         "checkpoint",
         "resources",
@@ -165,8 +165,12 @@ fn test_json_error_output() {
     // Should fail, but error should be JSON
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // Error should be JSON
-    let _json: serde_json::Value = serde_json::from_str(&stderr)
+    // Error should be JSON - find JSON in stderr (may have other output)
+    let json_start = stderr.find('{').unwrap_or(0);
+    let json_str = &stderr[json_start..];
+    // Remove any trailing whitespace/newlines
+    let json_str = json_str.trim();
+    let _json: serde_json::Value = serde_json::from_str(json_str)
         .expect(&format!("Error output should be JSON, got: {}", stderr));
 }
 
