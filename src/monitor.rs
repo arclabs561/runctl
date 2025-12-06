@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::{Result, TrainctlError};
 use notify::{Watcher, RecursiveMode, Event, EventKind};
 use std::path::{Path, PathBuf};
 use std::fs;
@@ -14,10 +14,12 @@ pub async fn monitor(
     let has_checkpoint = checkpoint.is_some();
 
     if let Some(log_path) = &log {
+        crate::validation::validate_path(&log_path.display().to_string())?;
         monitor_log(log_path, follow).await?;
     }
 
     if let Some(checkpoint_dir) = &checkpoint {
+        crate::validation::validate_path(&checkpoint_dir.display().to_string())?;
         monitor_checkpoint(checkpoint_dir).await?;
     }
 
@@ -41,7 +43,10 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
         }
         
         if !log_path.exists() {
-            anyhow::bail!("Log file not created after 60 seconds");
+            return Err(TrainctlError::ResourceNotFound {
+                resource_type: "log file".to_string(),
+                resource_id: log_path.display().to_string(),
+            });
         }
     }
 
@@ -52,15 +57,23 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
         // Follow mode - watch for changes
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
         
-        let mut watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
+        let mut watcher = notify::recommended_watcher(move |event: std::result::Result<Event, notify::Error>| {
             if let Ok(event) = event {
                 if matches!(event.kind, EventKind::Modify(_)) {
                     let _ = tx.try_send(event);
                 }
             }
-        })?;
+        })
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to create file watcher: {}", e),
+        )))?;
 
-        watcher.watch(log_path, RecursiveMode::NonRecursive)?;
+        watcher.watch(log_path, RecursiveMode::NonRecursive)
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to watch log file: {}", e),
+        )))?;
 
         let mut last_pos = 0u64;
         loop {
@@ -90,7 +103,7 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
         // One-time read of last N lines
         if let Ok(file) = fs::File::open(log_path) {
             let reader = BufReader::new(file);
-            let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()?;
+            let lines: Vec<String> = reader.lines().collect::<std::result::Result<_, _>>()?;
             
             let last_n = 20;
             let start = if lines.len() > last_n {
@@ -142,8 +155,11 @@ async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
         if checkpoints != last_checkpoints {
             println!("\n{} Checkpoints found:", checkpoints.len());
             for (path, modified, size) in &checkpoints[..checkpoints.len().min(5)] {
+                let file_name = path.file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
                 println!("  {} - {} ({})", 
-                    path.file_name().unwrap().to_string_lossy(),
+                    file_name,
                     format!("{:?}", modified),
                     format_size(*size)
                 );

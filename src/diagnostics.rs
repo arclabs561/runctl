@@ -3,10 +3,18 @@
 //! Provides visibility into process resource usage, system metrics,
 //! and diagnostic insights for instances and pods.
 
-use anyhow::Result;
+use crate::error::Result;
 use aws_sdk_ssm::Client as SsmClient;
 use serde::{Deserialize, Serialize};
 use crate::aws_utils::execute_ssm_command;
+
+/// Thresholds for high resource usage warnings
+const HIGH_CPU_THRESHOLD_PERCENT: f64 = 80.0;
+const HIGH_MEMORY_THRESHOLD_PERCENT: f64 = 80.0;
+const HIGH_GPU_UTILIZATION_THRESHOLD_PERCENT: f64 = 80.0;
+const HIGH_GPU_MEMORY_THRESHOLD_PERCENT: f64 = 80.0;
+const ACTIVE_PROCESS_CPU_THRESHOLD_PERCENT: f64 = 10.0;
+const ACTIVE_PROCESS_MEMORY_THRESHOLD_MB: f64 = 1000.0;
 
 /// Resource usage information for an instance
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,10 +153,14 @@ fn parse_resource_usage_output(instance_id: &str, output: &str) -> Result<Resour
 
     // Parse output line by line
     // Helper to parse a metric value with fallback
+    // Returns 0.0 on parse failure (logged separately if needed)
     let parse_metric = |prefix: &str, data: &str| -> f64 {
         data.strip_prefix(prefix)
             .and_then(|s| s.trim().parse().ok())
-            .unwrap_or(0.0)
+            .unwrap_or_else(|| {
+                tracing::debug!("Failed to parse metric with prefix '{}' from: {}", prefix, data);
+                0.0
+            })
     };
     
     for line in output.lines() {
@@ -242,17 +254,26 @@ fn parse_top_processes(data: &str) -> Vec<ProcessInfo> {
             continue;
         }
         let parts: Vec<&str> = entry.split(':').collect();
+        // Explicitly check bounds before accessing
         if parts.len() >= 6 {
+            // Use get() for safe access (first() is more idiomatic than get(0))
+            let pid_str = parts.first().copied().unwrap_or("0");
+            let user = parts.get(1).copied().unwrap_or("unknown");
+            let command = parts.get(2).copied().unwrap_or("");
+            let cpu_str = parts.get(3).copied().unwrap_or("0");
+            let mem_str = parts.get(4).copied().unwrap_or("0");
+            let runtime_str = parts.get(5).copied().unwrap_or("0");
+            
             if let (Ok(pid), Ok(cpu), Ok(mem), Ok(runtime)) = (
-                parts[0].parse::<u32>(),
-                parts[3].parse::<f64>(),
-                parts[4].parse::<f64>(),
-                parts[5].parse::<f64>(),
+                pid_str.parse::<u32>(),
+                cpu_str.parse::<f64>(),
+                mem_str.parse::<f64>(),
+                runtime_str.parse::<f64>(),
             ) {
                 processes.push(ProcessInfo {
                     pid,
-                    user: parts[1].to_string(),
-                    command: parts[2].to_string(),
+                    user: user.to_string(),
+                    command: command.to_string(),
                     cpu_percent: cpu,
                     memory_mb: mem,
                     memory_percent: mem,
@@ -322,12 +343,19 @@ fn parse_gpu_info(data: &str) -> Option<GpuInfo> {
 
 fn parse_network_stats(data: &str) -> Option<NetworkStats> {
     let parts: Vec<&str> = data.split(',').collect();
+    // Explicitly check bounds before accessing
     if parts.len() >= 4 {
+        // Use get() for safe access (first() is more idiomatic than get(0))
+        let rx_bytes_str = parts.first().copied().unwrap_or("0");
+        let tx_bytes_str = parts.get(1).copied().unwrap_or("0");
+        let rx_packets_str = parts.get(2).copied().unwrap_or("0");
+        let tx_packets_str = parts.get(3).copied().unwrap_or("0");
+        
         if let (Ok(rx_bytes), Ok(tx_bytes), Ok(rx_packets), Ok(tx_packets)) = (
-            parts[0].parse::<u64>(),
-            parts[1].parse::<u64>(),
-            parts[2].parse::<u64>(),
-            parts[3].parse::<u64>(),
+            rx_bytes_str.parse::<u64>(),
+            tx_bytes_str.parse::<u64>(),
+            rx_packets_str.parse::<u64>(),
+            tx_packets_str.parse::<u64>(),
         ) {
             return Some(NetworkStats {
                 rx_bytes,
@@ -350,12 +378,12 @@ pub async fn check_high_resource_usage(
     let mut warnings = Vec::new();
     
     // Check CPU usage
-    if usage.cpu_percent > 80.0 {
+    if usage.cpu_percent > HIGH_CPU_THRESHOLD_PERCENT {
         warnings.push(format!("High CPU usage: {:.1}%", usage.cpu_percent));
     }
     
     // Check memory usage
-    if usage.memory_percent > 80.0 {
+    if usage.memory_percent > HIGH_MEMORY_THRESHOLD_PERCENT {
         warnings.push(format!("High memory usage: {:.1}% ({:.1}GB/{:.1}GB)", 
             usage.memory_percent, usage.memory_used_gb, usage.memory_total_gb));
     }
@@ -363,11 +391,11 @@ pub async fn check_high_resource_usage(
     // Check GPU usage
     if let Some(ref gpu) = usage.gpu_info {
         for gpu_detail in &gpu.gpus {
-            if gpu_detail.utilization_percent > 80.0 {
+            if gpu_detail.utilization_percent > HIGH_GPU_UTILIZATION_THRESHOLD_PERCENT {
                 warnings.push(format!("GPU {} high utilization: {:.1}%", 
                     gpu_detail.index, gpu_detail.utilization_percent));
             }
-            if gpu_detail.memory_percent > 80.0 {
+            if gpu_detail.memory_percent > HIGH_GPU_MEMORY_THRESHOLD_PERCENT {
                 warnings.push(format!("GPU {} high memory usage: {:.1}%", 
                     gpu_detail.index, gpu_detail.memory_percent));
             }
@@ -382,7 +410,8 @@ pub async fn check_high_resource_usage(
                 p.command.contains("train") ||
                 p.command.contains("training") ||
                 p.command.contains("main.py") ||
-                p.cpu_percent > 10.0 || p.memory_mb > 1000.0
+                p.cpu_percent > ACTIVE_PROCESS_CPU_THRESHOLD_PERCENT || 
+                p.memory_mb > ACTIVE_PROCESS_MEMORY_THRESHOLD_MB
             )
         })
         .collect();

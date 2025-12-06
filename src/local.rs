@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use std::path::PathBuf;
 use std::process::Command;
 use crate::config::Config;
@@ -7,6 +7,8 @@ use crate::utils::ensure_dir;
 use tracing::info;
 
 pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Result<()> {
+    crate::validation::validate_path(&script.display().to_string())?;
+    
     if !script.exists() {
         let mut err = format!("Script not found: {}", script.display());
         
@@ -41,7 +43,10 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
         }
         
         err.push_str("\n  Tip: Use absolute paths or check your current directory with 'pwd'");
-        anyhow::bail!("{}", err);
+        return Err(TrainctlError::ResourceNotFound {
+            resource_type: "script".to_string(),
+            resource_id: script.display().to_string(),
+        });
     }
 
     info!("Starting local training: {}", script.display());
@@ -61,7 +66,10 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     // Save session metadata
     let sessions_dir = PathBuf::from(".trainctl");
     session.save(&sessions_dir)
-        .context("Failed to save training session")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to save training session: {}", e),
+        )))?;
 
     // Check if script is Python and use uv if available
     let is_python = script.extension()
@@ -97,7 +105,10 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     info!("Executing: {:?}", cmd);
 
     let status = cmd.status()
-        .with_context(|| format!("Failed to execute script: {}", script.display()))?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to execute script {}: {}", script.display(), e),
+        )))?;
 
     if !status.success() {
         let mut err = format!("Training failed with exit code: {:?}", status.code());
@@ -118,7 +129,13 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
             }
         }
         
-        anyhow::bail!("{}", err);
+        return Err(TrainctlError::Resource {
+            resource_type: "training".to_string(),
+            operation: "execute".to_string(),
+            resource_id: Some(script.display().to_string()),
+            message: err,
+            source: None,
+        });
     }
 
     info!("Training completed successfully");

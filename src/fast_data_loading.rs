@@ -188,8 +188,7 @@ dataloader = DataLoader(
     }
     
     fn parallel_s3_loading_script(&self, data_path: &Path) -> String {
-        let s3_source = self.config.s3_source.as_ref()
-            .map(|s| s.as_str())
+        let s3_source = self.config.s3_source.as_deref()
             .unwrap_or("s3://bucket/data");
         let standard_script = self.standard_loading_script(data_path);
         format!(

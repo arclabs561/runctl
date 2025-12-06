@@ -10,6 +10,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 
 /// Cleanup safety checks
+#[derive(Default)]
 pub struct CleanupSafety {
     /// Resources that should never be deleted
     protected_resources: HashSet<ResourceId>,
