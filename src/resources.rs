@@ -1029,10 +1029,10 @@ async fn list_runpod_pods(detailed: bool, _config: &Config) -> Result<()> {
         .args(["get", "pod"])
         .output()
         .map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to execute runpodctl: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to execute runpodctl: {}",
+                e
+            )))
         })?;
 
     if !output.status.success() {

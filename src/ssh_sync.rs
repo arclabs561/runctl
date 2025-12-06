@@ -223,7 +223,7 @@ fn sync_incremental_blocking(
         let mut contents = Vec::new();
         local_file
             .read_to_end(&mut contents)
-            .map_err(|e| TrainctlError::Io(e))?;
+            .map_err(TrainctlError::Io)?;
 
         // Write to remote via SFTP
         let mut remote_file = sftp.create(Path::new(&remote_path)).map_err(|e| {
