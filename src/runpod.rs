@@ -80,10 +80,10 @@ async fn create_pod(name: Option<String>, gpu: String, disk: u32, config: &Confi
     info!("Executing: {:?}", cmd);
 
     let output = cmd.output().map_err(|e| {
-        TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to execute runpodctl: {}", e),
-        ))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to execute runpodctl: {}",
+            e
+        )))
     })?;
 
     if !output.status.success() {

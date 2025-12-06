@@ -5,10 +5,11 @@ use std::path::Path;
 pub fn ensure_dir(path: &Path) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(path).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to create directory {}: {}", path.display(), e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to create directory {}: {}",
+                path.display(),
+                e
+            )))
         })?;
     }
     Ok(())
