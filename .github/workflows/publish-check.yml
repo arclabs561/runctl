@@ -106,7 +106,12 @@ jobs:
           cargo test --test integration_test || true
           echo "✓ All tests pass"
 
+      # SECURITY: Only run publish checks on tags or manual dispatch from main branch
+      # Never run on PRs from forks to prevent secret exposure
       - name: Dry-run publish
+        if: |
+          github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
         run: |
           cargo publish --dry-run --allow-dirty
         env:
