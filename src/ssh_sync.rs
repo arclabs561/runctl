@@ -6,6 +6,7 @@
 use crate::error::{Result, TrainctlError};
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use ignore::WalkBuilder;
 use indicatif::{ProgressBar, ProgressStyle};
 use ssh2::Session;
 use std::fs::File;
@@ -14,7 +15,6 @@ use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use tar::Builder;
 use tracing::info;
-use walkdir::WalkDir;
 
 /// Sync code to instance using native Rust SSH and tar
 pub async fn sync_code_native(
@@ -142,32 +142,22 @@ fn sync_incremental_blocking(
     remote_dir: &str,
     pb: &Option<ProgressBar>,
 ) -> Result<()> {
-    // Get list of files to sync (excluding patterns)
-    let exclusions = [
-        ".git",
-        "checkpoints",
-        "results",
-        "data",
-        "__pycache__",
-        "*.pyc",
-        ".aim",
-        "node_modules",
-        ".venv",
-    ];
-
-    let files_to_sync: Vec<PathBuf> = WalkDir::new(project_root)
-        .into_iter()
-        .filter_entry(|e| {
-            let path = e.path();
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-
-            !exclusions
-                .iter()
-                .any(|excl| name == *excl || path.to_string_lossy().contains(excl))
+    // Get list of files to sync (respecting .gitignore)
+    // Use ignore crate to parse .gitignore files and respect patterns
+    let files_to_sync: Vec<PathBuf> = WalkBuilder::new(project_root)
+        .git_ignore(true) // Respect .gitignore files
+        .git_global(false) // Don't use global gitignore (project-specific only)
+        .git_exclude(false) // Don't use .git/info/exclude
+        .build()
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            // Only include files (not directories)
+            if entry.file_type()?.is_file() {
+                Some(entry.path().to_path_buf())
+            } else {
+                None
+            }
         })
-        .filter_map(|e| e.ok())
-        .filter(|e| e.file_type().is_file())
-        .map(|e| e.path().to_path_buf())
         .collect();
 
     if let Some(ref p) = pb {
@@ -283,34 +273,20 @@ fn sync_full_tar_blocking(
         let encoder = GzEncoder::new(&mut archive_data, Compression::default());
         let mut tar = Builder::new(encoder);
 
-        let exclusions = [
-            ".git",
-            "checkpoints",
-            "results",
-            "data",
-            "__pycache__",
-            ".aim",
-            "node_modules",
-            ".venv",
-        ];
-
-        for entry in WalkDir::new(project_root).into_iter() {
+        // Use ignore crate to respect .gitignore files
+        for entry in WalkBuilder::new(project_root)
+            .git_ignore(true) // Respect .gitignore files
+            .git_global(false) // Don't use global gitignore (project-specific only)
+            .git_exclude(false) // Don't use .git/info/exclude
+            .build()
+        {
             let entry = entry.map_err(|e| {
-                TrainctlError::Io(std::io::Error::other(format!("WalkDir error: {}", e)))
+                TrainctlError::Io(std::io::Error::other(format!("WalkBuilder error: {}", e)))
             })?;
 
             let path = entry.path();
-            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-            // Skip excluded patterns
-            if exclusions.iter().any(|excl| {
-                name == *excl
-                    || path.to_string_lossy().contains(excl)
-                    || (excl.starts_with("*") && name.ends_with(&excl[1..]))
-            }) {
-                continue;
-            }
-
+            // Only process files (directories are handled automatically by gitignore)
             if path.is_file() {
                 let relative_path = path.strip_prefix(project_root).map_err(|e| {
                     TrainctlError::Io(std::io::Error::new(

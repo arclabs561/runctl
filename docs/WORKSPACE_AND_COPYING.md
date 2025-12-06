@@ -17,14 +17,10 @@ When you use `--sync-code` (or it's enabled by default), trainctl:
 
 2. **Creates a tar archive** of the entire project root
 
-3. **Excludes** the following (to save space/time):
-   - `.git/` - Git repository
-   - `checkpoints/` - Checkpoint files
-   - `results/` - Result files
-   - `data/` - Data directory
-   - `__pycache__/` - Python cache
-   - `*.pyc` - Compiled Python files
-   - `.aim/` - Aim tracking data
+3. **Respects `.gitignore` files** - All patterns in `.gitignore` are automatically excluded
+   - This includes common patterns like `.git/`, `__pycache__/`, `*.pyc`, `node_modules/`, `.venv/`, etc.
+   - You can customize exclusions by adding patterns to your `.gitignore` file
+   - The tool uses the `ignore` crate to parse `.gitignore` according to the gitignore spec
 
 4. **Transfers via SSH** using tar pipe:
    ```bash
