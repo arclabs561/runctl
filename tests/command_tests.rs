@@ -142,8 +142,13 @@ fn test_help_text_present() {
     ];
     
     for cmd in commands {
-        let output = Command::new("cargo")
-            .args(&["run", "--release", "--", cmd, "--help"])
+        let cmd_parts: Vec<&str> = cmd.split_whitespace().collect();
+        let mut cargo_cmd = Command::new("cargo");
+        cargo_cmd.args(&["run", "--release", "--"]);
+        cargo_cmd.args(&cmd_parts);
+        cargo_cmd.arg("--help");
+        
+        let output = cargo_cmd
             .output()
             .expect(&format!("Failed to execute {} --help", cmd));
         
@@ -166,11 +171,26 @@ fn test_json_error_output() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     // Error should be JSON - find JSON in stderr (may have other output)
-    let json_start = stderr.find('{').unwrap_or(0);
-    let json_str = &stderr[json_start..];
-    // Remove any trailing whitespace/newlines
-    let json_str = json_str.trim();
-    let _json: serde_json::Value = serde_json::from_str(json_str)
-        .expect(&format!("Error output should be JSON, got: {}", stderr));
+    if let Some(json_start) = stderr.find('{') {
+        // Find the matching closing brace
+        let mut brace_count = 0;
+        let mut json_end = json_start;
+        for (i, ch) in stderr[json_start..].char_indices() {
+            if ch == '{' {
+                brace_count += 1;
+            } else if ch == '}' {
+                brace_count -= 1;
+                if brace_count == 0 {
+                    json_end = json_start + i + 1;
+                    break;
+                }
+            }
+        }
+        let json_str = &stderr[json_start..json_end];
+        let _json: serde_json::Value = serde_json::from_str(json_str)
+            .expect(&format!("Error output should be JSON, got: {}", stderr));
+    } else {
+        panic!("No JSON found in error output: {}", stderr);
+    }
 }
 
