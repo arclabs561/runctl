@@ -296,10 +296,7 @@ fn sync_full_tar_blocking(
 
         for entry in WalkDir::new(project_root).into_iter() {
             let entry = entry.map_err(|e| {
-                TrainctlError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("WalkDir error: {}", e),
-                ))
+                TrainctlError::Io(std::io::Error::other(format!("WalkDir error: {}", e)))
             })?;
 
             let path = entry.path();
@@ -324,19 +321,19 @@ fn sync_full_tar_blocking(
 
                 tar.append_file(relative_path, &mut File::open(path)?)
                     .map_err(|e| {
-                        TrainctlError::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to add file to archive: {}", e),
-                        ))
+                        TrainctlError::Io(std::io::Error::other(format!(
+                            "Failed to add file to archive: {}",
+                            e
+                        )))
                     })?;
             }
         }
 
         tar.finish().map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to finish archive: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to finish archive: {}",
+                e
+            )))
         })?;
     }
 

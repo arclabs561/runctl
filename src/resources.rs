@@ -211,7 +211,7 @@ pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &
             .filter_map(|inst| {
                 inst.get("instance_type")
                     .and_then(|t| t.as_str())
-                    .map(|t| crate::utils::get_instance_cost(t))
+                    .map(crate::utils::get_instance_cost)
             })
             .sum();
 
@@ -221,7 +221,7 @@ pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &
                 let hourly = inst
                     .get("instance_type")
                     .and_then(|t| t.as_str())
-                    .map(|t| crate::utils::get_instance_cost(t))?;
+                    .map(crate::utils::get_instance_cost)?;
                 let hours = inst
                     .get("launch_time")
                     .and_then(|lt| lt.as_str())
@@ -390,10 +390,10 @@ async fn list_runpod_pods_json(_config: &Config) -> Result<Vec<serde_json::Value
         .args(["get", "pod"])
         .output()
         .map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to run runpodctl: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to run runpodctl: {}",
+                e
+            )))
         })?;
 
     if !output.status.success() {

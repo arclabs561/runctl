@@ -134,9 +134,9 @@ pub fn get_instance_cost(instance_type: &str) -> f64 {
             } else if instance_type.starts_with("m5.")
                 || instance_type.starts_with("m6i.")
                 || instance_type.starts_with("m7i.")
+                || instance_type.starts_with("c5.")
+                || instance_type.starts_with("c6i.")
             {
-                0.2
-            } else if instance_type.starts_with("c5.") || instance_type.starts_with("c6i.") {
                 0.2
             } else if instance_type.starts_with("g4dn.") {
                 0.8
