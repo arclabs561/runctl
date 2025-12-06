@@ -3,8 +3,9 @@
 //! Provides seamless data pipeline for training workloads with
 //! optimized transfer strategies.
 
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use crate::config::Config;
+use crate::validation as validate;
 use std::path::{Path, PathBuf};
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_ssm::Client as SsmClient;
@@ -22,11 +23,22 @@ pub enum DataLocation {
 
 /// Transfer options
 #[derive(Debug, Clone)]
+/// Options for data transfer operations
+/// 
+/// Some fields are reserved for future implementation:
+/// - `compression`: Future support for compressed transfers
+/// - `verify`: Future checksum verification
+/// - `resume`: Future resume capability for interrupted transfers
+/// - `exclude`: Future pattern-based exclusions
 pub struct TransferOptions {
     pub parallel: Option<usize>, // Number of parallel transfers
+    #[allow(dead_code)]
     pub compression: bool,
+    #[allow(dead_code)]
     pub verify: bool, // Verify checksums
+    #[allow(dead_code)]
     pub resume: bool, // Resume interrupted transfers
+    #[allow(dead_code)]
     pub exclude: Vec<String>, // Patterns to exclude
 }
 
@@ -45,20 +57,46 @@ impl Default for TransferOptions {
 /// Parse location string into DataLocation
 fn parse_location(loc: &str) -> Result<DataLocation> {
     if loc.starts_with("s3://") {
+        validate::validate_s3_path(loc)?;
         Ok(DataLocation::S3(loc.to_string()))
     } else if loc.contains(':') && !loc.starts_with("file://") {
         // Assume instance:path format
         let parts: Vec<&str> = loc.splitn(2, ':').collect();
         if parts.len() == 2 {
+            let instance_id = parts[0];
+            let path_str = parts[1];
+            
+            // Validate instance ID
+            validate::validate_instance_id(instance_id)
+                .map_err(|e| TrainctlError::Validation {
+                    field: "instance_id".to_string(),
+                    reason: format!("Invalid instance ID in location '{}': {}", loc, e),
+                })?;
+            
+            // Validate path
+            validate::validate_path(path_str)
+                .map_err(|e| TrainctlError::Validation {
+                    field: "path".to_string(),
+                    reason: format!("Invalid path in location '{}': {}", loc, e),
+                })?;
+            
             Ok(DataLocation::TrainingInstance(
-                parts[0].to_string(),
-                PathBuf::from(parts[1]),
+                instance_id.to_string(),
+                PathBuf::from(path_str),
             ))
         } else {
-            anyhow::bail!("Invalid instance location format. Use instance-id:/path/to/dest");
+            Err(TrainctlError::Validation {
+                field: "location".to_string(),
+                reason: "Invalid instance location format. Use instance-id:/path/to/dest".to_string(),
+            })
         }
     } else {
         // Local path
+        validate::validate_path(loc)
+            .map_err(|e| TrainctlError::Validation {
+                field: "path".to_string(),
+                reason: format!("Invalid local path '{}': {}", loc, e),
+            })?;
         Ok(DataLocation::Local(PathBuf::from(loc)))
     }
 }
@@ -90,8 +128,7 @@ pub async fn handle_transfer(
         exclude: vec!["*.pyc".to_string(), "__pycache__".to_string()],
     };
     
-    transfer.transfer(&src, &dst, options).await
-        .map_err(|e| anyhow::anyhow!("Transfer failed: {}", e))?;
+    transfer.transfer(&src, &dst, options).await?;
     
     println!("Transfer complete: {} -> {}", source, destination);
     Ok(())
@@ -137,7 +174,7 @@ impl DataTransfer {
             (DataLocation::S3(src), DataLocation::TrainingInstance(instance_id, dst)) => {
                 self.s3_to_instance(src, instance_id, dst, options).await
             }
-            _ => anyhow::bail!("Unsupported transfer combination"),
+            _ => Err(TrainctlError::DataTransfer("Unsupported transfer combination".to_string())),
         }
     }
     
@@ -149,7 +186,7 @@ impl DataTransfer {
         options: TransferOptions,
     ) -> Result<()> {
         let client = self.s3_client.as_ref()
-            .context("S3 client not configured")?;
+            .ok_or_else(|| TrainctlError::S3("S3 client not configured".to_string()))?;
         
         let (bucket, key) = parse_s3_path(s3_path)?;
         
@@ -174,7 +211,7 @@ impl DataTransfer {
         options: TransferOptions,
     ) -> Result<()> {
         let client = self.s3_client.as_ref()
-            .context("S3 client not configured")?;
+            .ok_or_else(|| TrainctlError::S3("S3 client not configured".to_string()))?;
         
         let (bucket, key) = parse_s3_path(s3_path)?;
         
@@ -192,7 +229,7 @@ impl DataTransfer {
         &self,
         source: &Path,
         instance_id: &str,
-        remote_path: &PathBuf,
+        remote_path: &Path,
         _options: TransferOptions,
     ) -> Result<()> {
         // Strategy: Upload to S3 first, then download on instance
@@ -200,7 +237,7 @@ impl DataTransfer {
         
         let s3_bucket = self.config.aws.as_ref()
             .and_then(|c| c.s3_bucket.as_ref())
-            .context("S3 bucket not configured")?;
+            .ok_or_else(|| TrainctlError::Config(crate::error::ConfigError::MissingField("s3_bucket".to_string())))?;
         
         let temp_s3_path = format!("s3://{}/trainctl-temp/{}/{}", 
             s3_bucket, instance_id, 
@@ -220,7 +257,7 @@ impl DataTransfer {
         info!("Downloading on instance {} to {}", instance_id, remote_path.display());
         
         let ssm_client = self.ssm_client.as_ref()
-            .context("SSM client not available. Ensure AWS credentials are configured.")?;
+            .ok_or_else(|| TrainctlError::Ssm("SSM client not available. Ensure AWS credentials are configured.".to_string()))?;
         
         // Ensure remote directory exists
         let mkdir_cmd = format!("mkdir -p {}", remote_path.parent().map(|p| p.to_string_lossy()).unwrap_or_else(|| ".".into()));
@@ -244,14 +281,14 @@ impl DataTransfer {
         &self,
         s3_path: &str,
         instance_id: &str,
-        remote_path: &PathBuf,
+        remote_path: &Path,
         _options: TransferOptions,
     ) -> Result<()> {
         // Use s5cmd on instance for fastest transfer (fallback to aws s3 if s5cmd not available)
         info!("Transferring {} to instance {}:{}", s3_path, instance_id, remote_path.display());
         
         let ssm_client = self.ssm_client.as_ref()
-            .context("SSM client not available. Ensure AWS credentials are configured.")?;
+            .ok_or_else(|| TrainctlError::Ssm("SSM client not available. Ensure AWS credentials are configured.".to_string()))?;
         
         // Ensure remote directory exists
         let mkdir_cmd = format!("mkdir -p {}", remote_path.parent().map(|p| p.to_string_lossy()).unwrap_or_else(|| ".".into()));
@@ -289,7 +326,7 @@ impl DataTransfer {
         let pb = ProgressBar::new(files.len() as u64);
         pb.set_style(ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .unwrap());
+            .expect("Progress bar template should be valid"));
         
         let parallel = options.parallel.unwrap_or(4);
         let mut handles = Vec::new();
@@ -360,10 +397,10 @@ impl DataTransfer {
             .key(key)
             .send()
             .await
-            .context("Download failed")?;
+            .map_err(|e| TrainctlError::S3(format!("Download failed: {}", e)))?;
         
         let data = response.body.collect().await
-            .context("Failed to read response")?;
+            .map_err(|e| TrainctlError::S3(format!("Failed to read response: {}", e)))?;
         
         std::fs::write(destination, data.into_bytes())?;
         Ok(())
@@ -392,11 +429,14 @@ impl DataTransfer {
         cmd.arg(s3_path);
         
         let output = cmd.output()
-            .context("Failed to execute s5cmd")?;
+            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to execute s5cmd: {}", e),
+            )))?;
         
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("s5cmd upload failed: {}", stderr);
+            return Err(TrainctlError::DataTransfer(format!("s5cmd upload failed: {}", stderr)));
         }
         
         Ok(())
@@ -422,11 +462,14 @@ impl DataTransfer {
         cmd.arg(destination.to_string_lossy().as_ref());
         
         let output = cmd.output()
-            .context("Failed to execute s5cmd")?;
+            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to execute s5cmd: {}", e),
+            )))?;
         
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("s5cmd download failed: {}", stderr);
+            return Err(TrainctlError::DataTransfer(format!("s5cmd download failed: {}", stderr)));
         }
         
         Ok(())
@@ -440,7 +483,10 @@ async fn upload_single_file(
     file_path: &Path,
 ) -> Result<()> {
     let body = aws_sdk_s3::primitives::ByteStream::from_path(file_path).await
-        .context("Failed to read file")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to read file: {}", e),
+        )))?;
     
     client
         .put_object()
@@ -449,7 +495,7 @@ async fn upload_single_file(
         .body(body)
         .send()
         .await
-        .context("Upload failed")?;
+        .map_err(|e| TrainctlError::S3(format!("Upload failed: {}", e)))?;
     
     Ok(())
 }
@@ -459,14 +505,14 @@ use crate::aws_utils::execute_ssm_command;
 
 pub fn parse_s3_path(s3_path: &str) -> Result<(String, String)> {
     if !s3_path.starts_with("s3://") {
-        anyhow::bail!("S3 path must start with s3://");
+        return Err(TrainctlError::S3("S3 path must start with s3://".to_string()));
     }
     
     let path = &s3_path[5..];
     let parts: Vec<&str> = path.splitn(2, '/').collect();
     
     if parts.len() != 2 {
-        anyhow::bail!("Invalid S3 path format. Expected s3://bucket/key");
+        return Err(TrainctlError::S3("Invalid S3 path format. Expected s3://bucket/key".to_string()));
     }
     
     Ok((parts[0].to_string(), parts[1].to_string()))

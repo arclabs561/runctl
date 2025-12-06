@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use clap::Subcommand;
 use std::path::PathBuf;
 use crate::config::Config;
@@ -54,7 +54,11 @@ async fn create_pod(
 
     // Check for runpodctl
     if which::which("runpodctl").is_err() {
-        anyhow::bail!("runpodctl not found. Install from: https://github.com/runpod/runpodctl");
+        return Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "runpodctl not found. Install from: https://github.com/runpod/runpodctl".to_string(),
+            source: None,
+        });
     }
 
     let pod_name = name.unwrap_or_else(|| {
@@ -62,7 +66,7 @@ async fn create_pod(
     });
 
     let runpod_config = config.runpod.as_ref()
-        .context("RunPod config not found")?;
+        .ok_or_else(|| TrainctlError::Config(crate::error::ConfigError::MissingField("runpod".to_string())))?;
 
     let image = &runpod_config.default_image;
 
@@ -78,17 +82,28 @@ async fn create_pod(
     info!("Executing: {:?}", cmd);
 
     let output = cmd.output()
-        .context("Failed to execute runpodctl")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to execute runpodctl: {}", e),
+        )))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to create pod: {}", stderr);
+        return Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: format!("Failed to create pod: {}", stderr),
+            source: None,
+        });
     }
 
     // Extract pod ID from output
     let stdout = String::from_utf8_lossy(&output.stdout);
     let pod_id = extract_pod_id(&stdout)
-        .context("Could not extract pod ID from output")?;
+        .ok_or_else(|| TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Could not extract pod ID from output".to_string(),
+            source: None,
+        })?;
 
     println!("Pod created: {}", pod_id);
     println!("   Waiting for pod to be ready...");
@@ -109,7 +124,10 @@ async fn train_on_pod(
     info!("Starting training on pod: {}", pod_id);
 
     if !script.exists() {
-        anyhow::bail!("Script not found: {}", script.display());
+        return Err(TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("Script not found: {}", script.display()),
+        )));
     }
 
     // Upload script to pod
@@ -120,10 +138,17 @@ async fn train_on_pod(
     upload_cmd.arg("/workspace/training_script");
 
     let upload_output = upload_cmd.output()
-        .context("Failed to upload script")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to upload script: {}", e),
+        )))?;
 
     if !upload_output.status.success() {
-        anyhow::bail!("Failed to upload script");
+        return Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Failed to upload script".to_string(),
+            source: None,
+        });
     }
 
     // Execute training
@@ -139,12 +164,18 @@ async fn train_on_pod(
 
     if background {
         train_cmd.spawn()
-            .context("Failed to start background training")?;
+            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to start background training: {}", e),
+            )))?;
         println!("Training started in background");
         println!("   Monitor with: trainctl runpod monitor {} --follow", pod_id);
     } else {
         train_cmd.status()
-            .context("Training failed")?;
+            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Training failed: {}", e),
+            )))?;
         println!("Training completed");
     }
 
@@ -180,10 +211,17 @@ async fn download_from_pod(pod_id: String, remote: PathBuf, local: PathBuf) -> R
     cmd.arg(&local);
 
     let status = cmd.status()
-        .context("Failed to download from pod")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to download from pod: {}", e),
+        )))?;
 
     if !status.success() {
-        anyhow::bail!("Download failed");
+        return Err(TrainctlError::CloudProvider {
+            provider: "runpod".to_string(),
+            message: "Download failed".to_string(),
+            source: None,
+        });
     }
 
     println!("Download complete");

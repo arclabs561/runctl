@@ -3,7 +3,7 @@
 //! Provides commands for creating, managing, and optimizing EBS volumes
 //! for training workloads, especially with spot instances.
 
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ec2::types::VolumeType;
@@ -138,7 +138,7 @@ pub enum EbsCommands {
     },
 }
 
-pub async fn handle_command(cmd: EbsCommands, config: &Config) -> Result<()> {
+pub async fn handle_command(cmd: EbsCommands, config: &Config, output_format: &str) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let ssm_client = SsmClient::new(&aws_config);
@@ -189,7 +189,7 @@ async fn create_volume(
     ssm_client: &SsmClient,
 ) -> Result<()> {
     let aws_cfg = config.aws.as_ref()
-        .context("AWS config not found")?;
+        .ok_or_else(|| TrainctlError::Aws("AWS config not found".to_string()))?;
     
     // Get availability zone if not provided
     let az = if let Some(az) = availability_zone {
@@ -206,7 +206,10 @@ async fn create_volume(
         "io2" => VolumeType::Io2,
         "st1" => VolumeType::St1,
         "sc1" => VolumeType::Sc1,
-        _ => anyhow::bail!("Invalid volume type: {}. Use: gp3, gp2, io2, st1, sc1", volume_type),
+        _ => return Err(TrainctlError::Validation {
+            field: "volume_type".to_string(),
+            reason: format!("Invalid volume type: {}. Use: gp3, gp2, io2, st1, sc1", volume_type),
+        }),
     };
     
     info!("Creating EBS volume: size={}GB, type={}, az={}", size, volume_type, az);
@@ -223,15 +226,14 @@ async fn create_volume(
             )
             .send()
             .await
-            .context("Failed to check for existing volumes")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to check for existing volumes: {}", e)))?;
         
         if !response.volumes().is_empty() {
             let existing_id = response.volumes()[0].volume_id().unwrap_or("unknown");
-            anyhow::bail!(
-                "Volume with name '{}' already exists: {}",
-                name_val,
-                existing_id
-            );
+            return Err(TrainctlError::ResourceExists {
+                resource_type: "volume".to_string(),
+                resource_id: format!("Volume with name '{}' already exists: {}", name_val, existing_id),
+            });
         }
     }
     
@@ -291,10 +293,10 @@ async fn create_volume(
     
     // Send request (retry logic can be added when ebs is moved to library)
     let response = request.send().await
-        .context("Failed to create EBS volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to create EBS volume: {}", e)))?;
     
     let volume_id = response.volume_id()
-        .context("Volume ID not in response")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume ID not in response".to_string()))?;
     
     println!("Created EBS volume: {}", volume_id);
     println!("   Size: {} GB", size);
@@ -331,7 +333,7 @@ async fn list_volumes(
         .describe_volumes()
         .send()
         .await
-        .context("Failed to list EBS volumes")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list EBS volumes: {}", e)))?;
     
     let volumes = response.volumes();
     
@@ -414,41 +416,45 @@ async fn attach_volume(
         .volume_ids(&volume_id)
         .send()
         .await
-        .context("Failed to describe volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
     
     let volume = volume_response
         .volumes()
         .first()
-        .context("Volume not found")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume not found".to_string()))?;
     
     let volume_az = volume.availability_zone()
-        .context("Volume has no availability zone")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume has no availability zone".to_string()))?;
     
     let instance_response = client
         .describe_instances()
         .instance_ids(&instance_id)
         .send()
         .await
-        .context("Failed to describe instance")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
     
     let instance = instance_response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
         .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
-        .context("Instance not found")?;
+        .ok_or_else(|| TrainctlError::Aws(format!("Instance not found: {}", instance_id)))?;
     
     let instance_az = instance.placement()
         .and_then(|p| p.availability_zone())
-        .context("Instance has no availability zone")?;
+        .ok_or_else(|| TrainctlError::Aws("Instance has no availability zone".to_string()))?;
     
     if volume_az != instance_az {
-        anyhow::bail!(
-            "Availability zone mismatch: Volume {} is in {}, but instance {} is in {}.\n\
-             EBS volumes must be in the same AZ as the instance.\n\
-             Create a new volume in {} or use instance in {}.",
-            volume_id, volume_az, instance_id, instance_az, instance_az, volume_az
-        );
+        return Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: format!(
+                "Availability zone mismatch: Volume {} is in {}, but instance {} is in {}.\n\
+                 EBS volumes must be in the same AZ as the instance.\n\
+                 Create a new volume in {} or use instance in {}.",
+                volume_id, volume_az, instance_id, instance_az, instance_az, volume_az
+            ),
+            source: None,
+        });
     }
     
     // Check if volume is already attached
@@ -457,11 +463,15 @@ async fn attach_volume(
             .first()
             .and_then(|a| a.instance_id())
             .unwrap_or("unknown");
-        anyhow::bail!(
-            "Volume {} is already attached to instance {}.\n\
-             Detach it first or use a different volume.",
-            volume_id, attached_to
-        );
+        return Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: format!(
+                "Volume {} is already attached to instance {}.\n\
+                 Detach it first or use a different volume.",
+                volume_id, attached_to
+            ),
+            source: None,
+        });
     }
     
     client
@@ -471,7 +481,7 @@ async fn attach_volume(
         .device(&device)
         .send()
         .await
-        .context("Failed to attach volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to attach volume: {}", e)))?;
     
     println!("Attached volume {} to instance {} at {}", volume_id, instance_id, device);
     println!("   Note: You may need to mount the volume on the instance:");
@@ -498,7 +508,7 @@ async fn detach_volume(
     }
     
     request.send().await
-        .context("Failed to detach volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to detach volume: {}", e)))?;
     
     println!("Detached volume {}", volume_id);
     Ok(())
@@ -515,11 +525,11 @@ async fn delete_volume(
         .volume_ids(&volume_id)
         .send()
         .await
-        .context("Failed to describe volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
     
     let volume = response.volumes()
         .first()
-        .context("Volume not found")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume not found".to_string()))?;
     
     // Check if volume is persistent/protected
     let is_persistent = volume.tags()
@@ -530,17 +540,25 @@ async fn delete_volume(
         });
     
     if is_persistent && !force {
-        anyhow::bail!(
-            "Volume {} is marked as persistent and protected from deletion.\n\
-             Use --force to override (not recommended for persistent storage).",
-            volume_id
-        );
+        return Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: format!(
+                "Volume {} is marked as persistent and protected from deletion.\n\
+                 Use --force to override (not recommended for persistent storage).",
+                volume_id
+            ),
+            source: None,
+        });
     }
     
     if !force {
         // Check if volume is attached
         if !volume.attachments().is_empty() {
-            anyhow::bail!("Volume is attached. Use --force to detach and delete, or detach first.");
+            return Err(TrainctlError::CloudProvider {
+                provider: "aws".to_string(),
+                message: "Volume is attached. Use --force to detach and delete, or detach first.".to_string(),
+                source: None,
+            });
         }
         
         // Check for snapshots
@@ -554,7 +572,7 @@ async fn delete_volume(
             )
             .send()
             .await
-            .context("Failed to check for snapshots")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to check for snapshots: {}", e)))?;
         
         let snapshot_count = snapshots_response.snapshots().len();
         if snapshot_count > 0 {
@@ -571,7 +589,7 @@ async fn delete_volume(
         .volume_id(&volume_id)
         .send()
         .await
-        .context("Failed to delete volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to delete volume: {}", e)))?;
     
     println!("Deleted volume {}", volume_id);
     Ok(())
@@ -589,7 +607,7 @@ async fn pre_warm_volume(
     info!("Pre-warming volume {} from {}", volume_id, s3_source);
     
     let aws_cfg = config.aws.as_ref()
-        .context("AWS config not found")?;
+        .ok_or_else(|| TrainctlError::Aws("AWS config not found".to_string()))?;
     
     // Get volume details (especially AZ)
     let volume_response = client
@@ -597,13 +615,13 @@ async fn pre_warm_volume(
         .volume_ids(&volume_id)
         .send()
         .await
-        .context("Failed to describe volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
     
     let volume = volume_response.volumes().first()
-        .context("Volume not found")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume not found".to_string()))?;
     
     let availability_zone = volume.availability_zone()
-        .context("Volume has no availability zone")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume has no availability zone".to_string()))?;
     
     let final_mount_point = if mount_point.is_empty() {
         "/mnt/data".to_string()
@@ -619,22 +637,25 @@ async fn pre_warm_volume(
             .instance_ids(inst_id)
             .send()
             .await
-            .context("Failed to describe instance")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
         
         let instance = inst_response
             .reservations()
             .iter()
             .flat_map(|r| r.instances())
             .find(|i| i.instance_id().map(|id| id == inst_id).unwrap_or(false))
-            .context("Instance not found")?;
+            .ok_or_else(|| TrainctlError::Aws(format!("Instance not found: {}", inst_id)))?;
         
         let inst_az = instance.placement()
             .and_then(|p| p.availability_zone())
-            .context("Instance has no availability zone")?;
+            .ok_or_else(|| TrainctlError::Aws("Instance has no availability zone".to_string()))?;
         
         if inst_az != availability_zone {
-            anyhow::bail!("Instance {} is in AZ {}, but volume is in AZ {}. They must be in the same AZ.", 
-                inst_id, inst_az, availability_zone);
+            return Err(TrainctlError::CloudProvider {
+                provider: "aws".to_string(),
+                message: format!("Instance {} is in AZ {}, but volume is in AZ {}. They must be in the same AZ.", inst_id, inst_az, availability_zone),
+                source: None,
+            });
         }
         
         println!("   Using existing instance: {}", inst_id);
@@ -667,7 +688,7 @@ async fn pre_warm_volume(
         .device(device_name)
         .send()
         .await
-        .context("Failed to attach volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to attach volume: {}", e)))?;
     
     // Wait for attachment to complete
     wait_for_volume_attachment(client, &volume_id, &temp_instance_id).await?;
@@ -732,7 +753,7 @@ du -sh {mount}
         .force(false)
         .send()
         .await
-        .context("Failed to detach volume")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to detach volume: {}", e)))?;
     
     wait_for_volume_detached(client, &volume_id).await?;
     println!("Volume detached");
@@ -745,7 +766,7 @@ du -sh {mount}
             .instance_ids(&temp_instance_id)
             .send()
             .await
-            .context("Failed to terminate temporary instance")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to terminate temporary instance: {}", e)))?;
         println!("Temporary instance termination requested");
     }
     
@@ -798,13 +819,13 @@ async fn create_temp_prewarm_instance(
         )
         .send()
         .await
-        .context("Failed to create temporary instance")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to create temporary instance: {}", e)))?;
     
     let instance_id = response
         .instances()
         .first()
         .and_then(|inst| inst.instance_id())
-        .context("No instance ID in response")?
+        .ok_or_else(|| TrainctlError::Aws("No instance ID in response".to_string()))?
         .to_string();
     
     Ok(instance_id)
@@ -826,10 +847,10 @@ async fn create_snapshot(
         .description(&desc);
     
     let response = request.send().await
-        .context("Failed to create snapshot")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to create snapshot: {}", e)))?;
     
     let snapshot_id = response.snapshot_id()
-        .context("Snapshot ID not in response")?;
+        .ok_or_else(|| TrainctlError::Aws("Snapshot ID not in response".to_string()))?;
     
     // Add name tag if provided
     if let Some(name_val) = name {
@@ -844,7 +865,7 @@ async fn create_snapshot(
             )
             .send()
             .await
-            .context("Failed to tag snapshot")?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to tag snapshot: {}", e)))?;
     }
     
     println!("Created snapshot: {}", snapshot_id);
@@ -875,7 +896,7 @@ async fn list_snapshots(
     request = request.owner_ids("self");
     
     let response = request.send().await
-        .context("Failed to list snapshots")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list snapshots: {}", e)))?;
     
     let snapshots = response.snapshots();
     
@@ -931,17 +952,17 @@ async fn restore_from_snapshot(
         .owner_ids("self")
         .send()
         .await
-        .context("Failed to describe snapshot")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe snapshot: {}", e)))?;
     
     let snapshot = response
         .snapshots()
         .first()
-        .context("Snapshot not found")?;
+        .ok_or_else(|| TrainctlError::Aws(format!("Snapshot not found: {}", snapshot_id)))?;
     
     let vol_size = size.unwrap_or(snapshot.volume_size().unwrap_or(100));
     let az = availability_zone
         .or_else(|| snapshot.availability_zone().map(|s| s.to_string()))
-        .context("Availability zone required")?;
+        .ok_or_else(|| TrainctlError::Aws("Availability zone required".to_string()))?;
     
     let vol_type = match volume_type.as_str() {
         "gp3" => VolumeType::Gp3,
@@ -949,7 +970,10 @@ async fn restore_from_snapshot(
         "io2" => VolumeType::Io2,
         "st1" => VolumeType::St1,
         "sc1" => VolumeType::Sc1,
-        _ => anyhow::bail!("Invalid volume type: {}", volume_type),
+        _ => return Err(TrainctlError::Validation {
+            field: "volume_type".to_string(),
+            reason: format!("Invalid volume type: {}", volume_type),
+        }),
     };
     
     info!("Restoring volume from snapshot {} (size={}GB, type={}, az={})", 
@@ -988,10 +1012,10 @@ async fn restore_from_snapshot(
     request = request.tag_specifications(tag_spec);
     
     let response = request.send().await
-        .context("Failed to restore volume from snapshot")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to restore volume from snapshot: {}", e)))?;
     
     let volume_id = response.volume_id()
-        .context("Volume ID not in response")?;
+        .ok_or_else(|| TrainctlError::Aws("Volume ID not in response".to_string()))?;
     
     println!("Restored volume {} from snapshot {}", volume_id, snapshot_id);
     println!("   Size: {} GB", vol_size);

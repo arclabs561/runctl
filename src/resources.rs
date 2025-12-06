@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use clap::Subcommand;
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use chrono::{DateTime, TimeZone, Utc};
 use console::{style, Style};
 use comfy_table::{Table, Cell};
+use sysinfo::{System, Pid};
 
 #[derive(Subcommand, Clone)]
 pub enum ResourceCommands {
@@ -141,7 +142,21 @@ pub async fn handle_command(cmd: ResourceCommands, config: &Config, output_forma
             if watch {
                 list_resources_watch(config, &platform, &filter, sort.as_deref(), interval, project.as_deref(), user.as_deref()).await
             } else {
-                list_resources(detailed, &platform, config, output_format, &format, &filter, sort.as_deref(), limit, show_terminated, export.as_deref(), export_file.as_deref(), project.as_deref(), user.as_deref()).await
+                let list_options = ListResourcesOptions {
+                    detailed,
+                    platform: platform.clone(),
+                    output_format: output_format.to_string(),
+                    format: format.clone(),
+                    filter: filter.clone(),
+                    sort: sort.clone(),
+                    limit,
+                    show_terminated,
+                    export: export.clone(),
+                    export_file: export_file.clone(),
+                    project_filter: project.clone(),
+                    user_filter: user.clone(),
+                };
+                list_resources(list_options, config).await
             }
         }
         ResourceCommands::Summary => {
@@ -159,14 +174,62 @@ pub async fn handle_command(cmd: ResourceCommands, config: &Config, output_forma
     }
 }
 
-pub async fn show_quick_status(_detailed: bool, config: &Config, output_format: &str) -> Result<()> {
+pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &str) -> Result<()> {
     if output_format == "json" {
         let summary = get_resource_summary_json(config).await?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
     }
 
-    // Text output with better formatting
+    if !detailed {
+        // Quick 1-2 line summary
+        let aws_instances_json = list_aws_instances_json(config).await?;
+        let running: Vec<_> = aws_instances_json.iter()
+            .filter(|inst| {
+                inst.get("state")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s == "running")
+                    .unwrap_or(false)
+            })
+            .collect();
+        
+        let running_count = running.len();
+        let hourly_cost: f64 = running.iter()
+            .filter_map(|inst| {
+                inst.get("instance_type")
+                    .and_then(|t| t.as_str())
+                    .map(|t| crate::utils::get_instance_cost(t))
+            })
+            .sum();
+        
+        let total_cost: f64 = running.iter()
+            .filter_map(|inst| {
+                let hourly = inst.get("instance_type")
+                    .and_then(|t| t.as_str())
+                    .map(|t| crate::utils::get_instance_cost(t))?;
+                let hours = inst.get("launch_time")
+                    .and_then(|lt| lt.as_str())
+                    .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| {
+                        let runtime = Utc::now().signed_duration_since(dt.with_timezone(&Utc));
+                        runtime.num_hours().max(0) as f64
+                    })
+                    .unwrap_or(0.0);
+                Some(hourly * hours)
+            })
+            .sum();
+        
+        println!("{} instances running, ${:.2}/hr, ${:.2} total", 
+                 running_count, hourly_cost, total_cost);
+        
+        if running_count > 0 {
+            println!("{} training jobs active", running_count);
+        }
+        
+        return Ok(());
+    }
+
+    // Detailed output with better formatting
     let header_style = Style::new().bold().cyan();
     println!("{}", header_style.apply_to("=".repeat(80)));
     println!("{}", header_style.apply_to("trainctl Status"));
@@ -178,7 +241,7 @@ pub async fn show_quick_status(_detailed: bool, config: &Config, output_format: 
     
     // Recent checkpoints
     println!("\nRECENT CHECKPOINTS:");
-    if let Some(checkpoint_dir) = config.local.as_ref().map(|c| &c.checkpoint_dir) {
+    if let Some(checkpoint_dir) = config.local.as_ref().map(|c| c.checkpoint_dir.as_path()) {
         if checkpoint_dir.exists() {
             let checkpoints = checkpoint::get_checkpoint_paths(checkpoint_dir).await?;
             let recent: Vec<_> = checkpoints.into_iter().take(5).collect();
@@ -227,7 +290,7 @@ async fn list_aws_instances_json(_config: &Config) -> Result<Vec<serde_json::Val
         .describe_instances()
         .send()
         .await
-        .context("Failed to list EC2 instances")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list EC2 instances: {}", e)))?;
     
     let reservations = response.reservations();
     for reservation in reservations {
@@ -298,7 +361,10 @@ async fn list_runpod_pods_json(_config: &Config) -> Result<Vec<serde_json::Value
     let output = Command::new("runpodctl")
         .args(["get", "pod"])
         .output()
-        .context("Failed to run runpodctl")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to run runpodctl: {}", e),
+        )))?;
     
     if !output.status.success() {
         return Ok(pods);
@@ -335,52 +401,47 @@ async fn list_runpod_pods_json(_config: &Config) -> Result<Vec<serde_json::Value
 async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
     let mut processes = Vec::new();
     
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .context("Failed to run ps")?;
+    // Use sysinfo for native Rust process listing
+    let mut system = System::new_all();
+    system.refresh_all();
     
-    let current_pid = std::process::id().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 11 {
+    let current_pid = Pid::from_u32(std::process::id());
+    
+    for (pid, process) in system.processes() {
+        // Skip current process
+        if *pid == current_pid {
             continue;
         }
         
-        // Skip trainctl commands themselves
-        if line.contains("trainctl") {
-            continue;
-        }
+        let cmd: Vec<String> = process.cmd().iter()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        let cmd_str = cmd.join(" ");
         
-        // Skip the current process
-        if parts[1] == current_pid {
-            continue;
-        }
-        
-        let cmd = parts[10..].join(" ");
-        
-        // Filter out non-training processes
-        if cmd.contains("ripgrep") 
-            || cmd.contains("mypy") 
-            || cmd.contains("lsp_server")
-            || cmd.contains("Cursor.app")
-            || cmd.contains("zsh") && !cmd.contains(".py")
-            || cmd.contains("ps aux")
-            || cmd.contains("runpodctl") {
+        // Filter out system processes and trainctl itself
+        if cmd_str.contains("trainctl")
+            || cmd_str.contains("ps aux")
+            || cmd_str.contains("runpodctl")
+            || cmd_str.contains("ripgrep")
+            || cmd_str.contains("mypy")
+            || cmd_str.contains("lsp_server")
+            || cmd_str.contains("Cursor.app") {
             continue;
         }
         
         // Look for actual training scripts
-        let is_training = (cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch") || cmd.contains("training"))) ||
-                          (cmd.contains("python") && cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch")));
+        let is_training = (cmd_str.contains(".py") && (cmd_str.contains("train") || cmd_str.contains("epoch") || cmd_str.contains("training"))) ||
+                          (cmd_str.contains("python") && cmd_str.contains(".py") && (cmd_str.contains("train") || cmd_str.contains("epoch")));
         
         if is_training {
+            let cpu_usage = process.cpu_usage();
+            let memory_mb = process.memory() as f64 / 1024.0 / 1024.0;
+            
             processes.push(serde_json::json!({
-                "pid": parts[1],
-                "cpu": parts[2],
-                "mem": parts[3],
-                "command": cmd,
+                "pid": pid.as_u32(),
+                "cpu_percent": cpu_usage,
+                "memory_mb": memory_mb,
+                "command": cmd_str,
             }));
         }
     }
@@ -388,46 +449,62 @@ async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
     Ok(processes)
 }
 
-async fn list_resources(
-    detailed: bool, 
-    platform: &str, 
-    config: &Config, 
-    output_format: &str,
-    format: &str,
-    filter: &str,
-    sort: Option<&str>,
+/// Options for listing resources
+#[derive(Debug, Clone)]
+struct ListResourcesOptions {
+    detailed: bool,
+    platform: String,
+    output_format: String,
+    format: String,
+    filter: String,
+    sort: Option<String>,
     limit: Option<usize>,
     show_terminated: bool,
-    export: Option<&str>,
-    export_file: Option<&str>,
-    project_filter: Option<&str>,
-    user_filter: Option<&str>,
+    export: Option<String>,
+    export_file: Option<String>,
+    project_filter: Option<String>,
+    user_filter: Option<String>,
+}
+
+async fn list_resources(
+    options: ListResourcesOptions,
+    config: &Config,
 ) -> Result<()> {
-    if output_format == "json" {
+    if options.output_format == "json" {
         let summary = get_resource_summary_json(config).await?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
     }
     
     // Handle exports
-    if let Some(export_format) = export {
-        return export_resources(config, platform, export_format, export_file).await;
+    if let Some(export_format) = &options.export {
+        return export_resources(config, &options.platform, export_format, options.export_file.as_deref()).await;
     }
     
     println!("{}", "=".repeat(80));
     println!("RESOURCE OVERVIEW");
     println!("{}", "=".repeat(80));
     
-    if platform == "all" || platform == "aws" {
-        list_aws_instances(detailed, config, format, filter, sort, limit, show_terminated, project_filter, user_filter).await?;
+    if options.platform == "all" || options.platform == "aws" {
+        let aws_options = ListAwsInstancesOptions {
+            detailed: options.detailed,
+            format: options.format.clone(),
+            filter: options.filter.clone(),
+            sort: options.sort.clone(),
+            limit: options.limit,
+            show_terminated: options.show_terminated,
+            project_filter: options.project_filter.clone(),
+            user_filter: options.user_filter.clone(),
+        };
+        list_aws_instances(aws_options, config).await?;
     }
     
-    if platform == "all" || platform == "runpod" {
-        list_runpod_pods(detailed, config).await?;
+    if options.platform == "all" || options.platform == "runpod" {
+        list_runpod_pods(options.detailed, config).await?;
     }
     
-    if platform == "all" || platform == "local" {
-        list_local_processes(detailed).await?;
+    if options.platform == "all" || options.platform == "local" {
+        list_local_processes(options.detailed).await?;
     }
     
     Ok(())
@@ -450,16 +527,22 @@ struct InstanceInfo {
     is_old: bool,
 }
 
-async fn list_aws_instances(
-    detailed: bool, 
-    _config: &Config,
-    format: &str,
-    filter: &str,
-    sort: Option<&str>,
+/// Options for listing AWS instances
+#[derive(Debug, Clone)]
+struct ListAwsInstancesOptions {
+    detailed: bool,
+    format: String,
+    filter: String,
+    sort: Option<String>,
     limit: Option<usize>,
     show_terminated: bool,
-    project_filter: Option<&str>,
-    user_filter: Option<&str>,
+    project_filter: Option<String>,
+    user_filter: Option<String>,
+}
+
+async fn list_aws_instances(
+    options: ListAwsInstancesOptions,
+    _config: &Config,
 ) -> Result<()> {
     let _section_style = Style::new().bold().yellow();
     println!("\nAWS EC2 INSTANCES:");
@@ -472,7 +555,7 @@ async fn list_aws_instances(
         .describe_instances()
         .send()
         .await
-        .with_context(|| "Failed to list EC2 instances")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list EC2 instances: {}", e)))?;
     
     // Collect all instance info
     let mut instances: Vec<InstanceInfo> = Vec::new();
@@ -558,7 +641,7 @@ async fn list_aws_instances(
     let mut filtered_instances: Vec<&InstanceInfo> = instances.iter().collect();
     
     // Filter by project
-    if let Some(project) = project_filter {
+    if let Some(project) = &options.project_filter {
         filtered_instances.retain(|inst| {
             inst.tags.iter()
                 .any(|(k, v)| k == "trainctl:project" && v == project)
@@ -566,7 +649,7 @@ async fn list_aws_instances(
     }
     
     // Filter by user
-    if let Some(user) = user_filter {
+    if let Some(user) = &options.user_filter {
         filtered_instances.retain(|inst| {
             inst.tags.iter()
                 .any(|(k, v)| k == "trainctl:user" && v == user)
@@ -574,13 +657,13 @@ async fn list_aws_instances(
     }
     
     // Filter by state
-    if filter != "all" {
+    if options.filter != "all" {
         filtered_instances.retain(|inst| {
-            if filter == "running" {
+            if options.filter == "running" {
                 inst.state == "running"
-            } else if filter == "stopped" {
+            } else if options.filter == "stopped" {
                 inst.state == "stopped"
-            } else if filter == "terminated" {
+            } else if options.filter == "terminated" {
                 inst.state == "terminated"
             } else {
                 true
@@ -589,13 +672,13 @@ async fn list_aws_instances(
     }
     
     // Hide terminated by default unless explicitly requested
-    if !show_terminated && filter == "running" {
+    if !options.show_terminated && options.filter == "running" {
         filtered_instances.retain(|inst| inst.state != "terminated");
     }
     
     // Apply sorting
-    if let Some(sort_field) = sort {
-        match sort_field {
+    if let Some(sort_field) = &options.sort {
+        match sort_field.as_str() {
             "cost" | "cost_per_hour" => {
                 filtered_instances.sort_by(|a, b| b.cost_per_hour.partial_cmp(&a.cost_per_hour).unwrap_or(std::cmp::Ordering::Equal));
             }
@@ -620,13 +703,13 @@ async fn list_aws_instances(
     }
     
     // Apply limit
-    if let Some(limit_val) = limit {
+    if let Some(limit_val) = options.limit {
         filtered_instances.truncate(limit_val);
     }
     
     // Table format
-    if format == "table" {
-        return display_table_format(&filtered_instances, detailed).await;
+    if options.format == "table" {
+        return display_table_format(&filtered_instances, options.detailed).await;
     }
     
     // Group by instance type for better display (compact format)
@@ -652,7 +735,7 @@ async fn list_aws_instances(
             .map(|i| i.accumulated_cost)
             .sum();
         
-        if detailed {
+        if options.detailed {
             println!("\n  {} ({} running, ${:.4}/hr, ${:.2} total)",
                 style(instance_type).bold().cyan(),
                 running_count,
@@ -687,7 +770,7 @@ async fn list_aws_instances(
                 ""
             };
             
-            if detailed {
+            if options.detailed {
                 let old_warning_display = if !old_warning_str.is_empty() {
                     style(old_warning_str).red().bold()
                 } else {
@@ -725,7 +808,7 @@ async fn list_aws_instances(
                 }
             } else {
                 let runtime_str = if inst.state == "running" {
-                    inst.runtime.as_ref().map(|r| format!("({})", r)).unwrap_or_else(|| "".to_string())
+                    inst.runtime.as_deref().map(|r| format!("({})", r)).unwrap_or_default()
                 } else {
                     String::new()
                 };
@@ -840,7 +923,10 @@ async fn list_runpod_pods(detailed: bool, _config: &Config) -> Result<()> {
     let output = Command::new("runpodctl")
         .args(["get", "pod"])
         .output()
-        .with_context(|| "Failed to execute runpodctl")?;
+        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to execute runpodctl: {}", e),
+        )))?;
     
     if !output.status.success() {
         // Check if it's just no pods or an actual error
@@ -916,58 +1002,48 @@ async fn list_local_processes(detailed: bool) -> Result<()> {
     println!("\n💻 Local Training Processes:");
     println!("{}", "-".repeat(80));
     
-    // Use ps to find training-related processes
-    let output = Command::new("ps")
-        .args(["aux"])
-        .output()
-        .with_context(|| "Failed to execute ps")?;
+    // Use sysinfo for native Rust process listing
+    let mut system = System::new_all();
+    system.refresh_all();
     
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let current_pid = Pid::from_u32(std::process::id());
     let mut found = false;
     
-    // Get current process info to exclude train-ops itself
-    let current_pid = std::process::id().to_string();
-    
-    for line in stdout.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 11 {
+    for (pid, process) in system.processes() {
+        // Skip current process
+        if *pid == current_pid {
             continue;
         }
         
-        // Skip trainctl commands themselves
-        if line.contains("trainctl") {
-            continue;
-        }
+        let cmd: Vec<String> = process.cmd().iter()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        let cmd_str = cmd.join(" ");
         
-        // Skip the current process
-        if parts[1] == current_pid {
-            continue;
-        }
-        
-        // Extract command
-        let cmd = parts[10..].join(" ");
-        
-        // Filter out non-training processes
-        if cmd.contains("ripgrep") 
-            || cmd.contains("mypy") 
-            || cmd.contains("lsp_server")
-            || cmd.contains("Cursor.app")
-            || cmd.contains("zsh") && !cmd.contains(".py")
-            || cmd.contains("ps aux")
-            || cmd.contains("runpodctl") {
+        // Filter out system processes
+        if cmd_str.contains("trainctl")
+            || cmd_str.contains("ps aux")
+            || cmd_str.contains("runpodctl")
+            || cmd_str.contains("ripgrep")
+            || cmd_str.contains("mypy")
+            || cmd_str.contains("lsp_server")
+            || cmd_str.contains("Cursor.app") {
             continue;
         }
         
         // Look for actual training scripts: Python scripts with train/epoch keywords, or .py files
-        let is_training = (cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch") || cmd.contains("training"))) ||
-                          (cmd.contains("python") && cmd.contains(".py") && (cmd.contains("train") || cmd.contains("epoch")));
+        let is_training = (cmd_str.contains(".py") && (cmd_str.contains("train") || cmd_str.contains("epoch") || cmd_str.contains("training"))) ||
+                          (cmd_str.contains("python") && cmd_str.contains(".py") && (cmd_str.contains("train") || cmd_str.contains("epoch")));
         
         if is_training {
             found = true;
+            let cpu_usage = process.cpu_usage();
+            let memory_mb = process.memory() as f64 / 1024.0 / 1024.0;
             if detailed {
-                println!("  {}", line);
+                println!("  PID: {}  CPU: {:.1}%  MEM: {:.1}MB  CMD: {}", 
+                         pid.as_u32(), cpu_usage, memory_mb, cmd_str);
             } else {
-                println!("  PID: {}  CMD: {}", parts[1], cmd);
+                println!("  PID: {}  CMD: {}", pid.as_u32(), cmd_str);
             }
         }
     }
@@ -1004,8 +1080,8 @@ async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
             for instance in instances {
                 let state = instance.state()
                     .and_then(|s| s.name())
-                    .map(|s| s.as_str().to_string())
-                    .unwrap_or_else(|| "unknown".to_string());
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| String::from("unknown"));
                 
                 if state == "running" {
                     let instance_id = instance.instance_id().unwrap_or("unknown").to_string();
@@ -1167,7 +1243,7 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
         .describe_instances()
         .send()
         .await
-        .with_context(|| "Failed to list instances")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list instances: {}", e)))?;
     
     let mut zombies = Vec::new();
     let mut protected_instances = Vec::new();
@@ -1230,7 +1306,7 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
         )
         .send()
         .await
-        .context("Failed to list volumes")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list volumes: {}", e)))?;
     
     let mut orphaned_volumes = Vec::new();
     for volume in volumes_response.volumes() {
@@ -1310,7 +1386,7 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
             .instance_ids(id.as_str())
             .send()
             .await
-            .with_context(|| format!("Failed to terminate {}", id))?;
+            .map_err(|e| TrainctlError::Aws(format!("Failed to terminate {}: {}", id, e)))?;
         println!("  Terminated {}", id);
     }
     
@@ -1350,7 +1426,7 @@ async fn show_insights(_config: &Config, output_format: &str) -> Result<()> {
         .describe_instances()
         .send()
         .await
-        .with_context(|| "Failed to list instances")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to list instances: {}", e)))?;
     
     let mut running = 0;
     let mut stopped = 0;
@@ -1527,21 +1603,21 @@ async fn list_resources_watch(
         println!("WATCH: refreshing every {}s | [Ctrl+C] to stop", interval);
         println!("Last update: {}\n", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"));
         
-        list_resources(
-            false,
-            platform,
-            config,
-            "text",
-            "table",
-            filter,
-            sort,
-            None,
-            false,
-            None,
-            None,
-            project_filter,
-            user_filter,
-        ).await?;
+        let list_options = ListResourcesOptions {
+            detailed: false,
+            platform: platform.to_string(),
+            output_format: "text".to_string(),
+            format: "table".to_string(),
+            filter: filter.to_string(),
+            sort: sort.map(|s| s.to_string()),
+            limit: None,
+            show_terminated: false,
+            export: None,
+            export_file: None,
+            project_filter: project_filter.map(|s| s.to_string()),
+            user_filter: user_filter.map(|s| s.to_string()),
+        };
+        list_resources(list_options, config).await?;
         
         tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
     }
@@ -1576,7 +1652,10 @@ async fn export_resources(
             }
         }
         _ => {
-            anyhow::bail!("Unsupported export format: {}. Use 'csv' or 'html'", format);
+            return Err(TrainctlError::Validation {
+                field: "format".to_string(),
+                reason: format!("Unsupported export format: {}. Use 'csv' or 'html'", format),
+            });
         }
     }
     
@@ -1687,8 +1766,8 @@ fn generate_html(summary: &serde_json::Value) -> Result<String> {
 async fn stop_all_instances(
     dry_run: bool,
     force: bool,
-    platform: String,
-    config: &Config,
+    _platform: String,
+    _config: &Config,
 ) -> Result<()> {
     use std::io::{self, Write};
     
@@ -1706,7 +1785,7 @@ async fn stop_all_instances(
         )
         .send()
         .await
-        .context("Failed to describe instances")?;
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe instances: {}", e)))?;
     
     let mut instance_ids = Vec::new();
     let mut instance_info = Vec::new();
