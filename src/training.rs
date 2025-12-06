@@ -43,16 +43,16 @@ impl TrainingSession {
 
         let session_file = sessions_dir.join(format!("{}.json", self.id));
         let content = serde_json::to_string_pretty(self).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to serialize session: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to serialize session: {}",
+                e
+            )))
         })?;
         fs::write(&session_file, content).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to write session file: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to write session file: {}",
+                e
+            )))
         })?;
 
         Ok(())
@@ -63,20 +63,18 @@ impl TrainingSession {
             .join("sessions")
             .join(format!("{}.json", session_id));
         let content = fs::read_to_string(&session_file).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!(
-                    "Failed to read session file {}: {}",
-                    session_file.display(),
-                    e
-                ),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to read session file {}: {}",
+                session_file.display(),
+                e
+            )))
         })?;
         let session: Self = serde_json::from_str(&content).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to parse session {}: {}", session_file.display(), e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to parse session {}: {}",
+                session_file.display(),
+                e
+            )))
         })?;
         Ok(session)
     }

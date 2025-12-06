@@ -67,10 +67,10 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     // Save session metadata
     let sessions_dir = PathBuf::from(".trainctl");
     session.save(&sessions_dir).map_err(|e| {
-        TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to save training session: {}", e),
-        ))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to save training session: {}",
+            e
+        )))
     })?;
 
     // Check if script is Python and use uv if available
@@ -108,10 +108,11 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     info!("Executing: {:?}", cmd);
 
     let status = cmd.status().map_err(|e| {
-        TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to execute script {}: {}", script.display(), e),
-        ))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to execute script {}: {}",
+            script.display(),
+            e
+        )))
     })?;
 
     if !status.success() {

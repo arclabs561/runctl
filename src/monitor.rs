@@ -75,10 +75,10 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
         watcher
             .watch(log_path, RecursiveMode::NonRecursive)
             .map_err(|e| {
-                TrainctlError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to watch log file: {}", e),
-                ))
+                TrainctlError::Io(std::io::Error::other(format!(
+                    "Failed to watch log file: {}",
+                    e
+                )))
             })?;
 
         let mut last_pos = 0u64;

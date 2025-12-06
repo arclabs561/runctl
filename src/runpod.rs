@@ -136,10 +136,10 @@ async fn train_on_pod(
     upload_cmd.arg("/workspace/training_script");
 
     let upload_output = upload_cmd.output().map_err(|e| {
-        TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to upload script: {}", e),
-        ))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to upload script: {}",
+            e
+        )))
     })?;
 
     if !upload_output.status.success() {
@@ -163,10 +163,10 @@ async fn train_on_pod(
 
     if background {
         train_cmd.spawn().map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to start background training: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to start background training: {}",
+                e
+            )))
         })?;
         println!("Training started in background");
         println!(
@@ -175,10 +175,7 @@ async fn train_on_pod(
         );
     } else {
         train_cmd.status().map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Training failed: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!("Training failed: {}", e)))
         })?;
         println!("Training completed");
     }
@@ -220,10 +217,10 @@ async fn download_from_pod(pod_id: String, remote: PathBuf, local: PathBuf) -> R
     cmd.arg(&local);
 
     let status = cmd.status().map_err(|e| {
-        TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to download from pod: {}", e),
-        ))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to download from pod: {}",
+            e
+        )))
     })?;
 
     if !status.success() {
