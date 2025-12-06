@@ -5,6 +5,9 @@ edition = "2021"
 authors = ["Your Name <you@example.com>"]
 description = "Modern training orchestration CLI for ML workloads"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/arclabs561/trainctl"
+homepage = "https://github.com/arclabs561/trainctl"
+# publish = false  # Uncomment to prevent accidental publishing
 
 [[bin]]
 name = "trainctl"
@@ -61,6 +64,12 @@ which = "5.0"
 duct = "0.13"
 walkdir = "2.4"
 futures = "0.3"
+sysinfo = "0.31"
+
+# SSH and archive operations
+ssh2 = "0.9"
+tar = "0.4"
+flate2 = "1.0"
 
 # Logging
 tracing = "0.1"

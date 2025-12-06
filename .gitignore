@@ -19,6 +19,21 @@ Thumbs.db
 # Config (may contain secrets)
 .trainctl.toml
 *.toml.local
+*.env
+.env.local
+.env.*.local
+
+# Credentials and keys
+*.pem
+*.key
+*.p12
+*.pfx
+*.credential
+*.secret
+credentials
+aws-credentials
+.aws/credentials
+.aws/config
 
 # Logs
 *.log
