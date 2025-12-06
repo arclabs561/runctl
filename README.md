@@ -4,9 +4,14 @@ Modern training orchestration CLI for ML workloads. Supports local, RunPod, and 
 
 ## Features
 
-- **Multi-platform**: Local, RunPod, AWS EC2
+- **AWS EC2** (Primary): Full-featured, well-tested, production-ready
+- **Local training**: Quick local development
+- **RunPod** (Experimental): GPU pods (less tested)
 - **Checkpoint management**: List, inspect, resume from checkpoints
-- **Real-time monitoring**: Follow training logs and checkpoint progress
+- **Real-time monitoring**: Interactive `top` command with ratatui dashboard
+- **Native S3 operations**: Parallel uploads/downloads without external tools
+- **EBS optimization**: Auto-configured IOPS/throughput for data loading
+- **SSM integration**: Secure command execution without SSH keys
 - **Cost optimization**: Spot instances, efficient resource usage
 - **Modern tooling**: Rust CLI with `uv`, `just` integration
 
@@ -20,27 +25,50 @@ cargo install --path .
 cargo build --release
 ```
 
-## Quick Start
+## Quick Start (AWS EC2)
 
 ```bash
 # Initialize config
 trainctl init
 
-# Train locally
-trainctl local training/train.py --epochs 50
+# Create spot instance
+INSTANCE_ID=$(trainctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
 
-# Create RunPod pod
-trainctl runpod create --gpu "NVIDIA GeForce RTX 4080 SUPER"
-
-# Train on RunPod
-trainctl runpod train <pod-id> training/train.py
+# Train with automatic code sync
+trainctl aws train $INSTANCE_ID training/train.py --sync-code
 
 # Monitor training
-trainctl monitor --log training.log --follow
+trainctl aws monitor $INSTANCE_ID --follow
 
-# List checkpoints
-trainctl checkpoint list checkpoints/
+# Check resource usage
+trainctl aws processes $INSTANCE_ID --watch
+
+# Stop when done (preserves data)
+trainctl aws stop $INSTANCE_ID
 ```
+
+## Testing with Temporary Credentials
+
+For secure testing, use IAM roles with temporary credentials instead of long-term access keys:
+
+```bash
+# Setup test environment (one-time)
+./scripts/setup-test-role.sh
+
+# Verify setup is correct
+./scripts/verify-setup.sh
+
+# Run comprehensive test suite
+./scripts/run-all-tests.sh
+
+# Or test individually
+source scripts/assume-test-role.sh
+./scripts/test-auth.sh                    # Basic authentication
+./scripts/test-security-boundaries.sh      # Security verification
+./scripts/test-trainctl-integration.sh     # trainctl integration
+```
+
+See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed setup instructions and [docs/AWS_TESTING_REVIEW.md](docs/AWS_TESTING_REVIEW.md) for review of security and robustness.
 
 ## Configuration
 
@@ -163,38 +191,30 @@ trainctl local training/train.py
 
 ## Examples
 
-### Complete RunPod Workflow
+### Complete AWS Training Workflow
 
 ```bash
-# 1. Create pod
-POD_ID=$(trainctl runpod create --gpu "RTX 4080 SUPER" | grep -o 'pod-[a-z0-9]*')
+# 1. Create spot instance with data volume
+INSTANCE_ID=$(trainctl aws create \
+    --spot \
+    --instance-type g4dn.xlarge \
+    --data-volume-size 100 \
+    | grep -o 'i-[a-z0-9]*')
 
-# 2. Upload and train
-trainctl runpod train $POD_ID training/train_cloud.py --background
-
-# 3. Monitor
-trainctl runpod monitor $POD_ID --follow
-
-# 4. Download results
-trainctl runpod download $POD_ID /workspace/checkpoints/best.pt ./best.pt
-```
-
-### AWS Spot Instance Training
-
-```bash
-# 1. Create spot instance
-INSTANCE_ID=$(trainctl aws create --spot --instance-type t3.medium | grep -o 'i-[a-z0-9]*')
-
-# 2. Train
+# 2. Train with code sync and S3 data
 trainctl aws train $INSTANCE_ID training/train.py \
-    --data-s3 s3://bucket/data.csv \
-    --output-s3 s3://bucket/output/
+    --sync-code \
+    --data-s3 s3://bucket/datasets/ \
+    --output-s3 s3://bucket/checkpoints/
 
-# 3. Monitor
+# 3. Monitor in real-time
 trainctl aws monitor $INSTANCE_ID --follow
 
-# 4. Terminate
-trainctl aws terminate $INSTANCE_ID
+# 4. Check resource usage
+trainctl aws processes $INSTANCE_ID --watch
+
+# 5. Stop (preserves data) or terminate
+trainctl aws stop $INSTANCE_ID
 ```
 
 ## Architecture
@@ -203,7 +223,7 @@ trainctl aws terminate $INSTANCE_ID
 - **Async runtime**: Tokio for concurrent operations
 - **AWS SDK**: Native AWS integration
 - **Modular design**: Separate modules for each platform
-- **Error handling**: `anyhow` for user-friendly errors
+- **Error handling**: Custom `TrainctlError` types in library, `anyhow` at CLI boundary
 
 ## Development
 
