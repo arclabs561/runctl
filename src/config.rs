@@ -146,10 +146,11 @@ impl Config {
             )))
         })?;
         std::fs::write(path, content).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to write config {}: {}", path.display(), e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to write config {}: {}",
+                path.display(),
+                e
+            )))
         })?;
         Ok(())
     }
@@ -214,7 +215,7 @@ pub async fn handle_command(
     output_format: &str,
 ) -> Result<()> {
     match cmd {
-        ConfigCommands::Show { .. } => {
+        ConfigCommands::Show => {
             let config = Config::load(config_path)?;
             if output_format == "json" {
                 println!("{}", serde_json::to_string_pretty(&config)?);

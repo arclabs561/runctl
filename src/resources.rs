@@ -1064,7 +1064,7 @@ async fn list_runpod_pods(detailed: bool, _config: &Config) -> Result<()> {
     for line in lines.iter() {
         let trimmed = line.trim();
         // Skip empty lines, headers, and help text
-        if trimmed.is_empty() 
+        if trimmed.is_empty()
             || trimmed.starts_with("ID") && trimmed.contains("NAME")  // Header row
             || trimmed.starts_with("NAME") && !trimmed.contains("ID")  // Alternative header
             || trimmed.contains("Available Commands")

@@ -63,7 +63,7 @@ pub fn calculate_optimal_throughput(iops: i32) -> i32 {
     // Throughput = 0.25 MiB/s per IOPS
     // Max throughput: 2,000 MiB/s (requires 8,000 IOPS minimum)
     let calculated = (iops as f64 * 0.25) as i32;
-    calculated.min(2000).max(125) // At least baseline
+    calculated.clamp(125, 2000) // At least baseline
 }
 
 /// Get optimized volume configuration for a use case
@@ -95,10 +95,11 @@ pub fn optimize_volume_config(
                     Balanced performance for mixed workloads.",
                     iops, throughput, size_gb
                 ),
-                VolumeUseCase::Archive => format!(
+                VolumeUseCase::Archive => {
                     "Archive storage: Baseline performance (3,000 IOPS, 125 MiB/s). \
-                    Cost-optimized for infrequent access.",
-                ),
+                    Cost-optimized for infrequent access."
+                        .to_string()
+                }
             };
 
             Ok(OptimizedVolumeConfig {
@@ -150,10 +151,10 @@ pub fn optimize_volume_config(
                 volume_type: vol_type,
                 iops: None,
                 throughput: None,
-                recommendation: format!(
+                recommendation:
                     "st1 volume: 500 MiB/s throughput. Best for large sequential reads. \
-                    Lower cost than SSD. Minimum size: 125 GB.",
-                ),
+                    Lower cost than SSD. Minimum size: 125 GB."
+                        .to_string(),
             })
         }
         "sc1" => {
@@ -163,8 +164,9 @@ pub fn optimize_volume_config(
                 volume_type: vol_type,
                 iops: None,
                 throughput: None,
-                  recommendation: "sc1 volume: 250 MiB/s throughput. Lowest cost option. \
-                    Best for archival storage. Minimum size: 125 GB.".to_string(),
+                recommendation: "sc1 volume: 250 MiB/s throughput. Lowest cost option. \
+                    Best for archival storage. Minimum size: 125 GB."
+                    .to_string(),
             })
         }
         _ => Err(TrainctlError::Validation {

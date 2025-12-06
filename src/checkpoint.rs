@@ -178,12 +178,12 @@ async fn list_checkpoints(dir: &Path, output_format: &str) -> Result<()> {
         }
         println!(
             "{}",
-            serde_json::to_string_pretty(&items).map_err(|e| TrainctlError::Io(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to serialize JSON: {}", e),
-                )
-            ))?
+            serde_json::to_string_pretty(&items).map_err(|e| {
+                TrainctlError::Io(std::io::Error::other(format!(
+                    "Failed to serialize JSON: {}",
+                    e
+                )))
+            })?
         );
         return Ok(());
     }
@@ -236,12 +236,12 @@ async fn show_info(path: &Path, output_format: &str) -> Result<()> {
         };
         println!(
             "{}",
-            serde_json::to_string_pretty(&info).map_err(|e| TrainctlError::Io(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to serialize JSON: {}", e),
-                )
-            ))?
+            serde_json::to_string_pretty(&info).map_err(|e| {
+                TrainctlError::Io(std::io::Error::other(format!(
+                    "Failed to serialize JSON: {}",
+                    e
+                )))
+            })?
         );
         return Ok(());
     }
@@ -354,10 +354,11 @@ async fn cleanup_checkpoints(
     // Delete old checkpoints
     for (path, _) in to_delete {
         fs::remove_file(path).map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to delete {}: {}", path.display(), e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to delete {}: {}",
+                path.display(),
+                e
+            )))
         })?;
         println!("  Deleted {}", path.display());
     }

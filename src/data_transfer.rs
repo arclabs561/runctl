@@ -141,8 +141,8 @@ pub struct DataTransfer {
 
 impl DataTransfer {
     pub fn new(config: Config, aws_config: Option<&SdkConfig>) -> Self {
-        let s3_client = aws_config.map(|cfg| S3Client::new(cfg));
-        let ssm_client = aws_config.map(|cfg| SsmClient::new(cfg));
+        let s3_client = aws_config.map(S3Client::new);
+        let ssm_client = aws_config.map(SsmClient::new);
         Self {
             s3_client,
             ssm_client,
@@ -484,10 +484,10 @@ impl DataTransfer {
         cmd.arg(s3_path);
 
         let output = cmd.output().map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to execute s5cmd: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to execute s5cmd: {}",
+                e
+            )))
         })?;
 
         if !output.status.success() {
@@ -521,10 +521,10 @@ impl DataTransfer {
         cmd.arg(destination.to_string_lossy().as_ref());
 
         let output = cmd.output().map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to execute s5cmd: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to execute s5cmd: {}",
+                e
+            )))
         })?;
 
         if !output.status.success() {
@@ -548,10 +548,7 @@ async fn upload_single_file(
     let body = aws_sdk_s3::primitives::ByteStream::from_path(file_path)
         .await
         .map_err(|e| {
-            TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to read file: {}", e),
-            ))
+            TrainctlError::Io(std::io::Error::other(format!("Failed to read file: {}", e)))
         })?;
 
     client
