@@ -1,24 +1,27 @@
-use crate::error::{Result, TrainctlError};
-use std::path::PathBuf;
-use std::process::Command;
 use crate::config::Config;
+use crate::error::{Result, TrainctlError};
 use crate::training::TrainingSession;
 use crate::utils::ensure_dir;
+use std::path::PathBuf;
+use std::process::Command;
 use tracing::info;
 
 pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Result<()> {
     crate::validation::validate_path(&script.display().to_string())?;
-    
+
     if !script.exists() {
         let mut err = format!("Script not found: {}", script.display());
-        
+
         // Suggest common fixes
         if let Some(parent) = script.parent() {
             if !parent.exists() {
-                err.push_str(&format!("\n  Directory does not exist: {}", parent.display()));
+                err.push_str(&format!(
+                    "\n  Directory does not exist: {}",
+                    parent.display()
+                ));
             }
         }
-        
+
         // Check for common alternatives
         if let Some(file_name) = script.file_name() {
             let current_dir = std::env::current_dir()?;
@@ -41,7 +44,7 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
                 }
             }
         }
-        
+
         err.push_str("\n  Tip: Use absolute paths or check your current directory with 'pwd'");
         return Err(TrainctlError::ResourceNotFound {
             resource_type: "script".to_string(),
@@ -52,27 +55,27 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     info!("Starting local training: {}", script.display());
 
     // Create training session
-    let checkpoint_dir = config.local.as_ref()
+    let checkpoint_dir = config
+        .local
+        .as_ref()
         .map(|c| c.checkpoint_dir.clone())
         .unwrap_or_else(|| PathBuf::from("checkpoints"));
     ensure_dir(&checkpoint_dir)?;
 
-    let session = TrainingSession::new(
-        "local".to_string(),
-        script.clone(),
-        checkpoint_dir.clone(),
-    );
-    
+    let session = TrainingSession::new("local".to_string(), script.clone(), checkpoint_dir.clone());
+
     // Save session metadata
     let sessions_dir = PathBuf::from(".trainctl");
-    session.save(&sessions_dir)
-        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+    session.save(&sessions_dir).map_err(|e| {
+        TrainctlError::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to save training session: {}", e),
-        )))?;
+        ))
+    })?;
 
     // Check if script is Python and use uv if available
-    let is_python = script.extension()
+    let is_python = script
+        .extension()
         .and_then(|s| s.to_str())
         .map(|s| s == "py")
         .unwrap_or(false);
@@ -104,31 +107,34 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
 
     info!("Executing: {:?}", cmd);
 
-    let status = cmd.status()
-        .map_err(|e| TrainctlError::Io(std::io::Error::new(
+    let status = cmd.status().map_err(|e| {
+        TrainctlError::Io(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to execute script {}: {}", script.display(), e),
-        )))?;
+        ))
+    })?;
 
     if !status.success() {
         let mut err = format!("Training failed with exit code: {:?}", status.code());
-        
+
         // Provide helpful suggestions
         err.push_str("\n\n  Troubleshooting:");
         err.push_str("\n    - Check script syntax: python3 -m py_compile <script>");
         err.push_str("\n    - Verify dependencies are installed");
         err.push_str("\n    - Check script logs for detailed error messages");
         err.push_str("\n    - Run with --verbose for more details");
-        
+
         if let Some(code) = status.code() {
             match code {
-                127 => err.push_str("\n    - Command not found - check PATH or install missing tools"),
+                127 => {
+                    err.push_str("\n    - Command not found - check PATH or install missing tools")
+                }
                 126 => err.push_str("\n    - Permission denied - check file permissions"),
                 1 => err.push_str("\n    - Script error - check script output above"),
                 _ => {}
             }
         }
-        
+
         return Err(TrainctlError::Resource {
             resource_type: "training".to_string(),
             operation: "execute".to_string(),
@@ -141,4 +147,3 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     info!("Training completed successfully");
     Ok(())
 }
-

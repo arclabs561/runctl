@@ -2,28 +2,29 @@
 //!
 //! This library provides the core functionality for trainctl CLI.
 
-pub mod training;
+pub mod aws_utils;
+pub mod checkpoint;
 pub mod config;
-pub mod utils;
+pub mod dashboard;
+pub mod data_transfer;
+pub mod diagnostics;
+pub mod ebs_optimization;
+pub mod error;
+pub mod fast_data_loading;
 pub mod provider;
 pub mod providers;
-pub mod checkpoint;
-pub mod resources;
-pub mod error;
 pub mod resource_tracking;
-pub mod safe_cleanup;
-pub mod data_transfer;
-pub mod fast_data_loading;
+pub mod resources;
 pub mod retry;
-pub mod aws_utils;
-pub mod diagnostics;
-pub mod validation;
-pub mod dashboard;
+pub mod safe_cleanup;
 pub mod ssh_sync;
-pub mod ebs_optimization;
+pub mod training;
+pub mod utils;
+pub mod validation;
 
 // Re-export commonly used types
+pub use error::{ConfigError, IsRetryable, Result, TrainctlError};
+pub use provider::{
+    CreateResourceOptions, ResourceState, ResourceStatus, TrainingJob, TrainingProvider,
+};
 pub use training::{TrainingSession, TrainingStatus};
-pub use provider::{TrainingProvider, ResourceStatus, ResourceState, TrainingJob, CreateResourceOptions};
-pub use error::{Result, TrainctlError, ConfigError, IsRetryable};
-

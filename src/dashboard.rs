@@ -6,13 +6,18 @@
 //! - Process resource usage (top-like view)
 //! - Real-time updates
 
-use crate::config::Config;
-use crate::error::{Result, TrainctlError};
-use crate::diagnostics;
 use crate::aws_utils;
+use crate::config::Config;
+use crate::diagnostics;
+use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -23,11 +28,6 @@ use ratatui::{
 };
 use std::io;
 use std::time::{Duration, Instant};
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
-    execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
-};
 
 struct DashboardState {
     selected_tab: usize,
@@ -150,10 +150,12 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
     }
 
     // Load AWS instances
-    let region_str = config.aws.as_ref()
+    let region_str = config
+        .aws
+        .as_ref()
         .map(|a| a.region.clone())
         .unwrap_or_else(|| "us-east-1".to_string());
-    
+
     let sdk_config = aws_config::defaults(BehaviorVersion::latest())
         .region(aws_sdk_ec2::config::Region::new(region_str))
         .load()
@@ -163,12 +165,10 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
     // Get running instances
     let response = ec2_client
         .describe_instances()
-        .set_filters(Some(vec![
-            aws_sdk_ec2::types::Filter::builder()
-                .name("instance-state-name")
-                .values("running")
-                .build(),
-        ]))
+        .set_filters(Some(vec![aws_sdk_ec2::types::Filter::builder()
+            .name("instance-state-name")
+            .values("running")
+            .build()]))
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(e.to_string()))?;
@@ -181,29 +181,35 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
         for instance in reservation.instances().iter() {
             if let Some(instance_id) = instance.instance_id() {
                 running_count += 1;
-                let instance_type = instance.instance_type()
+                let instance_type = instance
+                    .instance_type()
                     .map(|t| format!("{}", t))
                     .unwrap_or_else(|| "unknown".to_string());
-                let state = instance.state()
+                let state = instance
+                    .state()
                     .and_then(|s| s.name())
                     .map(|n| n.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
                 // Calculate costs
                 let cost_per_hour = crate::utils::get_instance_cost(&instance_type);
-                let launch_time = instance.launch_time()
+                let launch_time = instance
+                    .launch_time()
                     .and_then(|t| chrono::DateTime::from_timestamp(t.secs(), 0));
                 let runtime_duration = if let Some(lt) = launch_time {
                     chrono::Utc::now() - lt
                 } else {
                     chrono::TimeDelta::zero()
                 };
-                let accumulated_cost = cost_per_hour * (runtime_duration.num_seconds().max(0) as f64 / 3600.0);
+                let accumulated_cost =
+                    cost_per_hour * (runtime_duration.num_seconds().max(0) as f64 / 3600.0);
                 total_cost += accumulated_cost;
 
                 // Get resource usage (async, but don't block on errors)
                 let (cpu_usage, memory_usage, gpu_usage) = if state == "running" {
-                    get_instance_usage(&sdk_config, instance_id).await.unwrap_or((0.0, 0.0, None))
+                    get_instance_usage(&sdk_config, instance_id)
+                        .await
+                        .unwrap_or((0.0, 0.0, None))
                 } else {
                     (0.0, 0.0, None)
                 };
@@ -230,35 +236,41 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
 
     // Load processes for selected instance
     if let Some(instance_id) = &state.selected_instance {
-        state.processes = get_instance_processes(&sdk_config, instance_id).await.unwrap_or_default();
+        state.processes = get_instance_processes(&sdk_config, instance_id)
+            .await
+            .unwrap_or_default();
     }
 
     Ok(())
 }
 
-async fn get_instance_usage(sdk_config: &aws_config::SdkConfig, instance_id: &str) -> Result<(f64, f64, Option<f64>)> {
+async fn get_instance_usage(
+    sdk_config: &aws_config::SdkConfig,
+    instance_id: &str,
+) -> Result<(f64, f64, Option<f64>)> {
     // Use diagnostics module to get resource usage
     let ssm_client = SsmClient::new(sdk_config);
     let usage = diagnostics::get_instance_resource_usage(&ssm_client, instance_id).await?;
-    
-    let gpu_usage = usage.gpu_info.as_ref()
+
+    let gpu_usage = usage
+        .gpu_info
+        .as_ref()
         .and_then(|gpu| gpu.gpus.first())
         .map(|gpu| gpu.utilization_percent);
-    
-    Ok((
-        usage.cpu_percent,
-        usage.memory_percent,
-        gpu_usage,
-    ))
+
+    Ok((usage.cpu_percent, usage.memory_percent, gpu_usage))
 }
 
-async fn get_instance_processes(sdk_config: &aws_config::SdkConfig, instance_id: &str) -> Result<Vec<ProcessInfo>> {
+async fn get_instance_processes(
+    sdk_config: &aws_config::SdkConfig,
+    instance_id: &str,
+) -> Result<Vec<ProcessInfo>> {
     // Get top processes via SSM
     let ssm_client = SsmClient::new(sdk_config);
-    
+
     let command = r#"ps aux --sort=-%cpu | head -20 | awk '{print $2,$1,$3,$4,$11}'"#;
     let output = aws_utils::execute_ssm_command(&ssm_client, instance_id, command).await?;
-    
+
     let mut processes = Vec::new();
     for line in output.lines().skip(1) {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -273,7 +285,7 @@ async fn get_instance_processes(sdk_config: &aws_config::SdkConfig, instance_id:
             });
         }
     }
-    
+
     Ok(processes)
 }
 
@@ -281,7 +293,7 @@ fn format_runtime(duration: chrono::Duration) -> String {
     let hours = duration.num_hours();
     let minutes = duration.num_minutes() % 60;
     let seconds = duration.num_seconds() % 60;
-    
+
     if hours > 0 {
         format!("{}h {}m {}s", hours, minutes, seconds)
     } else if minutes > 0 {
@@ -296,10 +308,18 @@ fn render_dashboard(f: &mut Frame, state: &DashboardState) {
 
     // Tabs
     let tabs = Tabs::new(vec!["Overview", "Instances", "Processes", "Costs"])
-        .block(Block::default().borders(Borders::ALL).title("trainctl Dashboard"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("trainctl Dashboard"),
+        )
         .select(state.selected_tab)
         .style(Style::default().fg(Color::White))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -328,21 +348,25 @@ fn render_overview(f: &mut Frame, area: Rect, state: &DashboardState) {
         .split(area);
 
     // Summary
-    let summary = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled("Running: ", Style::default().fg(Color::Cyan)),
-            Span::styled(format!("{} instances", state.running_count), Style::default().fg(Color::Green)),
-            Span::raw(" | "),
-            Span::styled("Total Cost: ", Style::default().fg(Color::Cyan)),
-            Span::styled(format!("${:.2}", state.total_cost), Style::default().fg(Color::Yellow)),
-            Span::raw(" | "),
-            Span::styled("Last Update: ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                format!("{}s ago", state.last_update.elapsed().as_secs()),
-                Style::default().fg(Color::White),
-            ),
-        ]),
-    ])
+    let summary = Paragraph::new(vec![Line::from(vec![
+        Span::styled("Running: ", Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("{} instances", state.running_count),
+            Style::default().fg(Color::Green),
+        ),
+        Span::raw(" | "),
+        Span::styled("Total Cost: ", Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("${:.2}", state.total_cost),
+            Style::default().fg(Color::Yellow),
+        ),
+        Span::raw(" | "),
+        Span::styled("Last Update: ", Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("{}s ago", state.last_update.elapsed().as_secs()),
+            Style::default().fg(Color::White),
+        ),
+    ])])
     .block(Block::default().borders(Borders::ALL).title("Summary"));
 
     f.render_widget(summary, chunks[0]);
@@ -351,7 +375,11 @@ fn render_overview(f: &mut Frame, area: Rect, state: &DashboardState) {
     let daily_estimate = state.total_cost * 24.0;
     let cost_percent = ((daily_estimate.min(100.0) / 100.0) * 100.0) as u16;
     let cost_gauge = Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title("Daily Cost Estimate"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Daily Cost Estimate"),
+        )
         .gauge_style(Style::default().fg(Color::Yellow))
         .percent(cost_percent)
         .label(format!("${:.2}/day est.", daily_estimate));
@@ -359,16 +387,21 @@ fn render_overview(f: &mut Frame, area: Rect, state: &DashboardState) {
     f.render_widget(cost_gauge, chunks[1]);
 
     // Quick instance list
-    let rows: Vec<Row> = state.instances.iter().take(10).map(|inst| {
-        Row::new(vec![
-            Cell::from(inst.id.clone()),
-            Cell::from(inst.instance_type.clone()),
-            Cell::from(inst.state.clone()),
-            Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
-            Cell::from(format!("${:.2}", inst.accumulated_cost)),
-            Cell::from(inst.runtime.clone()),
-        ])
-    }).collect();
+    let rows: Vec<Row> = state
+        .instances
+        .iter()
+        .take(10)
+        .map(|inst| {
+            Row::new(vec![
+                Cell::from(inst.id.clone()),
+                Cell::from(inst.instance_type.clone()),
+                Cell::from(inst.state.clone()),
+                Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
+                Cell::from(format!("${:.2}", inst.accumulated_cost)),
+                Cell::from(inst.runtime.clone()),
+            ])
+        })
+        .collect();
 
     let widths = [
         Constraint::Length(20),
@@ -380,25 +413,38 @@ fn render_overview(f: &mut Frame, area: Rect, state: &DashboardState) {
     ];
     let table = Table::new(rows, widths)
         .block(Block::default().borders(Borders::ALL).title("Instances"))
-        .header(Row::new(vec!["ID", "Type", "State", "Cost/h", "Total", "Runtime"])
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+        .header(
+            Row::new(vec!["ID", "Type", "State", "Cost/h", "Total", "Runtime"]).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
 
     f.render_widget(table, chunks[2]);
 }
 
 fn render_instances(f: &mut Frame, area: Rect, state: &DashboardState) {
-    let rows: Vec<Row> = state.instances.iter().map(|inst| {
-        Row::new(vec![
-            Cell::from(inst.id.clone()),
-            Cell::from(inst.instance_type.clone()),
-            Cell::from(inst.state.clone()),
-            Cell::from(format!("{:.1}%", inst.cpu_usage)),
-            Cell::from(format!("{:.1}%", inst.memory_usage)),
-            Cell::from(inst.gpu_usage.map(|g| format!("{:.1}%", g)).unwrap_or_else(|| "N/A".to_string())),
-            Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
-            Cell::from(format!("${:.2}", inst.accumulated_cost)),
-        ])
-    }).collect();
+    let rows: Vec<Row> = state
+        .instances
+        .iter()
+        .map(|inst| {
+            Row::new(vec![
+                Cell::from(inst.id.clone()),
+                Cell::from(inst.instance_type.clone()),
+                Cell::from(inst.state.clone()),
+                Cell::from(format!("{:.1}%", inst.cpu_usage)),
+                Cell::from(format!("{:.1}%", inst.memory_usage)),
+                Cell::from(
+                    inst.gpu_usage
+                        .map(|g| format!("{:.1}%", g))
+                        .unwrap_or_else(|| "N/A".to_string()),
+                ),
+                Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
+                Cell::from(format!("${:.2}", inst.accumulated_cost)),
+            ])
+        })
+        .collect();
 
     let widths = [
         Constraint::Length(20),
@@ -411,9 +457,21 @@ fn render_instances(f: &mut Frame, area: Rect, state: &DashboardState) {
         Constraint::Length(10),
     ];
     let table = Table::new(rows, widths)
-        .block(Block::default().borders(Borders::ALL).title("Instances (Press 'r' to refresh)"))
-        .header(Row::new(vec!["ID", "Type", "State", "CPU", "Mem", "GPU", "Cost/h", "Total"])
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Instances (Press 'r' to refresh)"),
+        )
+        .header(
+            Row::new(vec![
+                "ID", "Type", "State", "CPU", "Mem", "GPU", "Cost/h", "Total",
+            ])
+            .style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
 
     f.render_widget(table, area);
 }
@@ -425,22 +483,26 @@ fn render_processes(f: &mut Frame, area: Rect, state: &DashboardState) {
         } else {
             "Select an instance to view processes (navigate with arrow keys)"
         };
-        
-        let paragraph = Paragraph::new(msg)
-            .block(Block::default().borders(Borders::ALL).title("Processes"));
+
+        let paragraph =
+            Paragraph::new(msg).block(Block::default().borders(Borders::ALL).title("Processes"));
         f.render_widget(paragraph, area);
         return;
     }
 
-    let rows: Vec<Row> = state.processes.iter().map(|proc| {
-        Row::new(vec![
-            Cell::from(proc.pid.clone()),
-            Cell::from(proc.user.clone()),
-            Cell::from(format!("{:.1}%", proc.cpu)),
-            Cell::from(format!("{:.1}%", proc.memory)),
-            Cell::from(proc.command.clone()),
-        ])
-    }).collect();
+    let rows: Vec<Row> = state
+        .processes
+        .iter()
+        .map(|proc| {
+            Row::new(vec![
+                Cell::from(proc.pid.clone()),
+                Cell::from(proc.user.clone()),
+                Cell::from(format!("{:.1}%", proc.cpu)),
+                Cell::from(format!("{:.1}%", proc.memory)),
+                Cell::from(proc.command.clone()),
+            ])
+        })
+        .collect();
 
     let widths = [
         Constraint::Length(8),
@@ -450,9 +512,18 @@ fn render_processes(f: &mut Frame, area: Rect, state: &DashboardState) {
         Constraint::Min(30),
     ];
     let table = Table::new(rows, widths)
-        .block(Block::default().borders(Borders::ALL).title("Top Processes (like top)"))
-        .header(Row::new(vec!["PID", "User", "CPU%", "Mem%", "Command"])
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Top Processes (like top)"),
+        )
+        .header(
+            Row::new(vec!["PID", "User", "CPU%", "Mem%", "Command"]).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
 
     f.render_widget(table, area);
 }
@@ -471,11 +542,19 @@ fn render_costs(f: &mut Frame, area: Rect, state: &DashboardState) {
     let total = Paragraph::new(vec![
         Line::from(vec![
             Span::styled("Total Accumulated Cost: ", Style::default().fg(Color::Cyan)),
-            Span::styled(format!("${:.2}", state.total_cost), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                format!("${:.2}", state.total_cost),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled("Estimated Daily Cost: ", Style::default().fg(Color::Cyan)),
-            Span::styled(format!("${:.2}", state.total_cost * 24.0), Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("${:.2}", state.total_cost * 24.0),
+                Style::default().fg(Color::Yellow),
+            ),
         ]),
     ])
     .block(Block::default().borders(Borders::ALL).title("Cost Summary"));
@@ -484,26 +563,31 @@ fn render_costs(f: &mut Frame, area: Rect, state: &DashboardState) {
 
     // Hourly cost
     let hourly: f64 = state.instances.iter().map(|i| i.cost_per_hour).sum();
-    let hourly_para = Paragraph::new(vec![
-        Line::from(vec![
-            Span::styled("Current Hourly Rate: ", Style::default().fg(Color::Cyan)),
-            Span::styled(format!("${:.2}/hour", hourly), Style::default().fg(Color::Green)),
-        ]),
-    ])
+    let hourly_para = Paragraph::new(vec![Line::from(vec![
+        Span::styled("Current Hourly Rate: ", Style::default().fg(Color::Cyan)),
+        Span::styled(
+            format!("${:.2}/hour", hourly),
+            Style::default().fg(Color::Green),
+        ),
+    ])])
     .block(Block::default().borders(Borders::ALL).title("Current Rate"));
 
     f.render_widget(hourly_para, chunks[1]);
 
     // Cost breakdown by instance
-    let rows: Vec<Row> = state.instances.iter().map(|inst| {
-        Row::new(vec![
-            Cell::from(inst.id.clone()),
-            Cell::from(inst.instance_type.clone()),
-            Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
-            Cell::from(format!("${:.2}", inst.accumulated_cost)),
-            Cell::from(inst.runtime.clone()),
-        ])
-    }).collect();
+    let rows: Vec<Row> = state
+        .instances
+        .iter()
+        .map(|inst| {
+            Row::new(vec![
+                Cell::from(inst.id.clone()),
+                Cell::from(inst.instance_type.clone()),
+                Cell::from(format!("${:.2}/h", inst.cost_per_hour)),
+                Cell::from(format!("${:.2}", inst.accumulated_cost)),
+                Cell::from(inst.runtime.clone()),
+            ])
+        })
+        .collect();
 
     let widths = [
         Constraint::Length(20),
@@ -513,10 +597,18 @@ fn render_costs(f: &mut Frame, area: Rect, state: &DashboardState) {
         Constraint::Length(15),
     ];
     let table = Table::new(rows, widths)
-        .block(Block::default().borders(Borders::ALL).title("Cost Breakdown"))
-        .header(Row::new(vec!["Instance", "Type", "Rate", "Accumulated", "Runtime"])
-            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Cost Breakdown"),
+        )
+        .header(
+            Row::new(vec!["Instance", "Type", "Rate", "Accumulated", "Runtime"]).style(
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
 
     f.render_widget(table, chunks[2]);
 }
-

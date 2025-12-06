@@ -1,12 +1,12 @@
+use crate::config::Config;
 use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client as S3Client;
 use clap::Subcommand;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use crate::config::Config;
 use tracing::info;
 use which::which;
-use serde::{Serialize, Deserialize};
 
 #[derive(Subcommand, Clone)]
 pub enum S3Commands {
@@ -26,9 +26,9 @@ pub enum S3Commands {
         /// S3 destination path (s3://bucket/path)
         #[arg(value_name = "DESTINATION")]
         destination: String,
-    /// Use s5cmd if available (optional, native Rust is default)
-    #[arg(long, default_value_t = false)]
-    use_s5cmd: bool,
+        /// Use s5cmd if available (optional, native Rust is default)
+        #[arg(long, default_value_t = false)]
+        use_s5cmd: bool,
         /// Recursive upload
         #[arg(short, long)]
         recursive: bool,
@@ -48,9 +48,9 @@ pub enum S3Commands {
         /// Local destination path (file or directory)
         #[arg(value_name = "DESTINATION")]
         destination: PathBuf,
-    /// Use s5cmd if available (optional, native Rust is default)
-    #[arg(long, default_value_t = false)]
-    use_s5cmd: bool,
+        /// Use s5cmd if available (optional, native Rust is default)
+        #[arg(long, default_value_t = false)]
+        use_s5cmd: bool,
         /// Recursive download
         #[arg(short, long)]
         recursive: bool,
@@ -151,28 +151,75 @@ pub enum S3Commands {
 
 pub async fn handle_command(cmd: S3Commands, _config: &Config, output_format: &str) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
-    
+
     match cmd {
-        S3Commands::Upload { source, destination, use_s5cmd, recursive } => {
+        S3Commands::Upload {
+            source,
+            destination,
+            use_s5cmd,
+            recursive,
+        } => {
             crate::validation::validate_path(&source.display().to_string())?;
             crate::validation::validate_s3_path(&destination)?;
-            upload_to_s3(source, destination, use_s5cmd, recursive, &aws_config, output_format).await
+            upload_to_s3(
+                source,
+                destination,
+                use_s5cmd,
+                recursive,
+                &aws_config,
+                output_format,
+            )
+            .await
         }
-        S3Commands::Download { source, destination, use_s5cmd, recursive } => {
+        S3Commands::Download {
+            source,
+            destination,
+            use_s5cmd,
+            recursive,
+        } => {
             crate::validation::validate_s3_path(&source)?;
             crate::validation::validate_path(&destination.display().to_string())?;
-            download_from_s3(source, destination, use_s5cmd, recursive, &aws_config, output_format).await
+            download_from_s3(
+                source,
+                destination,
+                use_s5cmd,
+                recursive,
+                &aws_config,
+                output_format,
+            )
+            .await
         }
-        S3Commands::Sync { local, s3_path, direction, use_s5cmd } => {
+        S3Commands::Sync {
+            local,
+            s3_path,
+            direction,
+            use_s5cmd,
+        } => {
             crate::validation::validate_path(&local.display().to_string())?;
             crate::validation::validate_s3_path(&s3_path)?;
-            sync_s3(local, s3_path, direction, use_s5cmd, &aws_config, output_format).await
+            sync_s3(
+                local,
+                s3_path,
+                direction,
+                use_s5cmd,
+                &aws_config,
+                output_format,
+            )
+            .await
         }
-        S3Commands::List { path, recursive, human_readable } => {
+        S3Commands::List {
+            path,
+            recursive,
+            human_readable,
+        } => {
             crate::validation::validate_s3_path(&path)?;
             list_s3(path, recursive, human_readable, &aws_config, output_format).await
         }
-        S3Commands::Cleanup { path, keep_last_n, dry_run } => {
+        S3Commands::Cleanup {
+            path,
+            keep_last_n,
+            dry_run,
+        } => {
             crate::validation::validate_s3_path(&path)?;
             cleanup_s3(path, keep_last_n, dry_run, &aws_config, output_format).await
         }
@@ -272,15 +319,19 @@ async fn upload_to_s3(
         }
         cmd.arg(source.to_string_lossy().as_ref());
         cmd.arg(&destination);
-        
-        let output = cmd.output()
+
+        let output = cmd
+            .output()
             .map_err(|e| TrainctlError::S3(format!("Failed to execute s5cmd: {}", e)))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(TrainctlError::S3(format!("s5cmd upload failed: {}", stderr)));
+            return Err(TrainctlError::S3(format!(
+                "s5cmd upload failed: {}",
+                stderr
+            )));
         }
-        
+
         if output_format == "json" {
             let result = S3UploadResult {
                 success: true,
@@ -296,18 +347,19 @@ async fn upload_to_s3(
     } else {
         "native-rust".to_string()
     };
-    
+
     // Native Rust implementation with parallel transfers
     info!("Using native Rust AWS SDK for upload (parallel transfers)");
     let client = S3Client::new(aws_config);
-    
+
     // Parse S3 path
     let (bucket, key) = parse_s3_path(&destination)?;
-    
+
     if source.is_file() {
-        let body = aws_sdk_s3::primitives::ByteStream::from_path(&source).await
+        let body = aws_sdk_s3::primitives::ByteStream::from_path(&source)
+            .await
             .map_err(|e| TrainctlError::S3(format!("Failed to read file: {}", e)))?;
-        
+
         client
             .put_object()
             .bucket(&bucket)
@@ -316,7 +368,7 @@ async fn upload_to_s3(
             .send()
             .await
             .map_err(|e| TrainctlError::S3(format!("Failed to upload file: {}", e)))?;
-        
+
         if output_format == "json" {
             let result = S3UploadResult {
                 success: true,
@@ -330,7 +382,10 @@ async fn upload_to_s3(
         }
     } else if recursive && source.is_dir() {
         // Recursive directory upload with parallel transfers
-        info!("Uploading directory recursively with parallel transfers: {}", source.display());
+        info!(
+            "Uploading directory recursively with parallel transfers: {}",
+            source.display()
+        );
         upload_directory_recursive_parallel(&client, &bucket, &key, &source).await?;
         if output_format == "json" {
             let result = S3UploadResult {
@@ -345,9 +400,11 @@ async fn upload_to_s3(
         }
         return Ok(());
     } else {
-        return Err(TrainctlError::S3("Source must be a file or use --recursive for directories".to_string()));
+        return Err(TrainctlError::S3(
+            "Source must be a file or use --recursive for directories".to_string(),
+        ));
     }
-    
+
     Ok(())
 }
 
@@ -371,15 +428,19 @@ async fn download_from_s3(
         }
         cmd.arg(&source);
         cmd.arg(destination.to_string_lossy().as_ref());
-        
-        let output = cmd.output()
+
+        let output = cmd
+            .output()
             .map_err(|e| TrainctlError::S3(format!("Failed to execute s5cmd: {}", e)))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(TrainctlError::S3(format!("s5cmd download failed: {}", stderr)));
+            return Err(TrainctlError::S3(format!(
+                "s5cmd download failed: {}",
+                stderr
+            )));
         }
-        
+
         if output_format == "json" {
             let result = S3DownloadResult {
                 success: true,
@@ -395,12 +456,12 @@ async fn download_from_s3(
     } else {
         "native-rust".to_string()
     };
-    
+
     // Native Rust implementation
     info!("Using native Rust AWS SDK for download (parallel transfers)");
     let client = S3Client::new(aws_config);
     let (bucket, key_prefix) = parse_s3_path(&source)?;
-    
+
     if recursive {
         // Recursive download with parallel transfers
         download_directory_recursive_parallel(&client, &bucket, &key_prefix, &destination).await?;
@@ -413,20 +474,23 @@ async fn download_from_s3(
             .send()
             .await
             .map_err(|e| TrainctlError::S3(format!("Failed to download object: {}", e)))?;
-        
-        let data = response.body.collect().await
+
+        let data = response
+            .body
+            .collect()
+            .await
             .map_err(|e| TrainctlError::S3(format!("Failed to read response body: {}", e)))?;
-        
+
         // Ensure parent directory exists
         if let Some(parent) = destination.parent() {
             std::fs::create_dir_all(parent)
                 .map_err(|e| TrainctlError::S3(format!("Failed to create directory: {}", e)))?;
         }
-        
+
         std::fs::write(&destination, data.into_bytes())
             .map_err(|e| TrainctlError::S3(format!("Failed to write file: {}", e)))?;
     }
-    
+
     if output_format == "json" {
         let result = S3DownloadResult {
             success: true,
@@ -455,7 +519,7 @@ async fn sync_s3(
         info!("Using s5cmd (external tool) for sync");
         let mut cmd = std::process::Command::new("s5cmd");
         cmd.arg("sync");
-        
+
         match direction.as_str() {
             "up" => {
                 cmd.arg(local.to_string_lossy().as_ref());
@@ -466,21 +530,26 @@ async fn sync_s3(
                 cmd.arg(local.to_string_lossy().as_ref());
             }
             "both" => {
-                return Err(TrainctlError::S3("Bidirectional sync not supported. Use 'up' or 'down'".to_string()));
+                return Err(TrainctlError::S3(
+                    "Bidirectional sync not supported. Use 'up' or 'down'".to_string(),
+                ));
             }
             _ => {
-                return Err(TrainctlError::S3("Direction must be 'up' or 'down'".to_string()));
+                return Err(TrainctlError::S3(
+                    "Direction must be 'up' or 'down'".to_string(),
+                ));
             }
         }
-        
-        let output = cmd.output()
+
+        let output = cmd
+            .output()
             .map_err(|e| TrainctlError::S3(format!("Failed to execute s5cmd sync: {}", e)))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(TrainctlError::S3(format!("s5cmd sync failed: {}", stderr)));
         }
-        
+
         if output_format == "json" {
             let result = S3SyncResult {
                 success: true,
@@ -495,34 +564,41 @@ async fn sync_s3(
         }
         return Ok(());
     }
-    
+
     // Native Rust sync implementation
     info!("Using native Rust AWS SDK for sync (parallel transfers)");
     let client = S3Client::new(aws_config);
     let (bucket, key_prefix) = parse_s3_path(&s3_path)?;
-    
+
     match direction.as_str() {
         "up" => {
             // Upload local to S3
             if !local.is_dir() {
-                return Err(TrainctlError::S3("Local path must be a directory for sync".to_string()));
+                return Err(TrainctlError::S3(
+                    "Local path must be a directory for sync".to_string(),
+                ));
             }
             upload_directory_recursive_parallel(&client, &bucket, &key_prefix, &local).await?;
         }
         "down" => {
             // Download S3 to local
-            std::fs::create_dir_all(&local)
-                .map_err(|e| TrainctlError::S3(format!("Failed to create destination directory: {}", e)))?;
+            std::fs::create_dir_all(&local).map_err(|e| {
+                TrainctlError::S3(format!("Failed to create destination directory: {}", e))
+            })?;
             download_directory_recursive_parallel(&client, &bucket, &key_prefix, &local).await?;
         }
         "both" => {
-            return Err(TrainctlError::S3("Bidirectional sync not supported. Use 'up' or 'down'".to_string()));
+            return Err(TrainctlError::S3(
+                "Bidirectional sync not supported. Use 'up' or 'down'".to_string(),
+            ));
         }
         _ => {
-            return Err(TrainctlError::S3("Direction must be 'up' or 'down'".to_string()));
+            return Err(TrainctlError::S3(
+                "Direction must be 'up' or 'down'".to_string(),
+            ));
         }
     }
-    
+
     if output_format == "json" {
         let result = S3SyncResult {
             success: true,
@@ -535,7 +611,7 @@ async fn sync_s3(
     } else {
         println!("Synced {} with {}", local.display(), s3_path);
     }
-    
+
     Ok(())
 }
 
@@ -558,55 +634,55 @@ async fn list_s3(
             cmd.arg("--human-readable");
         }
         cmd.arg(&path);
-        
-        let output = cmd.output()
+
+        let output = cmd
+            .output()
             .map_err(|e| TrainctlError::S3(format!("Failed to execute s5cmd: {}", e)))?;
-        
+
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(TrainctlError::S3(format!("s5cmd list failed: {}", stderr)));
         }
-        
+
         print!("{}", String::from_utf8_lossy(&output.stdout));
         return Ok(());
     }
-    
+
     // Use AWS SDK (required for JSON output or if s5cmd unavailable)
     let client = S3Client::new(aws_config);
     let (bucket, prefix) = parse_s3_path(&path)?;
-    
-    let mut list_objects = client
-        .list_objects_v2()
-        .bucket(&bucket);
-    
+
+    let mut list_objects = client.list_objects_v2().bucket(&bucket);
+
     if !prefix.is_empty() {
         list_objects = list_objects.prefix(&prefix);
     }
-    
+
     let response = list_objects
         .send()
         .await
         .map_err(|e| TrainctlError::S3(format!("Failed to list objects: {}", e)))?;
-    
+
     let contents = response.contents();
     let mut objects = Vec::new();
     let mut total_size = 0u64;
-    
+
     if !contents.is_empty() {
         for obj in contents {
             let key = obj.key().unwrap_or("").to_string();
             let size = obj.size().unwrap_or(0) as u64;
             total_size += size;
-            let modified_str = obj.last_modified()
+            let modified_str = obj
+                .last_modified()
                 .map(|dt| dt.to_string())
                 .unwrap_or_else(|| "unknown".to_string());
-            
+
             objects.push(S3Object {
                 key: key.clone(),
                 size,
                 last_modified: modified_str.clone(),
             });
-            
+
             if output_format != "json" {
                 if human_readable {
                     println!("{:>12}  {}  {}", format_size(size), modified_str, key);
@@ -616,7 +692,7 @@ async fn list_s3(
             }
         }
     }
-    
+
     if output_format == "json" {
         let result = S3ListResult {
             path: path.clone(),
@@ -626,7 +702,7 @@ async fn list_s3(
         };
         println!("{}", serde_json::to_string_pretty(&result)?);
     }
-    
+
     Ok(())
 }
 
@@ -640,37 +716,36 @@ async fn cleanup_s3(
 ) -> Result<()> {
     let client = S3Client::new(aws_config);
     let (bucket, prefix) = parse_s3_path(&path)?;
-    
+
     // List all checkpoints
-    let mut list_objects = client
-        .list_objects_v2()
-        .bucket(&bucket);
-    
+    let mut list_objects = client.list_objects_v2().bucket(&bucket);
+
     if !prefix.is_empty() {
         list_objects = list_objects.prefix(&prefix);
     }
-    
+
     let response = list_objects
         .send()
         .await
         .map_err(|e| TrainctlError::S3(format!("Failed to list checkpoints: {}", e)))?;
-    
+
     let contents = response.contents();
     let mut checkpoints: Vec<_> = contents
         .iter()
         .map(|obj| {
             let key = obj.key().unwrap_or("").to_string();
             // Use timestamp as u64 for sorting
-            let modified = obj.last_modified()
+            let modified = obj
+                .last_modified()
                 .map(|dt| dt.to_millis().unwrap_or(0))
                 .unwrap_or(0);
             (key, modified)
         })
         .collect();
-    
+
     // Sort by modification time (newest first)
     checkpoints.sort_by(|a, b| b.1.cmp(&a.1));
-    
+
     let total = checkpoints.len();
     if total <= keep_last_n {
         if output_format == "json" {
@@ -687,15 +762,17 @@ async fn cleanup_s3(
         }
         return Ok(());
     }
-    
+
     let to_delete = &checkpoints[keep_last_n..];
     let deleted_count = to_delete.len();
-    
+
     if output_format != "json" {
-        println!("Found {} checkpoint(s), keeping last {}, deleting {}...", 
-                 total, keep_last_n, deleted_count);
+        println!(
+            "Found {} checkpoint(s), keeping last {}, deleting {}...",
+            total, keep_last_n, deleted_count
+        );
     }
-    
+
     if dry_run {
         if output_format != "json" {
             println!("[DRY RUN] Would delete:");
@@ -715,7 +792,7 @@ async fn cleanup_s3(
         }
         return Ok(());
     }
-    
+
     // Delete old checkpoints
     for (key, _) in to_delete {
         client
@@ -729,7 +806,7 @@ async fn cleanup_s3(
             println!("  Deleted {}", key);
         }
     }
-    
+
     if output_format == "json" {
         let result = S3CleanupResult {
             path: path.clone(),
@@ -746,48 +823,43 @@ async fn cleanup_s3(
 }
 
 /// Watch S3 bucket for new files
-async fn watch_s3(
-    path: String,
-    interval: u64,
-    aws_config: &aws_config::SdkConfig,
-) -> Result<()> {
+async fn watch_s3(path: String, interval: u64, aws_config: &aws_config::SdkConfig) -> Result<()> {
     let client = S3Client::new(aws_config);
     let (bucket, prefix) = parse_s3_path(&path)?;
-    
+
     let mut last_seen = std::collections::HashSet::new();
-    
+
     println!("Watching {} (checking every {}s)...", path, interval);
     println!("Press Ctrl+C to stop");
-    
+
     loop {
-        let mut list_objects = client
-            .list_objects_v2()
-            .bucket(&bucket);
-        
+        let mut list_objects = client.list_objects_v2().bucket(&bucket);
+
         if !prefix.is_empty() {
             list_objects = list_objects.prefix(&prefix);
         }
-        
+
         let response = list_objects
             .send()
             .await
             .map_err(|e| TrainctlError::S3(format!("Failed to list objects: {}", e)))?;
-        
+
         let contents = response.contents();
         if !contents.is_empty() {
             for obj in contents {
                 let key = obj.key().unwrap_or("");
                 if !last_seen.contains(key) {
                     let size = obj.size().unwrap_or(0);
-                    let modified_str = obj.last_modified()
-                .map(|dt| dt.to_string())
-                .unwrap_or_else(|| "unknown".to_string());
+                    let modified_str = obj
+                        .last_modified()
+                        .map(|dt| dt.to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
                     println!("New file: {} ({} bytes, {})", key, size, modified_str);
                     last_seen.insert(key.to_string());
                 }
             }
         }
-        
+
         tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
     }
 }
@@ -801,34 +873,32 @@ async fn review_s3(
 ) -> Result<()> {
     let client = S3Client::new(aws_config);
     let (bucket, prefix) = parse_s3_path(&path)?;
-    
-    let mut list_objects = client
-        .list_objects_v2()
-        .bucket(&bucket);
-    
+
+    let mut list_objects = client.list_objects_v2().bucket(&bucket);
+
     if !prefix.is_empty() {
         list_objects = list_objects.prefix(&prefix);
     }
-    
+
     let response = list_objects
         .send()
         .await
         .map_err(|e| TrainctlError::S3(format!("Failed to list objects: {}", e)))?;
-    
+
     let mut total_size = 0u64;
     let mut checkpoint_count = 0;
     let mut model_count = 0;
     let mut log_count = 0;
-    
+
     let contents = response.contents();
     let total_objects = response.key_count().unwrap_or(0) as usize;
-    
+
     if !contents.is_empty() {
         for obj in contents {
             let key = obj.key().unwrap_or("");
             let size = obj.size().unwrap_or(0) as u64;
             total_size += size;
-            
+
             if key.contains("checkpoint") || key.ends_with(".pt") {
                 checkpoint_count += 1;
             } else if key.contains("model") || key.ends_with(".pth") {
@@ -836,16 +906,17 @@ async fn review_s3(
             } else if key.ends_with(".log") {
                 log_count += 1;
             }
-            
+
             if detailed && output_format != "json" {
-                let modified_str = obj.last_modified()
+                let modified_str = obj
+                    .last_modified()
                     .map(|dt| dt.to_string())
                     .unwrap_or_else(|| "unknown".to_string());
                 println!("{}  {:>12}  {}", modified_str, format_size(size), key);
             }
         }
     }
-    
+
     if output_format == "json" {
         let result = S3ReviewResult {
             path: path.clone(),
@@ -866,26 +937,32 @@ async fn review_s3(
         println!("Models: {}", model_count);
         println!("Logs: {}", log_count);
     }
-    
+
     Ok(())
 }
 
 /// Parse S3 path (s3://bucket/key) into bucket and key
 fn parse_s3_path(s3_path: &str) -> Result<(String, String)> {
     if !s3_path.starts_with("s3://") {
-        return Err(TrainctlError::S3("S3 path must start with s3://".to_string()));
+        return Err(TrainctlError::S3(
+            "S3 path must start with s3://".to_string(),
+        ));
     }
-    
+
     let path = &s3_path[5..]; // Remove "s3://"
     let parts: Vec<&str> = path.splitn(2, '/').collect();
-    
+
     if parts.is_empty() {
         return Err(TrainctlError::S3(format!("Invalid S3 path: {}", s3_path)));
     }
-    
+
     let bucket = parts[0].to_string();
-    let key = if parts.len() > 1 { parts[1].to_string() } else { String::new() };
-    
+    let key = if parts.len() > 1 {
+        parts[1].to_string()
+    } else {
+        String::new()
+    };
+
     Ok((bucket, key))
 }
 
@@ -896,16 +973,20 @@ async fn upload_directory_recursive_parallel(
     prefix: &str,
     source_dir: &Path,
 ) -> Result<()> {
-    use walkdir::WalkDir;
     use indicatif::{ProgressBar, ProgressStyle};
-    
-    let source_path = source_dir.canonicalize()
+    use walkdir::WalkDir;
+
+    let source_path = source_dir
+        .canonicalize()
         .map_err(|e| TrainctlError::S3(format!("Failed to canonicalize source path: {}", e)))?;
-    
+
     if !source_path.is_dir() {
-        return Err(TrainctlError::S3(format!("Source path is not a directory: {}", source_path.display())));
+        return Err(TrainctlError::S3(format!(
+            "Source path is not a directory: {}",
+            source_path.display()
+        )));
     }
-    
+
     // Collect all files first
     let files: Vec<_> = WalkDir::new(&source_path)
         .follow_links(false)
@@ -913,53 +994,60 @@ async fn upload_directory_recursive_parallel(
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().is_file())
         .collect();
-    
+
     let total_files = files.len();
     if total_files == 0 {
         return Err(TrainctlError::S3("No files found in directory".to_string()));
     }
-    
+
     info!("Uploading {} files with parallel transfers...", total_files);
-    
+
     // Create progress bar
     let pb = ProgressBar::new(total_files as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .expect("Progress bar template")
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+            )
+            .expect("Progress bar template"),
     );
-    
+
     // Parallel upload with concurrency limit (similar to s5cmd's default)
     const PARALLEL_CONCURRENCY: usize = 10;
     let mut handles = Vec::new();
     let mut uploaded = 0u64;
     let mut failed = 0u64;
-    
+
     for entry in files {
         let client = client.clone();
         let bucket = bucket.to_string();
         let source_path_clone = source_path.clone();
         let path = entry.path().to_path_buf();
         let pb = pb.clone();
-        
+
         // Calculate relative path and S3 key
-        let relative_path = path.strip_prefix(&source_path_clone)
+        let relative_path = path
+            .strip_prefix(&source_path_clone)
             .map_err(|e| TrainctlError::S3(format!("Failed to calculate relative path: {}", e)))?;
-        
+
         let key = if prefix.is_empty() {
             relative_path.to_string_lossy().replace('\\', "/")
         } else {
-            format!("{}/{}", prefix.trim_end_matches('/'), relative_path.to_string_lossy().replace('\\', "/"))
+            format!(
+                "{}/{}",
+                prefix.trim_end_matches('/'),
+                relative_path.to_string_lossy().replace('\\', "/")
+            )
         };
-        
+
         let handle = tokio::spawn(async move {
             let result = upload_file_to_s3(&client, &bucket, &key, &path).await;
             pb.inc(1);
             result
         });
-        
+
         handles.push(handle);
-        
+
         // Limit concurrency
         if handles.len() >= PARALLEL_CONCURRENCY {
             let (result, _idx, remaining) = futures::future::select_all(handles).await;
@@ -971,7 +1059,7 @@ async fn upload_directory_recursive_parallel(
             handles = remaining;
         }
     }
-    
+
     // Wait for remaining uploads
     for handle in handles {
         match handle.await {
@@ -980,14 +1068,20 @@ async fn upload_directory_recursive_parallel(
             Err(_) => failed += 1,
         }
     }
-    
+
     pb.finish_with_message("Upload complete");
-    
+
     if failed > 0 {
-        return Err(TrainctlError::S3(format!("Uploaded {} files, but {} failed", uploaded, failed)));
+        return Err(TrainctlError::S3(format!(
+            "Uploaded {} files, but {} failed",
+            uploaded, failed
+        )));
     }
-    
-    info!("Successfully uploaded {} files to s3://{}/{}", uploaded, bucket, prefix);
+
+    info!(
+        "Successfully uploaded {} files to s3://{}/{}",
+        uploaded, bucket, prefix
+    );
     Ok(())
 }
 
@@ -1009,61 +1103,66 @@ async fn download_directory_recursive_parallel(
     destination: &Path,
 ) -> Result<()> {
     use indicatif::{ProgressBar, ProgressStyle};
-    
+
     // List all objects with the prefix
-    let mut list_objects = client
-        .list_objects_v2()
-        .bucket(bucket);
-    
+    let mut list_objects = client.list_objects_v2().bucket(bucket);
+
     if !key_prefix.is_empty() {
         list_objects = list_objects.prefix(key_prefix);
     }
-    
+
     let response = list_objects
         .send()
         .await
         .map_err(|e| TrainctlError::S3(format!("Failed to list objects: {}", e)))?;
-    
+
     let contents = response.contents();
     if contents.is_empty() {
-        return Err(TrainctlError::S3("No objects found to download".to_string()));
+        return Err(TrainctlError::S3(
+            "No objects found to download".to_string(),
+        ));
     }
-    
+
     let total_files = contents.len();
-    info!("Downloading {} files with parallel transfers...", total_files);
-    
+    info!(
+        "Downloading {} files with parallel transfers...",
+        total_files
+    );
+
     // Create progress bar
     let pb = ProgressBar::new(total_files as u64);
     pb.set_style(
         ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
-            .expect("Progress bar template")
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+            )
+            .expect("Progress bar template"),
     );
-    
+
     // Ensure destination directory exists
     std::fs::create_dir_all(destination)
         .map_err(|e| TrainctlError::S3(format!("Failed to create destination directory: {}", e)))?;
-    
+
     // Parallel download with concurrency limit
     const PARALLEL_CONCURRENCY: usize = 10;
     let mut handles = Vec::new();
     let mut downloaded = 0u64;
     let mut failed = 0u64;
-    
+
     for obj in contents {
         let client = client.clone();
         let bucket = bucket.to_string();
         let destination = destination.to_path_buf();
         let pb = pb.clone();
-        
+
         let key = obj.key().unwrap_or("").to_string();
         let _size = obj.size().unwrap_or(0);
-        
+
         // Skip if key is empty or is a directory marker
         if key.is_empty() || key.ends_with('/') {
             continue;
         }
-        
+
         // Calculate local file path
         let relative_key = if key_prefix.is_empty() {
             key.clone()
@@ -1072,18 +1171,21 @@ async fn download_directory_recursive_parallel(
         } else {
             continue; // Skip if doesn't match prefix
         };
-        
+
         let local_path = destination.join(&relative_key);
-        
+
         // Ensure parent directory exists
         if let Some(parent) = local_path.parent() {
             let parent = parent.to_path_buf();
             let handle = tokio::spawn(async move {
                 // Create parent directory
                 if let Err(e) = std::fs::create_dir_all(&parent) {
-                    return Err(TrainctlError::S3(format!("Failed to create directory: {}", e)));
+                    return Err(TrainctlError::S3(format!(
+                        "Failed to create directory: {}",
+                        e
+                    )));
                 }
-                
+
                 // Download file
                 let response = client
                     .get_object()
@@ -1092,19 +1194,20 @@ async fn download_directory_recursive_parallel(
                     .send()
                     .await
                     .map_err(|e| TrainctlError::S3(format!("Failed to download {}: {}", key, e)))?;
-                
-                let data = response.body.collect().await
-                    .map_err(|e| TrainctlError::S3(format!("Failed to read response body: {}", e)))?;
-                
+
+                let data = response.body.collect().await.map_err(|e| {
+                    TrainctlError::S3(format!("Failed to read response body: {}", e))
+                })?;
+
                 std::fs::write(&local_path, data.into_bytes())
                     .map_err(|e| TrainctlError::S3(format!("Failed to write file: {}", e)))?;
-                
+
                 pb.inc(1);
                 Ok(())
             });
-            
+
             handles.push(handle);
-            
+
             // Limit concurrency
             if handles.len() >= PARALLEL_CONCURRENCY {
                 let (result, _idx, remaining) = futures::future::select_all(handles).await;
@@ -1117,7 +1220,7 @@ async fn download_directory_recursive_parallel(
             }
         }
     }
-    
+
     // Wait for remaining downloads
     for handle in handles {
         match handle.await {
@@ -1126,14 +1229,21 @@ async fn download_directory_recursive_parallel(
             Err(_) => failed += 1,
         }
     }
-    
+
     pb.finish_with_message("Download complete");
-    
+
     if failed > 0 {
-        return Err(TrainctlError::S3(format!("Downloaded {} files, but {} failed", downloaded, failed)));
+        return Err(TrainctlError::S3(format!(
+            "Downloaded {} files, but {} failed",
+            downloaded, failed
+        )));
     }
-    
-    info!("Successfully downloaded {} files to {}", downloaded, destination.display());
+
+    info!(
+        "Successfully downloaded {} files to {}",
+        downloaded,
+        destination.display()
+    );
     Ok(())
 }
 
@@ -1144,9 +1254,16 @@ async fn upload_file_to_s3(
     key: &str,
     file_path: &std::path::Path,
 ) -> Result<()> {
-    let body = aws_sdk_s3::primitives::ByteStream::from_path(file_path).await
-        .map_err(|e| TrainctlError::S3(format!("Failed to read file {}: {}", file_path.display(), e)))?;
-    
+    let body = aws_sdk_s3::primitives::ByteStream::from_path(file_path)
+        .await
+        .map_err(|e| {
+            TrainctlError::S3(format!(
+                "Failed to read file {}: {}",
+                file_path.display(),
+                e
+            ))
+        })?;
+
     client
         .put_object()
         .bucket(bucket)
@@ -1154,8 +1271,14 @@ async fn upload_file_to_s3(
         .body(body)
         .send()
         .await
-        .map_err(|e| TrainctlError::S3(format!("Failed to upload file {}: {}", file_path.display(), e)))?;
-    
+        .map_err(|e| {
+            TrainctlError::S3(format!(
+                "Failed to upload file {}: {}",
+                file_path.display(),
+                e
+            ))
+        })?;
+
     Ok(())
 }
 
@@ -1163,12 +1286,11 @@ fn format_size(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
     let mut size = bytes as f64;
     let mut unit_idx = 0;
-    
+
     while size >= 1024.0 && unit_idx < UNITS.len() - 1 {
         size /= 1024.0;
         unit_idx += 1;
     }
-    
+
     format!("{:.2} {}", size, UNITS[unit_idx])
 }
-

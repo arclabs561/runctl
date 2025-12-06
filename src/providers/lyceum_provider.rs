@@ -1,13 +1,13 @@
 //! Lyceum AI provider implementation
 
-use crate::provider::*;
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
+use crate::provider::*;
 use async_trait::async_trait;
 use std::path::Path;
 
 /// Lyceum AI provider implementation
-/// 
+///
 /// Currently a stub - not yet implemented.
 /// Kept for future Lyceum AI integration.
 #[allow(dead_code)]
@@ -60,11 +60,7 @@ impl TrainingProvider for LyceumProvider {
         })
     }
 
-    async fn train(
-        &self,
-        _resource_id: &ResourceId,
-        _job: TrainingJob,
-    ) -> Result<TrainingStatus> {
+    async fn train(&self, _resource_id: &ResourceId, _job: TrainingJob) -> Result<TrainingStatus> {
         Err(TrainctlError::CloudProvider {
             provider: "lyceum".to_string(),
             message: "Lyceum AI provider not yet implemented".to_string(),
@@ -72,11 +68,7 @@ impl TrainingProvider for LyceumProvider {
         })
     }
 
-    async fn monitor(
-        &self,
-        _resource_id: &ResourceId,
-        _follow: bool,
-    ) -> Result<()> {
+    async fn monitor(&self, _resource_id: &ResourceId, _follow: bool) -> Result<()> {
         Err(TrainctlError::CloudProvider {
             provider: "lyceum".to_string(),
             message: "Lyceum AI provider not yet implemented".to_string(),
@@ -115,4 +107,3 @@ impl TrainingProvider for LyceumProvider {
         cost_per_hour * hours
     }
 }
-

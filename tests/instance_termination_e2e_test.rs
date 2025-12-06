@@ -7,11 +7,11 @@
 //!
 //! Cost: ~$0.20-0.50 per test run
 
+use aws_config::BehaviorVersion;
+use aws_sdk_ec2::Client as Ec2Client;
 use std::env;
 use std::time::Duration;
 use tokio::time::sleep;
-use aws_config::BehaviorVersion;
-use aws_sdk_ec2::Client as Ec2Client;
 use tracing::info;
 
 fn should_run_e2e() -> bool {
@@ -28,21 +28,24 @@ macro_rules! require_e2e {
 }
 
 fn test_tag() -> String {
-    format!("trainctl-test-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap())
+    format!(
+        "trainctl-test-{}",
+        uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
+    )
 }
 
 #[tokio::test]
 #[ignore]
 async fn test_termination_with_attached_persistent_volume() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create persistent volume
     let vol_response = client
         .create_volume()
@@ -56,32 +59,32 @@ async fn test_termination_with_attached_persistent_volume() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:persistent")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = vol_response.volume_id().expect("No volume ID").to_string();
     info!("Created persistent volume: {}", volume_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Note: Full test would:
     // 1. Create t3.micro instance
     // 2. Attach persistent volume
     // 3. Terminate instance (should warn about attached volume)
     // 4. Verify volume is detached and still exists
     // 5. Verify volume is available (not in-use)
-    
+
     // For now, just verify volume exists
     let describe = client
         .describe_volumes()
@@ -89,9 +92,9 @@ async fn test_termination_with_attached_persistent_volume() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     assert!(!describe.volumes().is_empty(), "Volume should exist");
-    
+
     // Cleanup
     client
         .delete_volume()
@@ -106,12 +109,11 @@ async fn test_termination_with_attached_persistent_volume() {
 #[ignore]
 async fn test_termination_warns_about_attached_volumes() {
     require_e2e!();
-    
+
     // Test that terminate_instance function checks for attached volumes
     // and warns appropriately
     // This would require creating an instance and attaching a volume
     // For cost reasons, we'll just verify the logic exists
-    
+
     assert!(true);
 }
-

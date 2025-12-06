@@ -2,8 +2,8 @@ use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize, Deserialize)]
 struct CheckpointListItem {
@@ -24,7 +24,7 @@ struct CheckpointInfoJson {
 }
 
 /// Metadata for a training checkpoint
-/// 
+///
 /// This struct is kept for future use when checkpoint metadata tracking is implemented.
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,7 +107,11 @@ pub async fn handle_command(cmd: CheckpointCommands, output_format: &str) -> Res
             crate::validation::validate_path(&script.display().to_string())?;
             resume_from(&path, &script, output_format).await
         }
-        CheckpointCommands::Cleanup { dir, keep_last_n, dry_run } => {
+        CheckpointCommands::Cleanup {
+            dir,
+            keep_last_n,
+            dry_run,
+        } => {
             crate::validation::validate_path(&dir.display().to_string())?;
             cleanup_checkpoints(&dir, keep_last_n, dry_run, output_format).await
         }
@@ -130,8 +134,12 @@ pub async fn get_checkpoint_paths(dir: &Path) -> Result<Vec<PathBuf>> {
 
     // Sort by modified time (newest first)
     checkpoints.sort_by(|a, b| {
-        let a_time = fs::metadata(a).and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
-        let b_time = fs::metadata(b).and_then(|m| m.modified()).unwrap_or(std::time::UNIX_EPOCH);
+        let a_time = fs::metadata(a)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        let b_time = fs::metadata(b)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
         b_time.cmp(&a_time)
     });
 
@@ -168,11 +176,15 @@ async fn list_checkpoints(dir: &Path, output_format: &str) -> Result<()> {
                 modified: format!("{:?}", modified),
             });
         }
-        println!("{}", serde_json::to_string_pretty(&items)
-            .map_err(|e| TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to serialize JSON: {}", e),
-            )))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&items).map_err(|e| TrainctlError::Io(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to serialize JSON: {}", e),
+                )
+            ))?
+        );
         return Ok(());
     }
 
@@ -185,14 +197,11 @@ async fn list_checkpoints(dir: &Path, output_format: &str) -> Result<()> {
         let size = fs::metadata(&path)?.len();
         let size_str = format_size(size);
         let modified_str = format!("{:?}", modified);
-        let file_name = path.file_name()
+        let file_name = path
+            .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown".to_string());
-        println!("{:<50} {:<20} {:<10}", 
-            file_name,
-            modified_str,
-            size_str
-        );
+        println!("{:<50} {:<20} {:<10}", file_name, modified_str, size_str);
     }
 
     Ok(())
@@ -207,7 +216,7 @@ async fn show_info(path: &Path, output_format: &str) -> Result<()> {
     }
 
     let metadata = fs::metadata(path)?;
-    
+
     // Try to extract checkpoint info using training module
     let epoch = crate::training::extract_checkpoint_info(path)
         .ok()
@@ -215,7 +224,7 @@ async fn show_info(path: &Path, output_format: &str) -> Result<()> {
     let loss = crate::training::extract_checkpoint_info(path)
         .ok()
         .and_then(|info| info.loss);
-    
+
     if output_format == "json" {
         let info = CheckpointInfoJson {
             path: path.display().to_string(),
@@ -225,11 +234,15 @@ async fn show_info(path: &Path, output_format: &str) -> Result<()> {
             epoch,
             loss,
         };
-        println!("{}", serde_json::to_string_pretty(&info)
-            .map_err(|e| TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to serialize JSON: {}", e),
-            )))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&info).map_err(|e| TrainctlError::Io(
+                std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to serialize JSON: {}", e),
+                )
+            ))?
+        );
         return Ok(());
     }
 
@@ -267,7 +280,10 @@ async fn resume_from(checkpoint: &Path, script: &Path, _output_format: &str) -> 
         });
     }
 
-    println!("Resuming training from checkpoint: {}", checkpoint.display());
+    println!(
+        "Resuming training from checkpoint: {}",
+        checkpoint.display()
+    );
     println!("Script: {}", script.display());
 
     // In a real implementation, this would:
@@ -281,7 +297,12 @@ async fn resume_from(checkpoint: &Path, script: &Path, _output_format: &str) -> 
     Ok(())
 }
 
-async fn cleanup_checkpoints(dir: &Path, keep_last_n: usize, dry_run: bool, _output_format: &str) -> Result<()> {
+async fn cleanup_checkpoints(
+    dir: &Path,
+    keep_last_n: usize,
+    dry_run: bool,
+    _output_format: &str,
+) -> Result<()> {
     if !dir.exists() {
         println!("No checkpoint directory found: {}", dir.display());
         return Ok(());
@@ -307,13 +328,20 @@ async fn cleanup_checkpoints(dir: &Path, keep_last_n: usize, dry_run: bool, _out
     checkpoints.sort_by(|a, b| b.1.cmp(&a.1));
 
     if checkpoints.len() <= keep_last_n {
-        println!("Only {} checkpoint(s), nothing to clean up", checkpoints.len());
+        println!(
+            "Only {} checkpoint(s), nothing to clean up",
+            checkpoints.len()
+        );
         return Ok(());
     }
 
     let to_delete = &checkpoints[keep_last_n..];
-    println!("Found {} checkpoint(s), keeping last {}, deleting {}...", 
-             checkpoints.len(), keep_last_n, to_delete.len());
+    println!(
+        "Found {} checkpoint(s), keeping last {}, deleting {}...",
+        checkpoints.len(),
+        keep_last_n,
+        to_delete.len()
+    );
 
     if dry_run {
         println!("[DRY RUN] Would delete:");
@@ -325,11 +353,12 @@ async fn cleanup_checkpoints(dir: &Path, keep_last_n: usize, dry_run: bool, _out
 
     // Delete old checkpoints
     for (path, _) in to_delete {
-        fs::remove_file(path)
-            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+        fs::remove_file(path).map_err(|e| {
+            TrainctlError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("Failed to delete {}: {}", path.display(), e),
-            )))?;
+            ))
+        })?;
         println!("  Deleted {}", path.display());
     }
 
@@ -353,9 +382,9 @@ fn format_size(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs;
     use std::time::Duration;
+    use tempfile::TempDir;
 
     #[test]
     fn test_format_size() {
@@ -376,12 +405,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let checkpoint_dir = temp_dir.path().join("checkpoints");
         fs::create_dir_all(&checkpoint_dir).unwrap();
-        
+
         // Create some checkpoint files
         fs::write(checkpoint_dir.join("checkpoint1.pt"), b"fake checkpoint").unwrap();
         fs::write(checkpoint_dir.join("checkpoint2.pt"), b"fake checkpoint").unwrap();
-        fs::write(checkpoint_dir.join("not_a_checkpoint.txt"), b"not a checkpoint").unwrap();
-        
+        fs::write(
+            checkpoint_dir.join("not_a_checkpoint.txt"),
+            b"not a checkpoint",
+        )
+        .unwrap();
+
         let checkpoints = get_checkpoint_paths(&checkpoint_dir).await.unwrap();
         assert_eq!(checkpoints.len(), 2);
         assert!(checkpoints.iter().all(|p| p.extension().unwrap() == "pt"));
@@ -391,7 +424,7 @@ mod tests {
     async fn test_list_checkpoints_nonexistent_dir() {
         let temp_dir = TempDir::new().unwrap();
         let fake_dir = temp_dir.path().join("nonexistent");
-        
+
         // Should not panic, just print message
         assert!(list_checkpoints(&fake_dir, "text").await.is_ok());
     }
@@ -401,7 +434,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let checkpoint_dir = temp_dir.path().join("checkpoints");
         fs::create_dir_all(&checkpoint_dir).unwrap();
-        
+
         // Create 5 checkpoint files
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
@@ -409,10 +442,12 @@ mod tests {
             // Add small delay to ensure different modification times
             std::thread::sleep(Duration::from_millis(10));
         }
-        
+
         // Dry run - should not delete anything
-        cleanup_checkpoints(&checkpoint_dir, 3, true, "text").await.unwrap();
-        
+        cleanup_checkpoints(&checkpoint_dir, 3, true, "text")
+            .await
+            .unwrap();
+
         // All files should still exist
         let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
         assert_eq!(entries.len(), 5);
@@ -423,17 +458,19 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let checkpoint_dir = temp_dir.path().join("checkpoints");
         fs::create_dir_all(&checkpoint_dir).unwrap();
-        
+
         // Create 5 checkpoint files
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
             fs::write(&path, b"fake checkpoint").unwrap();
             std::thread::sleep(Duration::from_millis(10));
         }
-        
+
         // Keep last 2, delete others
-        cleanup_checkpoints(&checkpoint_dir, 2, false, "text").await.unwrap();
-        
+        cleanup_checkpoints(&checkpoint_dir, 2, false, "text")
+            .await
+            .unwrap();
+
         // Should have 2 files left
         let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
         assert_eq!(entries.len(), 2);
@@ -444,19 +481,20 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let checkpoint_dir = temp_dir.path().join("checkpoints");
         fs::create_dir_all(&checkpoint_dir).unwrap();
-        
+
         // Create 2 checkpoint files
         for i in 1..=2 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
             fs::write(&path, b"fake checkpoint").unwrap();
         }
-        
+
         // Try to keep 5, but only have 2
-        cleanup_checkpoints(&checkpoint_dir, 5, false, "text").await.unwrap();
-        
+        cleanup_checkpoints(&checkpoint_dir, 5, false, "text")
+            .await
+            .unwrap();
+
         // All should still exist
         let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
         assert_eq!(entries.len(), 2);
     }
 }
-

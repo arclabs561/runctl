@@ -1,16 +1,16 @@
 //! End-to-end test for complete training workflow
-//! 
+//!
 //! Tests the full cycle: create instance → sync code → train → monitor → cleanup
-//! 
+//!
 //! Run with: TRAINCTL_E2E=1 cargo test --test training_workflow_test --features e2e -- --ignored
 //!
 //! Cost: ~$0.50-2.00 per run (creates real instance, runs training)
 
-use std::env;
-use std::time::Duration;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
+use std::env;
+use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
 
@@ -26,14 +26,14 @@ async fn wait_for_instance_running(
     max_wait_secs: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let start = std::time::Instant::now();
-    
+
     while start.elapsed().as_secs() < max_wait_secs {
         let response = client
             .describe_instances()
             .instance_ids(instance_id)
             .send()
             .await?;
-        
+
         if let Some(instance) = response
             .reservations()
             .iter()
@@ -48,10 +48,10 @@ async fn wait_for_instance_running(
                 }
             }
         }
-        
+
         sleep(Duration::from_secs(5)).await;
     }
-    
+
     Err("Instance did not reach running state in time".into())
 }
 
@@ -62,9 +62,9 @@ async fn dir_exists_on_instance(
     path: &str,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let cmd = format!("test -d {} && echo 'EXISTS' || echo 'NOT_FOUND'", path);
-    
+
     let output = execute_ssm_command(ssm_client, instance_id, &cmd).await?;
-    
+
     Ok(output.contains("EXISTS"))
 }
 
@@ -85,24 +85,24 @@ async fn execute_ssm_command(
         .and_then(|c| c.command_id())
         .ok_or("No command ID returned")?
         .to_string();
-    
+
     // Wait for command to complete (simplified polling)
     let mut attempts = 0;
     loop {
         sleep(Duration::from_secs(2)).await;
         attempts += 1;
-        
+
         if attempts > 60 {
             return Err("SSM command timeout".into());
         }
-        
+
         let output = ssm_client
             .get_command_invocation()
             .command_id(&command_id)
             .instance_id(instance_id)
             .send()
             .await?;
-        
+
         if let Some(status) = output.status() {
             match status.as_str() {
                 "Success" => {
@@ -112,7 +112,8 @@ async fn execute_ssm_command(
                     return Err(format!(
                         "Command failed: {}",
                         output.standard_error_content().unwrap_or("")
-                    ).into());
+                    )
+                    .into());
                 }
                 _ => {
                     // Still running, continue waiting
@@ -141,7 +142,7 @@ async fn test_full_training_workflow() {
     info!("Step 1: Creating test instance...");
     let instance_id = {
         use aws_sdk_ec2::types::InstanceType;
-        
+
         let response = ec2_client
             .run_instances()
             .image_id("ami-08fa3ed5577079e64") // Amazon Linux 2023
@@ -155,15 +156,15 @@ async fn test_full_training_workflow() {
                         aws_sdk_ec2::types::Tag::builder()
                             .key("Name")
                             .value("trainctl-e2e-test")
-                            .build()
+                            .build(),
                     )
                     .tags(
                         aws_sdk_ec2::types::Tag::builder()
                             .key("CreatedBy")
                             .value("trainctl-e2e-test")
-                            .build()
+                            .build(),
                     )
-                    .build()
+                    .build(),
             )
             .send()
             .await
@@ -175,7 +176,7 @@ async fn test_full_training_workflow() {
             .and_then(|i| i.instance_id())
             .expect("No instance ID")
             .to_string();
-        
+
         info!("Created instance: {}", id);
         id
     };
@@ -202,7 +203,7 @@ async fn test_full_training_workflow() {
     let dir_exists = dir_exists_on_instance(&ssm_client, &instance_id, project_dir)
         .await
         .unwrap_or(false);
-    
+
     if !dir_exists {
         // Create it (user-data might not have run yet)
         let cmd = format!("mkdir -p {}", project_dir);
@@ -226,12 +227,12 @@ echo "TRAINING_COMPLETE" > training.status
 "#,
         project_dir
     );
-    
+
     let create_script_cmd = format!(
         "cat > {}/test_train.sh << 'EOF'\n{}\nEOF\nchmod +x {}/test_train.sh",
         project_dir, test_script, project_dir
     );
-    
+
     execute_ssm_command(&ssm_client, &instance_id, &create_script_cmd)
         .await
         .expect("Failed to create test script");
@@ -242,7 +243,7 @@ echo "TRAINING_COMPLETE" > training.status
         "cd {} && nohup ./test_train.sh > training.log 2>&1 & echo $! > training.pid",
         project_dir
     );
-    
+
     execute_ssm_command(&ssm_client, &instance_id, &start_training_cmd)
         .await
         .expect("Failed to start training");
@@ -250,16 +251,16 @@ echo "TRAINING_COMPLETE" > training.status
     // Step 6: Wait a bit and verify training is running
     info!("Step 6: Verifying training is running...");
     sleep(Duration::from_secs(5)).await;
-    
+
     let check_pid_cmd = format!(
         "if [ -f {}/training.pid ]; then PID=$(cat {}/training.pid) && ps -p $PID > /dev/null && echo 'RUNNING' || echo 'STOPPED'; else echo 'NO_PID'; fi",
         project_dir, project_dir
     );
-    
+
     let status = execute_ssm_command(&ssm_client, &instance_id, &check_pid_cmd)
         .await
         .expect("Failed to check training status");
-    
+
     assert!(status.contains("RUNNING"), "Training should be running");
 
     // Step 7: Wait for training to complete
@@ -268,20 +269,20 @@ echo "TRAINING_COMPLETE" > training.status
     loop {
         sleep(Duration::from_secs(2)).await;
         attempts += 1;
-        
+
         if attempts > 30 {
             panic!("Training did not complete in time");
         }
-        
+
         let check_complete_cmd = format!(
             "if [ -f {}/training.status ] && grep -q TRAINING_COMPLETE {}/training.status; then echo 'COMPLETE'; else echo 'RUNNING'; fi",
             project_dir, project_dir
         );
-        
+
         let status = execute_ssm_command(&ssm_client, &instance_id, &check_complete_cmd)
             .await
             .expect("Failed to check completion");
-        
+
         if status.contains("COMPLETE") {
             break;
         }
@@ -293,13 +294,19 @@ echo "TRAINING_COMPLETE" > training.status
         "if [ -f {}/training.log ] && [ -s {}/training.log ]; then head -5 {}/training.log; else echo 'LOG_MISSING'; fi",
         project_dir, project_dir, project_dir
     );
-    
+
     let log_content = execute_ssm_command(&ssm_client, &instance_id, &check_log_cmd)
         .await
         .expect("Failed to read training log");
-    
-    assert!(!log_content.contains("LOG_MISSING"), "Training log should exist");
-    assert!(log_content.contains("Training"), "Training log should have content");
+
+    assert!(
+        !log_content.contains("LOG_MISSING"),
+        "Training log should exist"
+    );
+    assert!(
+        log_content.contains("Training"),
+        "Training log should have content"
+    );
 
     // Step 9: Cleanup
     info!("Step 9: Cleaning up...");
@@ -307,4 +314,3 @@ echo "TRAINING_COMPLETE" > training.status
 
     info!("✅ Full training workflow test passed!");
 }
-

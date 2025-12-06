@@ -1,8 +1,8 @@
 use crate::error::{Result, TrainctlError};
-use notify::{Watcher, RecursiveMode, Event, EventKind};
-use std::path::{Path, PathBuf};
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::fs;
 use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use tokio::time::{sleep, Duration};
 
 pub async fn monitor(
@@ -34,14 +34,14 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
     if !log_path.exists() {
         println!("Log file not found: {}", log_path.display());
         println!("Waiting for log file to be created...");
-        
+
         // Wait for file to be created
         let mut attempts = 0;
         while !log_path.exists() && attempts < 60 {
             sleep(Duration::from_secs(1)).await;
             attempts += 1;
         }
-        
+
         if !log_path.exists() {
             return Err(TrainctlError::ResourceNotFound {
                 resource_type: "log file".to_string(),
@@ -56,24 +56,30 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
     if follow {
         // Follow mode - watch for changes
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-        
-        let mut watcher = notify::recommended_watcher(move |event: std::result::Result<Event, notify::Error>| {
-            if let Ok(event) = event {
-                if matches!(event.kind, EventKind::Modify(_)) {
-                    let _ = tx.try_send(event);
-                }
-            }
-        })
-        .map_err(|e| TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to create file watcher: {}", e),
-        )))?;
 
-        watcher.watch(log_path, RecursiveMode::NonRecursive)
-        .map_err(|e| TrainctlError::Io(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to watch log file: {}", e),
-        )))?;
+        let mut watcher =
+            notify::recommended_watcher(move |event: std::result::Result<Event, notify::Error>| {
+                if let Ok(event) = event {
+                    if matches!(event.kind, EventKind::Modify(_)) {
+                        let _ = tx.try_send(event);
+                    }
+                }
+            })
+            .map_err(|e| {
+                TrainctlError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to create file watcher: {}", e),
+                ))
+            })?;
+
+        watcher
+            .watch(log_path, RecursiveMode::NonRecursive)
+            .map_err(|e| {
+                TrainctlError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to watch log file: {}", e),
+                ))
+            })?;
 
         let mut last_pos = 0u64;
         loop {
@@ -84,13 +90,13 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
                         use std::io::Seek;
                         file.seek(std::io::SeekFrom::Start(last_pos))?;
                         let mut reader = BufReader::new(file);
-                        
+
                         let mut line = String::new();
                         while reader.read_line(&mut line)? > 0 {
                             print!("{}", line);
                             line.clear();
                         }
-                        
+
                         last_pos = reader.stream_position()?;
                     }
                 }
@@ -104,7 +110,7 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
         if let Ok(file) = fs::File::open(log_path) {
             let reader = BufReader::new(file);
             let lines: Vec<String> = reader.lines().collect::<std::result::Result<_, _>>()?;
-            
+
             let last_n = 20;
             let start = if lines.len() > last_n {
                 lines.len() - last_n
@@ -124,14 +130,17 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
 
 async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
     if !checkpoint_dir.exists() {
-        println!("Checkpoint directory not found: {}", checkpoint_dir.display());
+        println!(
+            "Checkpoint directory not found: {}",
+            checkpoint_dir.display()
+        );
         return Ok(());
     }
 
     println!("Monitoring checkpoints in: {}", checkpoint_dir.display());
-    
+
     let mut last_checkpoints = Vec::new();
-    
+
     loop {
         let mut checkpoints = Vec::new();
         if let Ok(entries) = fs::read_dir(checkpoint_dir) {
@@ -139,11 +148,7 @@ async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
                 let path = entry.path();
                 if path.extension().and_then(|s| s.to_str()) == Some("pt") {
                     if let Ok(metadata) = fs::metadata(&path) {
-                        checkpoints.push((
-                            path.clone(),
-                            metadata.modified()?,
-                            metadata.len(),
-                        ));
+                        checkpoints.push((path.clone(), metadata.modified()?, metadata.len()));
                     }
                 }
             }
@@ -155,10 +160,12 @@ async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
         if checkpoints != last_checkpoints {
             println!("\n{} Checkpoints found:", checkpoints.len());
             for (path, modified, size) in &checkpoints[..checkpoints.len().min(5)] {
-                let file_name = path.file_name()
+                let file_name = path
+                    .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
-                println!("  {} - {} ({})", 
+                println!(
+                    "  {} - {} ({})",
                     file_name,
                     format!("{:?}", modified),
                     format_size(*size)
@@ -183,4 +190,3 @@ fn format_size(bytes: u64) -> String {
 
     format!("{:.2}{}", size, UNITS[unit_idx])
 }
-

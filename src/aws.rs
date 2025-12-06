@@ -1,16 +1,16 @@
+use crate::aws_utils::{count_running_instances, execute_ssm_command};
+use crate::config::Config;
+use crate::diagnostics::check_high_resource_usage;
 use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
-use clap::Subcommand;
-use std::path::PathBuf;
-use crate::config::Config;
-use crate::aws_utils::{count_running_instances, execute_ssm_command};
-use crate::diagnostics::check_high_resource_usage;
-use tracing::{info, warn};
 use base64::Engine;
 use chrono::Utc;
-use serde::{Serialize, Deserialize};
+use clap::Subcommand;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tracing::{info, warn};
 
 #[derive(Serialize, Deserialize)]
 struct InstanceInfo {
@@ -114,28 +114,29 @@ async fn get_instance_info_json(
 ) -> Result<InstanceInfo> {
     // Wait a moment for instance to be available
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-    
+
     let response = client
         .describe_instances()
         .instance_ids(instance_id)
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-    
+
     let instance = response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
         .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
         .ok_or_else(|| TrainctlError::Aws("Instance not found".to_string()))?;
-    
-    let state = instance.state()
+
+    let state = instance
+        .state()
         .and_then(|s| s.name())
         .map(|s| format!("{}", s))
         .unwrap_or_else(|| "unknown".to_string());
-    
+
     let cost_per_hour = crate::utils::get_instance_cost(instance_type);
-    
+
     Ok(InstanceInfo {
         success: true,
         instance_id: instance_id.to_string(),
@@ -168,58 +169,58 @@ pub enum AwsCommands {
         ///   - GPU: g4dn.xlarge, p3.2xlarge, p4d.24xlarge
         #[arg(value_name = "INSTANCE_TYPE")]
         instance_type: String,
-        
+
         /// Request spot instance (cheaper, can be interrupted)
         ///
         /// Spot instances are up to 90% cheaper but can be terminated by AWS.
         /// Use for fault-tolerant workloads. Falls back to on-demand unless --no-fallback is set.
         #[arg(long)]
         spot: bool,
-        
+
         /// Maximum spot price per hour (e.g., 0.10)
         ///
         /// If not set, uses the current on-demand price as maximum.
         /// Set lower to save money, but may reduce availability.
         #[arg(long, value_name = "PRICE")]
         spot_max_price: Option<String>,
-        
+
         /// Don't fall back to on-demand if spot request fails
         ///
         /// By default, if spot instance creation fails, the command will
         /// automatically try on-demand. Use this flag to fail instead.
         #[arg(long)]
         no_fallback: bool,
-        
+
         /// SSH key pair name (for EC2 Key Pairs)
         #[arg(long, value_name = "KEY_NAME")]
         key_name: Option<String>,
-        
+
         /// Security group ID or name
         #[arg(long, value_name = "SECURITY_GROUP")]
         security_group: Option<String>,
-        
+
         /// AMI ID (auto-detects Deep Learning AMI for GPU instances if not provided)
         #[arg(long, value_name = "AMI_ID")]
         ami_id: Option<String>,
-        
+
         /// Root volume size in GB (default: 30, increased for GPU instances)
         #[arg(long, value_name = "SIZE_GB")]
         root_volume_size: Option<i32>,
-        
+
         /// Auto-attach EBS volume for data/cache (size in GB)
         ///
         /// Creates and attaches an additional EBS volume for datasets, checkpoints, etc.
         /// The volume persists after instance termination unless explicitly deleted.
         #[arg(long, value_name = "SIZE_GB")]
         data_volume_size: Option<i32>,
-        
+
         /// Project directory name (default: current directory name)
         ///
         /// Used for tagging and organizing instances. Defaults to the current
         /// directory name. Use to group related instances together.
         #[arg(long, value_name = "NAME")]
         project_name: Option<String>,
-        
+
         /// IAM instance profile name for SSM access
         ///
         /// Enables Systems Manager (SSM) for secure command execution without SSH keys.
@@ -243,34 +244,34 @@ pub enum AwsCommands {
         /// EC2 instance ID (e.g., i-1234567890abcdef0)
         #[arg(value_name = "INSTANCE_ID")]
         instance_id: String,
-        
+
         /// Training script path (Python script)
         #[arg(value_name = "SCRIPT")]
         script: PathBuf,
-        
+
         /// S3 path for training data (s3://bucket/path)
         ///
         /// If provided, data will be downloaded before training starts.
         #[arg(long, value_name = "S3_PATH")]
         data_s3: Option<String>,
-        
+
         /// S3 path for output/checkpoints (s3://bucket/path)
         ///
         /// If provided, checkpoints will be uploaded to S3 after training.
         #[arg(long, value_name = "S3_PATH")]
         _output_s3: Option<String>,
-        
+
         /// Sync code before training (default: true)
         ///
         /// Uploads project code to the instance before starting training.
         /// Set to false if code is already present on the instance.
         #[arg(long, default_value = "true")]
         sync_code: bool,
-        
+
         /// Project directory name (default: current directory name)
         #[arg(long, value_name = "NAME")]
         project_name: Option<String>,
-        
+
         /// Additional arguments to pass to training script
         ///
         /// Use '--' to separate trainctl args from script args:
@@ -290,12 +291,12 @@ pub enum AwsCommands {
         /// EC2 instance ID
         #[arg(value_name = "INSTANCE_ID")]
         instance_id: String,
-        
+
         /// Follow mode (continuous updates, like tail -f)
         #[arg(short, long)]
         follow: bool,
     },
-    
+
     /// Stop an instance (preserves data, can be restarted)
     ///
     /// Stops the instance gracefully, preserving all data on attached volumes.
@@ -309,14 +310,14 @@ pub enum AwsCommands {
         /// EC2 instance ID
         #[arg(value_name = "INSTANCE_ID")]
         instance_id: String,
-        
+
         /// Force stop, bypassing safety checks
         ///
         /// Skips checks for running training jobs. Use with caution.
         #[arg(long)]
         force: bool,
     },
-    
+
     /// Terminate an instance (permanently deletes, data on volumes preserved)
     ///
     /// Permanently terminates the instance. Attached EBS volumes are preserved
@@ -331,7 +332,7 @@ pub enum AwsCommands {
         /// EC2 instance ID
         #[arg(value_name = "INSTANCE_ID")]
         instance_id: String,
-        
+
         /// Force termination, bypassing safety checks (e.g., running training jobs)
         ///
         /// WARNING: This will terminate even if training is actively running.
@@ -400,9 +401,21 @@ pub struct TrainInstanceOptions {
 
 pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &str) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
-    
+
     match cmd {
-        AwsCommands::Create { instance_type, spot, spot_max_price, no_fallback, key_name, security_group, ami_id, root_volume_size, data_volume_size, project_name, iam_instance_profile } => {
+        AwsCommands::Create {
+            instance_type,
+            spot,
+            spot_max_price,
+            no_fallback,
+            key_name,
+            security_group,
+            ami_id,
+            root_volume_size,
+            data_volume_size,
+            project_name,
+            iam_instance_profile,
+        } => {
             let final_project_name = get_project_name(project_name, config);
             crate::validation::validate_project_name(&final_project_name)?;
             let options = CreateInstanceOptions {
@@ -420,7 +433,15 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             };
             create_instance(options, config, &aws_config, output_format).await
         }
-        AwsCommands::Train { instance_id, script, data_s3, _output_s3, sync_code, project_name, script_args } => {
+        AwsCommands::Train {
+            instance_id,
+            script,
+            data_s3,
+            _output_s3,
+            sync_code,
+            project_name,
+            script_args,
+        } => {
             let final_project_name = get_project_name(project_name, config);
             let options = TrainInstanceOptions {
                 instance_id,
@@ -433,17 +454,31 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             };
             train_on_instance(options, config, &aws_config, output_format).await
         }
-        AwsCommands::Monitor { instance_id, follow } => {
-            monitor_instance(instance_id, follow, &aws_config, output_format).await
-        }
+        AwsCommands::Monitor {
+            instance_id,
+            follow,
+        } => monitor_instance(instance_id, follow, &aws_config, output_format).await,
         AwsCommands::Stop { instance_id, force } => {
             stop_instance(instance_id, force, &aws_config, output_format).await
         }
         AwsCommands::Terminate { instance_id, force } => {
             terminate_instance(instance_id, force, &aws_config, output_format).await
         }
-        AwsCommands::Processes { instance_id, detailed, watch, interval } => {
-            show_processes(instance_id, detailed, watch, interval, &aws_config, output_format).await
+        AwsCommands::Processes {
+            instance_id,
+            detailed,
+            watch,
+            interval,
+        } => {
+            show_processes(
+                instance_id,
+                detailed,
+                watch,
+                interval,
+                &aws_config,
+                output_format,
+            )
+            .await
         }
         AwsCommands::Ebs { subcommand } => {
             crate::ebs::handle_command(subcommand, &config, output_format).await
@@ -459,7 +494,7 @@ fn get_user_id(config: &Config) -> String {
             return user_id.clone();
         }
     }
-    
+
     // Auto-detect from username
     if let Ok(username) = std::env::var("USER") {
         return username;
@@ -467,7 +502,7 @@ fn get_user_id(config: &Config) -> String {
     if let Ok(username) = std::env::var("USERNAME") {
         return username;
     }
-    
+
     // Fallback
     "unknown".to_string()
 }
@@ -478,14 +513,14 @@ fn get_project_name(provided: Option<String>, config: &Config) -> String {
     if let Some(name) = provided {
         return name;
     }
-    
+
     // Try config
     if let Some(aws_cfg) = &config.aws {
         if let Some(project) = &aws_cfg.default_project_name {
             return project.clone();
         }
     }
-    
+
     // Derive from current directory
     if let Ok(current_dir) = std::env::current_dir() {
         if let Some(dir_name) = current_dir.file_name() {
@@ -493,10 +528,12 @@ fn get_project_name(provided: Option<String>, config: &Config) -> String {
                 // Sanitize directory name for use as project name
                 let sanitized = name_str
                     .chars()
-                    .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
-                        c
-                    } else {
-                        '-'
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                            c
+                        } else {
+                            '-'
+                        }
                     })
                     .collect::<String>();
                 if !sanitized.is_empty() {
@@ -505,7 +542,7 @@ fn get_project_name(provided: Option<String>, config: &Config) -> String {
             }
         }
     }
-    
+
     // Final fallback
     "trainctl-project".to_string()
 }
@@ -516,8 +553,9 @@ async fn create_instance(
     aws_config: &aws_config::SdkConfig,
     output_format: &str,
 ) -> Result<()> {
-    let aws_cfg = config.aws.as_ref()
-        .ok_or_else(|| TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string())))?;
+    let aws_cfg = config.aws.as_ref().ok_or_else(|| {
+        TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string()))
+    })?;
 
     let client = Ec2Client::new(aws_config);
 
@@ -539,21 +577,27 @@ async fn create_instance(
             source: None,
         });
     } else if running_count >= 10 {
-        println!("WARNING: {} instances already running. Proceeding with caution.", running_count);
+        println!(
+            "WARNING: {} instances already running. Proceeding with caution.",
+            running_count
+        );
         println!("  Use 'trainctl resources list' to review running instances.");
     }
 
-    info!("Creating EC2 instance: type={}, spot={}", options.instance_type, options.use_spot);
+    info!(
+        "Creating EC2 instance: type={}, spot={}",
+        options.instance_type, options.use_spot
+    );
 
     // Auto-detect AMI if not provided
     let final_ami = if let Some(ami) = &options.ami_id {
         ami.clone()
     } else {
         // Check if GPU instance (g4dn, p3, p4, etc.)
-        let is_gpu = options.instance_type.starts_with("g") || 
-                     options.instance_type.starts_with("p") ||
-                     options.instance_type.contains("gpu");
-        
+        let is_gpu = options.instance_type.starts_with("g")
+            || options.instance_type.starts_with("p")
+            || options.instance_type.contains("gpu");
+
         if is_gpu {
             // Try to find Deep Learning AMI
             match find_deep_learning_ami(&client, &aws_cfg.region).await {
@@ -575,9 +619,9 @@ async fn create_instance(
     // Determine root volume size (larger for GPU instances or if specified)
     let root_size = options.root_volume_size.unwrap_or_else(|| {
         if options.instance_type.starts_with("g") || options.instance_type.starts_with("p") {
-            50  // GPU instances need more space for CUDA/PyTorch
+            50 // GPU instances need more space for CUDA/PyTorch
         } else {
-            30  // Default
+            30 // Default
         }
     });
 
@@ -599,12 +643,16 @@ async fn create_instance(
         match create_spot_instance(&client, spot_options).await {
             Ok(instance_id) => {
                 if output_format == "json" {
-                    let instance_info = get_instance_info_json(&client, &instance_id, &options.instance_type).await?;
+                    let instance_info =
+                        get_instance_info_json(&client, &instance_id, &options.instance_type)
+                            .await?;
                     println!("{}", serde_json::to_string_pretty(&instance_info)?);
                 } else {
                     println!("Created spot instance: {}", instance_id);
                 }
-                if let Err(e) = tag_instance(&client, &instance_id, &options.project_name, config).await {
+                if let Err(e) =
+                    tag_instance(&client, &instance_id, &options.project_name, config).await
+                {
                     warn!("Failed to tag instance {}: {}", instance_id, e);
                     if output_format != "json" {
                         println!("  Instance created but tagging failed. You can tag manually if needed.");
@@ -636,31 +684,47 @@ async fn create_instance(
     }
 
     // Create on-demand instance
-    let instance_id = create_ondemand_instance(&client, &options.instance_type, &final_ami, &user_data, options.key_name.as_deref(), options.security_group.as_deref(), root_size, options.iam_instance_profile.as_deref()).await?;
-    
+    let instance_id = create_ondemand_instance(
+        &client,
+        &options.instance_type,
+        &final_ami,
+        &user_data,
+        options.key_name.as_deref(),
+        options.security_group.as_deref(),
+        root_size,
+        options.iam_instance_profile.as_deref(),
+    )
+    .await?;
+
     if output_format == "json" {
-        let instance_info = get_instance_info_json(&client, &instance_id, &options.instance_type).await?;
+        let instance_info =
+            get_instance_info_json(&client, &instance_id, &options.instance_type).await?;
         println!("{}", serde_json::to_string_pretty(&instance_info)?);
     } else {
         println!("Created on-demand instance: {}", instance_id);
     }
-    
+
     if let Err(e) = tag_instance(&client, &instance_id, &options.project_name, config).await {
         warn!("Failed to tag instance {}: {}", instance_id, e);
         if output_format != "json" {
             println!("  Instance created but tagging failed. You can tag manually if needed.");
         }
     }
-    
+
     // Auto-attach data volume if requested
     if let Some(data_size) = options.data_volume_size {
         if output_format != "json" {
             println!("   Creating and attaching {}GB data volume...", data_size);
         }
-        if let Err(e) = auto_attach_data_volume(&client, &instance_id, data_size, &aws_cfg.region).await {
+        if let Err(e) =
+            auto_attach_data_volume(&client, &instance_id, data_size, &aws_cfg.region).await
+        {
             if output_format != "json" {
                 println!("WARNING: Failed to attach data volume: {}", e);
-                println!("   You can attach manually: trainctl aws ebs create --size {} --attach", data_size);
+                println!(
+                    "   You can attach manually: trainctl aws ebs create --size {} --attach",
+                    data_size
+                );
             }
         }
     }
@@ -671,7 +735,7 @@ async fn create_instance(
 /// Find latest Deep Learning AMI for GPU instances
 async fn find_deep_learning_ami(client: &Ec2Client, _region: &str) -> Result<String> {
     use aws_sdk_ec2::types::Filter;
-    
+
     // Try multiple Deep Learning AMI patterns
     let patterns = vec![
         "Deep Learning AMI GPU PyTorch * (Amazon Linux 2)*",
@@ -679,27 +743,19 @@ async fn find_deep_learning_ami(client: &Ec2Client, _region: &str) -> Result<Str
         "Deep Learning AMI (Amazon Linux 2)*",
         "Deep Learning Base AMI (Amazon Linux 2)*",
     ];
-    
+
     for pattern in patterns {
         let response = client
             .describe_images()
             .owners("amazon")
-            .filters(
-                Filter::builder()
-                    .name("name")
-                    .values(pattern)
-                    .build()
-            )
-            .filters(
-                Filter::builder()
-                    .name("state")
-                    .values("available")
-                    .build()
-            )
+            .filters(Filter::builder().name("name").values(pattern).build())
+            .filters(Filter::builder().name("state").values("available").build())
             .send()
             .await
-            .map_err(|e| TrainctlError::Aws(format!("Failed to search for Deep Learning AMI: {}", e)))?;
-        
+            .map_err(|e| {
+                TrainctlError::Aws(format!("Failed to search for Deep Learning AMI: {}", e))
+            })?;
+
         let images = response.images();
         if !images.is_empty() {
             // Sort by creation date (newest first)
@@ -709,14 +765,14 @@ async fn find_deep_learning_ami(client: &Ec2Client, _region: &str) -> Result<Str
                 let b_date = b.creation_date().unwrap_or("");
                 b_date.cmp(a_date)
             });
-            
+
             return Ok(sorted[0]
                 .image_id()
                 .ok_or_else(|| TrainctlError::Aws("AMI has no image ID".to_string()))?
                 .to_string());
         }
     }
-    
+
     return Err(TrainctlError::CloudProvider {
         provider: "aws".to_string(),
         message: "No Deep Learning AMI found with any pattern".to_string(),
@@ -726,7 +782,8 @@ async fn find_deep_learning_ami(client: &Ec2Client, _region: &str) -> Result<Str
 
 /// Generate user data script for instance initialization
 fn generate_user_data(project_name: &str, _has_data_volume: bool) -> String {
-    format!(r#"#!/bin/bash
+    format!(
+        r#"#!/bin/bash
 set -e
 
 # Log all output for debugging
@@ -865,7 +922,9 @@ echo "Instance setup complete"
 echo "   Project directory: $PROJECT_DIR"
 echo "   Data directory: $DATA_DIR"
 echo "   To start training: $HOME_DIR/start_training.sh"
-"#, project_name=project_name)
+"#,
+        project_name = project_name
+    )
 }
 
 /// Auto-attach and setup data volume
@@ -882,19 +941,19 @@ async fn auto_attach_data_volume(
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-    
+
     let instance = instance_response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
         .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
         .ok_or_else(|| TrainctlError::Aws("Instance not found".to_string()))?;
-    
+
     let az = instance
         .placement()
         .and_then(|p| p.availability_zone())
         .ok_or_else(|| TrainctlError::Aws("Instance has no availability zone".to_string()))?;
-    
+
     // Create volume
     let volume_response = client
         .create_volume()
@@ -908,41 +967,44 @@ async fn auto_attach_data_volume(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("Name")
                         .value(format!("{}-data", instance_id))
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("CreatedBy")
                         .value("trainctl")
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to create data volume: {}", e)))?;
-    
-    let volume_id = volume_response.volume_id()
+
+    let volume_id = volume_response
+        .volume_id()
         .ok_or_else(|| TrainctlError::Aws("Volume ID not in response".to_string()))?;
-    
+
     // Wait for volume to be available
     println!("   Waiting for volume to be available...");
     let mut attempts = 0;
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         attempts += 1;
-        
+
         let vol_response = client
             .describe_volumes()
             .volume_ids(volume_id)
             .send()
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
-        
-        let vol = vol_response.volumes().first()
+
+        let vol = vol_response
+            .volumes()
+            .first()
             .ok_or_else(|| TrainctlError::Aws("Volume not found".to_string()))?;
         let state = vol.state().map(|s| format!("{:?}", s)).unwrap_or_default();
-        
+
         if state == "available" {
             break;
         }
@@ -954,7 +1016,7 @@ async fn auto_attach_data_volume(
             });
         }
     }
-    
+
     // Attach volume (use /dev/sdf for compatibility)
     client
         .attach_volume()
@@ -964,8 +1026,11 @@ async fn auto_attach_data_volume(
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to attach volume: {}", e)))?;
-    
-    println!("Data volume {} attached (will be auto-mounted by user-data)", volume_id);
+
+    println!(
+        "Data volume {} attached (will be auto-mounted by user-data)",
+        volume_id
+    );
 
     Ok(())
 }
@@ -988,54 +1053,54 @@ async fn create_spot_instance(
     options: CreateSpotInstanceOptions,
 ) -> Result<String> {
     use aws_sdk_ec2::types::InstanceType as Ec2InstanceType;
-    
+
     // Base64 encode user data
     let user_data_b64 = base64::engine::general_purpose::STANDARD.encode(&options.user_data);
-    
+
     // Create spot instance request with launch specification
     let mut spec_builder = aws_sdk_ec2::types::RequestSpotLaunchSpecification::builder()
         .image_id(&options.ami_id)
         .instance_type(Ec2InstanceType::from(options.instance_type.as_str()))
         .user_data(&user_data_b64)
         .ebs_optimized(true); // Enable EBS optimization for better I/O performance
-    
+
     if let Some(key) = &options.key_name {
         spec_builder = spec_builder.key_name(key);
     }
     if let Some(sg) = &options.security_group {
         spec_builder = spec_builder.security_groups(sg);
     }
-    
+
     // Configure root volume size (device name depends on AMI - try both common ones)
     // For Ubuntu: /dev/sda1, for Amazon Linux: /dev/xvda
     let block_device = aws_sdk_ec2::types::BlockDeviceMapping::builder()
-        .device_name("/dev/sda1")  // Ubuntu default
+        .device_name("/dev/sda1") // Ubuntu default
         .ebs(
             aws_sdk_ec2::types::EbsBlockDevice::builder()
                 .volume_size(options.root_volume_size)
                 .delete_on_termination(true)
                 .volume_type(aws_sdk_ec2::types::VolumeType::Gp3)
-                .build()
+                .build(),
         )
         .build();
     spec_builder = spec_builder.block_device_mappings(block_device);
-    
+
     // Add IAM instance profile if provided
     if let Some(profile_name) = &options.iam_instance_profile {
         spec_builder = spec_builder.iam_instance_profile(
             aws_sdk_ec2::types::IamInstanceProfileSpecification::builder()
                 .name(profile_name)
-                .build()
+                .build(),
         );
     }
-    
+
     let spec = spec_builder.build();
-    
+
     let mut spot_request = client
         .request_spot_instances()
         .instance_count(1)
         .launch_specification(spec);
-    
+
     // Set spot price if provided
     if let Some(price) = &options.max_price {
         spot_request = spot_request.spot_price(price);
@@ -1043,44 +1108,51 @@ async fn create_spot_instance(
         // Use one-time spot request by default
         spot_request = spot_request.spot_price("0.10"); // Default max price
     }
-    
+
     let response = spot_request
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to request spot instance: {}", e)))?;
-    
+
     let spot_request_id = response
         .spot_instance_requests()
         .first()
         .and_then(|req| req.spot_instance_request_id())
         .ok_or_else(|| TrainctlError::Aws("No spot request ID in response".to_string()))?
         .to_string();
-    
+
     // Wait for spot instance to be fulfilled
-    info!("Waiting for spot instance to be fulfilled (request ID: {})", spot_request_id);
-    
+    info!(
+        "Waiting for spot instance to be fulfilled (request ID: {})",
+        spot_request_id
+    );
+
     let mut attempts = 0;
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         attempts += 1;
-        
+
         let describe_response = client
             .describe_spot_instance_requests()
             .spot_instance_request_ids(&spot_request_id)
             .send()
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe spot request: {}", e)))?;
-        
+
         let request = describe_response
             .spot_instance_requests()
-            .first().ok_or_else(|| TrainctlError::Aws("Spot request not found".to_string()))?;
-        
+            .first()
+            .ok_or_else(|| TrainctlError::Aws("Spot request not found".to_string()))?;
+
         let state = request.state().and_then(|s| s.as_str().into());
-        
+
         match state {
             Some("fulfilled") => {
                 let instance_id = request
-                    .instance_id().ok_or_else(|| TrainctlError::Aws("No instance ID in fulfilled request".to_string()))?
+                    .instance_id()
+                    .ok_or_else(|| {
+                        TrainctlError::Aws("No instance ID in fulfilled request".to_string())
+                    })?
                     .to_string();
                 return Ok(instance_id);
             }
@@ -1098,7 +1170,11 @@ async fn create_spot_instance(
             Some("failed") | Some("cancelled") | Some("closed") => {
                 return Err(TrainctlError::CloudProvider {
                     provider: "aws".to_string(),
-                    message: format!("Spot request {}: {}", spot_request_id, state.unwrap_or("unknown")),
+                    message: format!(
+                        "Spot request {}: {}",
+                        spot_request_id,
+                        state.unwrap_or("unknown")
+                    ),
                     source: None,
                 });
             }
@@ -1127,10 +1203,10 @@ async fn create_ondemand_instance(
     iam_instance_profile: Option<&str>,
 ) -> Result<String> {
     use aws_sdk_ec2::types::InstanceType as Ec2InstanceType;
-    
+
     // Base64 encode user data
     let user_data_b64 = base64::engine::general_purpose::STANDARD.encode(user_data);
-    
+
     let mut run_request = client
         .run_instances()
         .image_id(ami_id)
@@ -1139,48 +1215,48 @@ async fn create_ondemand_instance(
         .max_count(1)
         .user_data(&user_data_b64)
         .ebs_optimized(true); // Enable EBS optimization for better I/O performance
-    
+
     if let Some(key) = key_name {
         run_request = run_request.key_name(key);
     }
     if let Some(sg) = security_group {
         run_request = run_request.security_group_ids(sg);
     }
-    
+
     // Add IAM instance profile if provided
     if let Some(profile_name) = iam_instance_profile {
         run_request = run_request.iam_instance_profile(
             aws_sdk_ec2::types::IamInstanceProfileSpecification::builder()
                 .name(profile_name)
-                .build()
+                .build(),
         );
     }
-    
+
     // Configure root volume size (device name depends on AMI)
     let block_device = aws_sdk_ec2::types::BlockDeviceMapping::builder()
-        .device_name("/dev/sda1")  // Ubuntu default, works for most AMIs
+        .device_name("/dev/sda1") // Ubuntu default, works for most AMIs
         .ebs(
             aws_sdk_ec2::types::EbsBlockDevice::builder()
                 .volume_size(root_volume_size)
                 .delete_on_termination(true)
                 .volume_type(aws_sdk_ec2::types::VolumeType::Gp3)
-                .build()
+                .build(),
         )
         .build();
     run_request = run_request.block_device_mappings(block_device);
-    
+
     let response = run_request
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to create instance: {}", e)))?;
-    
+
     let instance_id = response
         .instances()
         .first()
         .and_then(|inst| inst.instance_id())
         .ok_or_else(|| TrainctlError::Aws("No instance ID in response".to_string()))?
         .to_string();
-    
+
     Ok(instance_id)
 }
 
@@ -1192,50 +1268,40 @@ async fn tag_instance(
     config: &Config,
 ) -> Result<()> {
     use aws_sdk_ec2::types::Tag;
-    
+
     let timestamp = Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string();
     let user_id = get_user_id(config);
-    
+
     // config is used via get_user_id() call above
-    let name_tag = format!("trainctl-{}-{}-{}", user_id, project_name, &instance_id[..8]);
-    
+    let name_tag = format!(
+        "trainctl-{}-{}-{}",
+        user_id,
+        project_name,
+        &instance_id[..8]
+    );
+
     client
         .create_tags()
         .resources(instance_id)
-        .tags(
-            Tag::builder()
-                .key("Name")
-                .value(&name_tag)
-                .build()
-        )
+        .tags(Tag::builder().key("Name").value(&name_tag).build())
         .tags(
             Tag::builder()
                 .key("trainctl:created")
                 .value(timestamp)
-                .build()
+                .build(),
         )
         .tags(
             Tag::builder()
                 .key("trainctl:project")
                 .value(project_name)
-                .build()
+                .build(),
         )
-        .tags(
-            Tag::builder()
-                .key("trainctl:user")
-                .value(&user_id)
-                .build()
-        )
-        .tags(
-            Tag::builder()
-                .key("CreatedBy")
-                .value("trainctl")
-                .build()
-        )
+        .tags(Tag::builder().key("trainctl:user").value(&user_id).build())
+        .tags(Tag::builder().key("CreatedBy").value("trainctl").build())
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to tag instance: {}", e)))?;
-    
+
     Ok(())
 }
 
@@ -1257,21 +1323,27 @@ async fn train_on_instance(
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-    
+
     let instance = instance_response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
-        .find(|i| i.instance_id().map(|id| id == options.instance_id.as_str()).unwrap_or(false))
-        .ok_or_else(|| TrainctlError::Aws(format!(
-            "Instance {} not found.\n\n\
+        .find(|i| {
+            i.instance_id()
+                .map(|id| id == options.instance_id.as_str())
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            TrainctlError::Aws(format!(
+                "Instance {} not found.\n\n\
             To resolve:\n\
               1. Verify instance ID: trainctl resources list --platform aws\n\
               2. Check if instance was terminated: aws ec2 describe-instances --instance-ids {}\n\
               3. Verify you're using the correct AWS region/account",
-            options.instance_id, options.instance_id
-        )))?;
-    
+                options.instance_id, options.instance_id
+            ))
+        })?;
+
     let public_ip = instance.public_ip_address()
         .ok_or_else(|| TrainctlError::Aws(format!(
             "Instance {} has no public IP address.\n\n\
@@ -1282,7 +1354,7 @@ async fn train_on_instance(
               4. Use SSM instead if IAM role is configured: trainctl aws train {} --sync-code false",
             options.instance_id, options.instance_id, options.instance_id
         )))?;
-    
+
     let key_name = instance.key_name();
     let key_path = key_name
         .and_then(|k| {
@@ -1313,24 +1385,35 @@ async fn train_on_instance(
                 key_name_str, key_name_str, key_name_str, key_name_str, key_name_str, options.instance_id
             ))
         })?;
-    
+
     // Determine user based on AMI
-    let user = if instance.image_id()
+    let user = if instance
+        .image_id()
         .map(|id| id.contains("ubuntu") || id.contains("Ubuntu"))
-        .unwrap_or(false) {
+        .unwrap_or(false)
+    {
         "ubuntu"
     } else {
         "ec2-user"
     };
-    
+
     let project_dir = format!("/home/{}/{}", user, options.project_name);
-    
+
     // Sync code if requested
     if options.sync_code {
         if output_format != "json" {
             println!("Syncing code to instance...");
         }
-        if let Err(e) = sync_code_to_instance(&key_path, public_ip, user, &project_dir, &options.script, output_format).await {
+        if let Err(e) = sync_code_to_instance(
+            &key_path,
+            public_ip,
+            user,
+            &project_dir,
+            &options.script,
+            output_format,
+        )
+        .await
+        {
             if output_format != "json" {
                 return Err(TrainctlError::CloudProvider {
                     provider: "aws".to_string(),
@@ -1341,7 +1424,15 @@ async fn train_on_instance(
                           2. Verify instance is accessible: ssh -i {} {}@{}\n\
                           3. Check network connectivity and security groups\n\
                           4. Try syncing manually: rsync -avz -e 'ssh -i {}' ./ {}@{}:{}/",
-                        e, key_path, key_path, user, public_ip, key_path, user, public_ip, project_dir
+                        e,
+                        key_path,
+                        key_path,
+                        user,
+                        public_ip,
+                        key_path,
+                        user,
+                        public_ip,
+                        project_dir
                     ),
                     source: None,
                 });
@@ -1354,20 +1445,20 @@ async fn train_on_instance(
             }
         }
     }
-    
+
     // Pre-load data from S3 if provided (critical for performance)
     if let Some(data_s3) = &options.data_s3 {
         if output_format != "json" {
             println!("Pre-loading data from S3 (this may take a while)...");
         }
-        
+
         // Check if SSM is available (same check as used later for training command)
         let use_ssm = instance.iam_instance_profile().is_some();
-        
+
         // Determine data directory (prefer EBS volume if mounted, else use project data dir)
         let data_dir = format!("/mnt/data/{}", options.project_name);
         let data_dir_alt = format!("{}/data", project_dir);
-        
+
         // Use s5cmd for parallel downloads (much faster than aws s3 cp)
         let download_cmd = format!(
             r#"
@@ -1400,22 +1491,24 @@ else
     echo "DATA_DIR={data_s3}" > {project_dir}/.data_path
 fi
 "#,
-            data_dir=data_dir,
-            data_dir_alt=data_dir_alt,
-            data_s3=data_s3,
-            project_dir=project_dir
+            data_dir = data_dir,
+            data_dir_alt = data_dir_alt,
+            data_s3 = data_s3,
+            project_dir = project_dir
         );
-        
+
         // Execute data download via SSM (preferred) or SSH (fallback)
         let download_result: Result<String> = if use_ssm {
-            execute_ssm_command(&ssm_client, &options.instance_id, &download_cmd).await
+            execute_ssm_command(&ssm_client, &options.instance_id, &download_cmd)
+                .await
                 .map_err(|e| TrainctlError::Ssm(format!("SSM execution failed: {}", e)))
         } else {
             // Fallback to SSH - execute_via_ssh returns Result<()>, so we convert to Result<String>
-            execute_via_ssh(&key_path, public_ip, user, &download_cmd).await
+            execute_via_ssh(&key_path, public_ip, user, &download_cmd)
+                .await
                 .map(|_| "Data download initiated".to_string())
         };
-        
+
         match download_result {
             Ok(_) => {
                 if output_format != "json" {
@@ -1425,12 +1518,14 @@ fi
             Err(e) => {
                 if output_format != "json" {
                     println!("WARNING: Data pre-loading failed: {}", e);
-                    println!("   Training will proceed but may be slow if data is accessed on-demand");
+                    println!(
+                        "   Training will proceed but may be slow if data is accessed on-demand"
+                    );
                 }
             }
         }
     }
-    
+
     // Build training command
     // Convert script path to module path relative to project root
     // e.g., /path/to/matryoshka-box/training/train_lightning.py -> training.train_lightning
@@ -1449,40 +1544,48 @@ fi
                 break None;
             }
         };
-        
+
         // Get relative path from project root
         if let Some(root) = project_root {
-            options.script.strip_prefix(root)
+            options
+                .script
+                .strip_prefix(root)
                 .ok()
                 .and_then(|p| p.to_str())
                 .map(|p| p.strip_suffix(".py").unwrap_or(p).replace(['/', '\\'], "."))
                 .unwrap_or_else(|| {
                     // Fallback: use filename without extension
-                    options.script.file_stem()
+                    options
+                        .script
+                        .file_stem()
                         .and_then(|s| s.to_str())
                         .unwrap_or("train_lightning")
                         .to_string()
                 })
         } else {
             // Fallback: use filename without extension
-            options.script.file_stem()
+            options
+                .script
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("train_lightning")
                 .to_string()
         }
     } else {
-        options.script.file_stem()
+        options
+            .script
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("train_lightning")
             .to_string()
     };
-    
+
     let args_str = if options.script_args.is_empty() {
         String::new()
     } else {
         format!(" {}", options.script_args.join(" "))
     };
-    
+
     // Create training command
     let command = format!(
         r#"
@@ -1515,25 +1618,23 @@ echo $TRAIN_PID > training.pid
 echo "Training started (PID: $TRAIN_PID)"
 echo "Monitor with: tail -f {project_dir}/training.log"
 "#,
-        project_dir=project_dir,
-        script_module=script_module,
-        args=args_str
+        project_dir = project_dir,
+        script_module = script_module,
+        args = args_str
     );
 
     // Try SSM first (requires IAM role), fallback to SSH
     let use_ssm = instance.iam_instance_profile().is_some();
-    
+
     let training_info = if use_ssm {
         match execute_ssm_command(&ssm_client, &options.instance_id, &command).await {
-            Ok(_) => {
-                TrainingInfo {
-                    success: true,
-                    method: "ssm".to_string(),
-                    instance_id: options.instance_id.clone(),
-                    log_path: format!("{}/training.log", project_dir),
-                    monitor_command: format!("trainctl aws monitor {}", options.instance_id),
-                }
-            }
+            Ok(_) => TrainingInfo {
+                success: true,
+                method: "ssm".to_string(),
+                instance_id: options.instance_id.clone(),
+                log_path: format!("{}/training.log", project_dir),
+                monitor_command: format!("trainctl aws monitor {}", options.instance_id),
+            },
             Err(e) => {
                 if output_format != "json" {
                     println!("WARNING: SSM failed: {}, trying SSH...", e);
@@ -1560,13 +1661,15 @@ echo "Monitor with: tail -f {project_dir}/training.log"
             monitor_command: format!("trainctl aws monitor {}", options.instance_id),
         }
     };
-    
+
     if output_format == "json" {
         println!("{}", serde_json::to_string_pretty(&training_info)?);
     } else {
         println!("Training started");
-        println!("   Monitor: ssh -i {} {}@{} 'tail -f {}/training.log'", 
-                 key_path, user, public_ip, project_dir);
+        println!(
+            "   Monitor: ssh -i {} {}@{} 'tail -f {}/training.log'",
+            key_path, user, public_ip, project_dir
+        );
         println!("   Or: trainctl aws monitor {}", options.instance_id);
     }
 
@@ -1574,7 +1677,7 @@ echo "Monitor with: tail -f {project_dir}/training.log"
 }
 
 /// Sync code to instance using native Rust SSH and tar
-/// 
+///
 /// Uses incremental sync if code already exists, full sync otherwise.
 async fn sync_code_to_instance(
     key_path: &str,
@@ -1585,12 +1688,20 @@ async fn sync_code_to_instance(
     output_format: &str,
 ) -> Result<()> {
     // Get project root (parent of script's directory)
-    let script_dir = script_path.parent().ok_or_else(|| TrainctlError::Aws("Script has no parent directory: {}".to_string()))?;
-    
+    let script_dir = script_path
+        .parent()
+        .ok_or_else(|| TrainctlError::Aws("Script has no parent directory: {}".to_string()))?;
+
     // Find project root (look for requirements.txt, setup.py, pyproject.toml, etc.)
     let mut current = script_dir;
     let project_root = loop {
-        let markers = ["requirements.txt", "setup.py", "pyproject.toml", "Cargo.toml", ".git"];
+        let markers = [
+            "requirements.txt",
+            "setup.py",
+            "pyproject.toml",
+            "Cargo.toml",
+            ".git",
+        ];
         if markers.iter().any(|m| current.join(m).exists()) {
             break current;
         }
@@ -1599,52 +1710,48 @@ async fn sync_code_to_instance(
             None => break script_dir, // Fallback to script directory
         }
     };
-    
+
     if output_format != "json" {
         println!("   Syncing from: {}", project_root.display());
     }
-    
+
     // Use native Rust SSH sync
-    crate::ssh_sync::sync_code_native(
-        key_path,
-        ip,
-        user,
-        project_dir,
-        project_root,
-        output_format,
-    ).await
-        .map_err(|e| TrainctlError::DataTransfer(format!(
-            "Native code sync failed: {}\n\n\
+    crate::ssh_sync::sync_code_native(key_path, ip, user, project_dir, project_root, output_format)
+        .await
+        .map_err(|e| {
+            TrainctlError::DataTransfer(format!(
+                "Native code sync failed: {}\n\n\
             To resolve:\n\
               1. Check SSH key permissions: chmod 600 {}\n\
               2. Verify instance is accessible: ssh -i {} {}@{}\n\
               3. Check network connectivity and security groups\n\
               4. Ensure instance has sufficient disk space\n\
               5. Fallback: Use shell-based sync by setting TRAINCTL_USE_SHELL_SYNC=1",
-            e, key_path, key_path, user, ip
-        )))
+                e, key_path, key_path, user, ip
+            ))
+        })
 }
 
 // execute_via_ssm removed - use crate::aws_utils::execute_ssm_command instead
 
 /// Execute command via SSH
-async fn execute_via_ssh(
-    key_path: &str,
-    ip: &str,
-    user: &str,
-    command: &str,
-) -> Result<()> {
+async fn execute_via_ssh(key_path: &str, ip: &str, user: &str, command: &str) -> Result<()> {
     use std::process::Command;
-    
+
     let mut cmd = Command::new("ssh");
-    cmd.arg("-o").arg("StrictHostKeyChecking=no")
-       .arg("-o").arg("ConnectTimeout=10")
-       .arg("-i").arg(key_path)
-       .arg(format!("{}@{}", user, ip))
-       .arg(command);
-    
-    let output = cmd.output().map_err(|e| TrainctlError::Aws(format!("Failed to execute SSH command: {}", e)))?;
-    
+    cmd.arg("-o")
+        .arg("StrictHostKeyChecking=no")
+        .arg("-o")
+        .arg("ConnectTimeout=10")
+        .arg("-i")
+        .arg(key_path)
+        .arg(format!("{}@{}", user, ip))
+        .arg(command);
+
+    let output = cmd
+        .output()
+        .map_err(|e| TrainctlError::Aws(format!("Failed to execute SSH command: {}", e)))?;
+
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(TrainctlError::CloudProvider {
@@ -1653,7 +1760,7 @@ async fn execute_via_ssh(
             source: None,
         });
     }
-    
+
     if !output.stdout.is_empty() {
         print!("{}", String::from_utf8_lossy(&output.stdout));
     }
@@ -1667,7 +1774,6 @@ async fn monitor_instance(
     _aws_config: &aws_config::SdkConfig,
     _output_format: &str,
 ) -> Result<()> {
-
     // Get command output via SSM
     // Simplified - would need to track command ID
     println!("Monitoring instance: {} (follow={})", instance_id, _follow);
@@ -1692,33 +1798,44 @@ async fn terminate_instance(
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-    
+
     let instance = instance_response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
         .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
         .ok_or_else(|| TrainctlError::Aws(format!("Instance not found: {}", instance_id)))?;
-    
+
     // Check for attached volumes
     let block_devices = instance.block_device_mappings();
     let has_data_volumes = block_devices.iter().any(|bd| {
-        bd.device_name().map(|d| d != "/dev/xvda" && d != "/dev/sda1").unwrap_or(false)
+        bd.device_name()
+            .map(|d| d != "/dev/xvda" && d != "/dev/sda1")
+            .unwrap_or(false)
     });
-    
+
     if has_data_volumes {
-        println!("WARNING: Instance {} has attached EBS volumes.", instance_id);
+        println!(
+            "WARNING: Instance {} has attached EBS volumes.",
+            instance_id
+        );
         println!("Volumes will remain after instance termination.");
-        println!("   List volumes: trainctl aws ebs list --instance-id {}", instance_id);
+        println!(
+            "   List volumes: trainctl aws ebs list --instance-id {}",
+            instance_id
+        );
     }
-    
+
     // Check for running training jobs and resource usage (unless force is used)
     if !force {
         if let Some(_iam_profile) = instance.iam_instance_profile() {
             // Check for high resource usage (warns but doesn't block)
             match check_high_resource_usage(&ssm_client, &instance_id).await {
                 Ok(Some(warnings)) => {
-                    println!("WARNING: High resource usage detected on instance {}:", instance_id);
+                    println!(
+                        "WARNING: High resource usage detected on instance {}:",
+                        instance_id
+                    );
                     println!("{}", warnings);
                     println!("Consider stopping active processes before termination.");
                     println!("Use --force to override and terminate anyway.");
@@ -1730,7 +1847,7 @@ async fn terminate_instance(
                     println!("WARNING: Could not check resource usage: {}", e);
                 }
             }
-            
+
             // Try SSM to check for training processes (blocks termination)
             let check_training_cmd = r#"
 if [ -f training.pid ]; then
@@ -1749,7 +1866,7 @@ else
     fi
 fi
 "#;
-            
+
             // Check for running training jobs using shared SSM utility
             match execute_ssm_command(&ssm_client, &instance_id, check_training_cmd).await {
                 Ok(output) => {
@@ -1784,7 +1901,7 @@ fi
         .map_err(|e| TrainctlError::Aws(format!("Failed to terminate instance: {}", e)))?;
 
     let state = "terminating".to_string();
-    
+
     if output_format == "json" {
         let result = TerminateInstanceResult {
             success: true,
@@ -1797,7 +1914,7 @@ fi
     } else {
         println!("Instance termination requested: {}", instance_id);
     }
-    
+
     Ok(())
 }
 
@@ -1817,32 +1934,36 @@ async fn stop_instance(
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-    
+
     let instance = instance_response
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
         .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
         .ok_or_else(|| TrainctlError::Aws(format!("Instance not found: {}", instance_id)))?;
-    
-    let state = instance.state()
+
+    let state = instance
+        .state()
         .and_then(|s| s.name())
         .map(|s| s.as_str())
         .unwrap_or("unknown");
-    
+
     if state == "stopped" || state == "stopping" {
         println!("Instance {} is already stopped or stopping", instance_id);
         return Ok(());
     }
-    
+
     if state != "running" {
         return Err(TrainctlError::CloudProvider {
             provider: "aws".to_string(),
-            message: format!("Instance {} is in state '{}', cannot stop", instance_id, state),
+            message: format!(
+                "Instance {} is in state '{}', cannot stop",
+                instance_id, state
+            ),
             source: None,
         });
     }
-    
+
     // Graceful shutdown: save checkpoints and stop training cleanly
     if !force {
         if let Some(_iam_profile) = instance.iam_instance_profile() {
@@ -1891,11 +2012,14 @@ else
     fi
 fi
 "#;
-            
+
             match execute_ssm_command(&ssm_client, &instance_id, graceful_stop_cmd).await {
                 Ok(output) => {
                     if output.contains("TRAINING_RUNNING") {
-                        println!("Training detected on instance {}, attempting graceful shutdown...", instance_id);
+                        println!(
+                            "Training detected on instance {}, attempting graceful shutdown...",
+                            instance_id
+                        );
                     } else if output.contains("TRAINING_STOPPED_GRACEFULLY") {
                         println!("Training stopped gracefully on instance {}", instance_id);
                     } else if output.contains("TRAINING_FORCE_STOPPED") {
@@ -1908,16 +2032,16 @@ fi
             }
         }
     }
-    
+
     client
         .stop_instances()
         .instance_ids(&instance_id)
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to stop instance: {}", e)))?;
-    
+
     let state = "stopping".to_string();
-    
+
     if output_format == "json" {
         let result = StopInstanceResult {
             success: true,
@@ -1928,9 +2052,12 @@ fi
         println!("{}", serde_json::to_string_pretty(&result)?);
     } else {
         println!("Instance stop requested: {}", instance_id);
-        println!("Instance can be restarted with: trainctl aws start {}", instance_id);
+        println!(
+            "Instance can be restarted with: trainctl aws start {}",
+            instance_id
+        );
     }
-    
+
     Ok(())
 }
 
@@ -1945,42 +2072,46 @@ async fn show_processes(
     use crate::diagnostics::get_instance_resource_usage;
     // Table formatting removed - using plain text output
     use std::io::{self, Write};
-    
+
     let ssm_client = SsmClient::new(aws_config);
-    
+
     let display_usage = |usage: &crate::diagnostics::ResourceUsage| -> Result<()> {
         if output_format == "json" {
             // JSON output
-            let disk_usage: Vec<DiskUsage> = usage.disk_usage.iter().map(|d| {
-                DiskUsage {
+            let disk_usage: Vec<DiskUsage> = usage
+                .disk_usage
+                .iter()
+                .map(|d| DiskUsage {
                     filesystem: d.filesystem.clone(),
                     size_gb: d.size_gb,
                     used_gb: d.used_gb,
                     available_gb: d.available_gb,
                     percent_used: d.percent_used,
                     mount_point: d.mount_point.clone(),
-                }
-            }).collect();
-            
-            let gpu_info = usage.gpu_info.as_ref().map(|g| {
-                GpuInfoJson {
-                    gpus: g.gpus.iter().map(|gd| {
-                        GpuDetailJson {
-                            index: gd.index,
-                            name: gd.name.clone(),
-                            memory_used_mb: gd.memory_used_mb,
-                            memory_total_mb: gd.memory_total_mb,
-                            memory_percent: gd.memory_percent,
-                            utilization_percent: gd.utilization_percent,
-                            temperature_c: gd.temperature_c,
-                            power_draw_w: gd.power_draw_w,
-                        }
-                    }).collect(),
-                }
+                })
+                .collect();
+
+            let gpu_info = usage.gpu_info.as_ref().map(|g| GpuInfoJson {
+                gpus: g
+                    .gpus
+                    .iter()
+                    .map(|gd| GpuDetailJson {
+                        index: gd.index,
+                        name: gd.name.clone(),
+                        memory_used_mb: gd.memory_used_mb,
+                        memory_total_mb: gd.memory_total_mb,
+                        memory_percent: gd.memory_percent,
+                        utilization_percent: gd.utilization_percent,
+                        temperature_c: gd.temperature_c,
+                        power_draw_w: gd.power_draw_w,
+                    })
+                    .collect(),
             });
-            
-            let processes: Vec<ProcessInfo> = usage.top_processes.iter().map(|p| {
-                ProcessInfo {
+
+            let processes: Vec<ProcessInfo> = usage
+                .top_processes
+                .iter()
+                .map(|p| ProcessInfo {
                     pid: p.pid,
                     user: p.user.clone(),
                     command: p.command.clone(),
@@ -1988,9 +2119,9 @@ async fn show_processes(
                     memory_mb: p.memory_mb,
                     memory_percent: p.memory_percent,
                     runtime: p.runtime.clone(),
-                }
-            }).collect();
-            
+                })
+                .collect();
+
             let resource_usage = ProcessResourceUsage {
                 cpu_percent: usage.cpu_percent,
                 memory_used_gb: usage.memory_used_gb,
@@ -1999,7 +2130,7 @@ async fn show_processes(
                 disk_usage,
                 gpu_info,
             };
-            
+
             let result = ProcessListResult {
                 success: true,
                 instance_id: usage.instance_id.clone(),
@@ -2007,7 +2138,7 @@ async fn show_processes(
                 resource_usage,
                 processes,
             };
-            
+
             if watch {
                 // JSONL format for watch mode (one JSON object per line)
                 println!("{}", serde_json::to_string(&result)?);
@@ -2017,34 +2148,42 @@ async fn show_processes(
             }
             return Ok(());
         }
-        
+
         // Text output (existing code)
         // Clear screen in watch mode
         if watch {
             print!("\x1B[2J\x1B[1;1H");
             io::stdout().flush()?;
         }
-        
+
         // Header - like top/htop
-        println!("INSTANCE: {} | UPDATED: {}", usage.instance_id, usage.timestamp.format("%Y-%m-%d %H:%M:%S UTC"));
+        println!(
+            "INSTANCE: {} | UPDATED: {}",
+            usage.instance_id,
+            usage.timestamp.format("%Y-%m-%d %H:%M:%S UTC")
+        );
         println!("{}", "=".repeat(80));
-        
+
         // System overview - like top
         println!("SYSTEM:");
         println!("  cpu: {:5.1}%", usage.cpu_percent);
-        println!("  mem: {:5.1}GB / {:5.1}GB ({:5.1}%)", 
-            usage.memory_used_gb, usage.memory_total_gb, usage.memory_percent);
-        
+        println!(
+            "  mem: {:5.1}GB / {:5.1}GB ({:5.1}%)",
+            usage.memory_used_gb, usage.memory_total_gb, usage.memory_percent
+        );
+
         // GPU info - minimal, like nvidia-smi
         if let Some(ref gpu) = usage.gpu_info {
             println!("\nGPU:");
             for gpu_detail in &gpu.gpus {
                 println!("  [{}] {}", gpu_detail.index, gpu_detail.name);
-                println!("       mem: {:5.1}GB / {:5.1}GB ({:5.1}%) | util: {:5.1}%", 
+                println!(
+                    "       mem: {:5.1}GB / {:5.1}GB ({:5.1}%) | util: {:5.1}%",
                     gpu_detail.memory_used_mb as f64 / 1024.0,
                     gpu_detail.memory_total_mb as f64 / 1024.0,
                     gpu_detail.memory_percent,
-                    gpu_detail.utilization_percent);
+                    gpu_detail.utilization_percent
+                );
                 if let Some(temp) = gpu_detail.temperature_c {
                     print!(" | temp: {}C", temp);
                 }
@@ -2054,31 +2193,37 @@ async fn show_processes(
                 println!();
             }
         }
-        
+
         // Disk usage - like df -h
         if !usage.disk_usage.is_empty() {
             println!("\nFILESYSTEM:");
-            println!("{:<20} {:>8} {:>8} {:>8} {:>6} {}", 
-                "FILESYSTEM", "SIZE", "USED", "AVAIL", "USE%", "MOUNTED");
+            println!(
+                "{:<20} {:>8} {:>8} {:>8} {:>6} {}",
+                "FILESYSTEM", "SIZE", "USED", "AVAIL", "USE%", "MOUNTED"
+            );
             println!("{}", "-".repeat(80));
             for disk in &usage.disk_usage {
                 let use_str = format!("{:>5.1}%", disk.percent_used);
-                println!("{:<20} {:>7.1}G {:>7.1}G {:>7.1}G {:>6} {}", 
+                println!(
+                    "{:<20} {:>7.1}G {:>7.1}G {:>7.1}G {:>6} {}",
                     disk.filesystem,
                     disk.size_gb,
                     disk.used_gb,
                     disk.available_gb,
                     use_str,
-                    disk.mount_point);
+                    disk.mount_point
+                );
             }
         }
-        
+
         // Top processes - like top/ps
         if !usage.top_processes.is_empty() {
             println!("\nPROCESSES:");
             if detailed {
-                println!("{:<8} {:<12} {:<40} {:>6} {:>10} {:>6} {:>10}", 
-                    "PID", "USER", "COMMAND", "CPU%", "MEM(MB)", "MEM%", "RUNTIME");
+                println!(
+                    "{:<8} {:<12} {:<40} {:>6} {:>10} {:>6} {:>10}",
+                    "PID", "USER", "COMMAND", "CPU%", "MEM(MB)", "MEM%", "RUNTIME"
+                );
                 println!("{}", "-".repeat(100));
                 for proc in &usage.top_processes {
                     let cmd_display = if proc.command.len() > 38 {
@@ -2086,18 +2231,22 @@ async fn show_processes(
                     } else {
                         format!("{:<38}", proc.command)
                     };
-                    println!("{:<8} {:<12} {:<40} {:>6.1} {:>10.1} {:>6.1} {:>10}", 
+                    println!(
+                        "{:<8} {:<12} {:<40} {:>6.1} {:>10.1} {:>6.1} {:>10}",
                         proc.pid,
                         proc.user,
                         cmd_display,
                         proc.cpu_percent,
                         proc.memory_mb,
                         proc.memory_percent,
-                        proc.runtime);
+                        proc.runtime
+                    );
                 }
             } else {
-                println!("{:<8} {:<50} {:>6} {:>10}", 
-                    "PID", "COMMAND", "CPU%", "MEM(MB)");
+                println!(
+                    "{:<8} {:<50} {:>6} {:>10}",
+                    "PID", "COMMAND", "CPU%", "MEM(MB)"
+                );
                 println!("{}", "-".repeat(80));
                 for proc in usage.top_processes.iter().take(10) {
                     let cmd_display = if proc.command.len() > 48 {
@@ -2105,32 +2254,37 @@ async fn show_processes(
                     } else {
                         proc.command.clone()
                     };
-                    println!("{:<8} {:<50} {:>6.1} {:>10.1}", 
-                        proc.pid,
-                        cmd_display,
-                        proc.cpu_percent,
-                        proc.memory_mb);
+                    println!(
+                        "{:<8} {:<50} {:>6.1} {:>10.1}",
+                        proc.pid, cmd_display, proc.cpu_percent, proc.memory_mb
+                    );
                 }
             }
         }
-        
+
         // Network stats - like ifconfig/ip
         if let Some(ref net) = usage.network_stats {
             println!("\nNETWORK:");
-            println!("  rx: {:>12.2} GB ({:>12} packets)", 
-                net.rx_bytes as f64 / 1_000_000_000.0, net.rx_packets);
-            println!("  tx: {:>12.2} GB ({:>12} packets)", 
-                net.tx_bytes as f64 / 1_000_000_000.0, net.tx_packets);
+            println!(
+                "  rx: {:>12.2} GB ({:>12} packets)",
+                net.rx_bytes as f64 / 1_000_000_000.0,
+                net.rx_packets
+            );
+            println!(
+                "  tx: {:>12.2} GB ({:>12} packets)",
+                net.tx_bytes as f64 / 1_000_000_000.0,
+                net.tx_packets
+            );
         }
-        
+
         if watch {
             println!("\n{}", "-".repeat(80));
             println!("refresh: {}s | [Ctrl+C] to stop", interval);
         }
-        
+
         Ok(())
     };
-    
+
     if watch {
         loop {
             match get_instance_resource_usage(&ssm_client, &instance_id).await {
@@ -2148,7 +2302,6 @@ async fn show_processes(
         let usage = get_instance_resource_usage(&ssm_client, &instance_id).await?;
         display_usage(&usage)?;
     }
-    
+
     Ok(())
 }
-

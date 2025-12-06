@@ -3,10 +3,10 @@
 //! Provides visibility into process resource usage, system metrics,
 //! and diagnostic insights for instances and pods.
 
+use crate::aws_utils::execute_ssm_command;
 use crate::error::Result;
 use aws_sdk_ssm::Client as SsmClient;
 use serde::{Deserialize, Serialize};
-use crate::aws_utils::execute_ssm_command;
 
 /// Thresholds for high resource usage warnings
 const HIGH_CPU_THRESHOLD_PERCENT: f64 = 80.0;
@@ -136,7 +136,7 @@ echo "CPU:$CPU|MEM_TOTAL:$MEM_TOTAL|MEM_USED:$MEM_USED|MEM_AVAIL:$MEM_AVAIL|MEM_
 "#;
 
     let output = execute_ssm_command(ssm_client, instance_id, metrics_cmd).await?;
-    
+
     // Parse output
     parse_resource_usage_output(instance_id, &output)
 }
@@ -158,11 +158,15 @@ fn parse_resource_usage_output(instance_id: &str, output: &str) -> Result<Resour
         data.strip_prefix(prefix)
             .and_then(|s| s.trim().parse().ok())
             .unwrap_or_else(|| {
-                tracing::debug!("Failed to parse metric with prefix '{}' from: {}", prefix, data);
+                tracing::debug!(
+                    "Failed to parse metric with prefix '{}' from: {}",
+                    prefix,
+                    data
+                );
                 0.0
             })
     };
-    
+
     for line in output.lines() {
         if line.starts_with("CPU:") {
             let parts: Vec<&str> = line.split('|').collect();
@@ -237,11 +241,25 @@ fn parse_disk_usage(data: &str) -> Vec<DiskUsage> {
 fn parse_size_gb(size_str: &str) -> Result<f64> {
     let size_str = size_str.trim();
     if size_str.ends_with('G') {
-        Ok(size_str.strip_suffix('G').unwrap_or("0").parse().unwrap_or(0.0))
+        Ok(size_str
+            .strip_suffix('G')
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0.0))
     } else if size_str.ends_with('M') {
-        Ok(size_str.strip_suffix('M').unwrap_or("0").parse().unwrap_or(0.0) / 1024.0)
+        Ok(size_str
+            .strip_suffix('M')
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0.0)
+            / 1024.0)
     } else if size_str.ends_with('T') {
-        Ok(size_str.strip_suffix('T').unwrap_or("0").parse().unwrap_or(0.0) * 1024.0)
+        Ok(size_str
+            .strip_suffix('T')
+            .unwrap_or("0")
+            .parse()
+            .unwrap_or(0.0)
+            * 1024.0)
     } else {
         Ok(size_str.parse().unwrap_or(0.0))
     }
@@ -263,7 +281,7 @@ fn parse_top_processes(data: &str) -> Vec<ProcessInfo> {
             let cpu_str = parts.get(3).copied().unwrap_or("0");
             let mem_str = parts.get(4).copied().unwrap_or("0");
             let runtime_str = parts.get(5).copied().unwrap_or("0");
-            
+
             if let (Ok(pid), Ok(cpu), Ok(mem), Ok(runtime)) = (
                 pid_str.parse::<u32>(),
                 cpu_str.parse::<f64>(),
@@ -334,10 +352,7 @@ fn parse_gpu_info(data: &str) -> Option<GpuInfo> {
     if gpus.is_empty() {
         None
     } else {
-        Some(GpuInfo {
-            gpu_count,
-            gpus,
-        })
+        Some(GpuInfo { gpu_count, gpus })
     }
 }
 
@@ -350,7 +365,7 @@ fn parse_network_stats(data: &str) -> Option<NetworkStats> {
         let tx_bytes_str = parts.get(1).copied().unwrap_or("0");
         let rx_packets_str = parts.get(2).copied().unwrap_or("0");
         let tx_packets_str = parts.get(3).copied().unwrap_or("0");
-        
+
         if let (Ok(rx_bytes), Ok(tx_bytes), Ok(rx_packets), Ok(tx_packets)) = (
             rx_bytes_str.parse::<u64>(),
             tx_bytes_str.parse::<u64>(),
@@ -374,61 +389,70 @@ pub async fn check_high_resource_usage(
     instance_id: &str,
 ) -> Result<Option<String>> {
     let usage = get_instance_resource_usage(ssm_client, instance_id).await?;
-    
+
     let mut warnings = Vec::new();
-    
+
     // Check CPU usage
     if usage.cpu_percent > HIGH_CPU_THRESHOLD_PERCENT {
         warnings.push(format!("High CPU usage: {:.1}%", usage.cpu_percent));
     }
-    
+
     // Check memory usage
     if usage.memory_percent > HIGH_MEMORY_THRESHOLD_PERCENT {
-        warnings.push(format!("High memory usage: {:.1}% ({:.1}GB/{:.1}GB)", 
-            usage.memory_percent, usage.memory_used_gb, usage.memory_total_gb));
+        warnings.push(format!(
+            "High memory usage: {:.1}% ({:.1}GB/{:.1}GB)",
+            usage.memory_percent, usage.memory_used_gb, usage.memory_total_gb
+        ));
     }
-    
+
     // Check GPU usage
     if let Some(ref gpu) = usage.gpu_info {
         for gpu_detail in &gpu.gpus {
             if gpu_detail.utilization_percent > HIGH_GPU_UTILIZATION_THRESHOLD_PERCENT {
-                warnings.push(format!("GPU {} high utilization: {:.1}%", 
-                    gpu_detail.index, gpu_detail.utilization_percent));
+                warnings.push(format!(
+                    "GPU {} high utilization: {:.1}%",
+                    gpu_detail.index, gpu_detail.utilization_percent
+                ));
             }
             if gpu_detail.memory_percent > HIGH_GPU_MEMORY_THRESHOLD_PERCENT {
-                warnings.push(format!("GPU {} high memory usage: {:.1}%", 
-                    gpu_detail.index, gpu_detail.memory_percent));
+                warnings.push(format!(
+                    "GPU {} high memory usage: {:.1}%",
+                    gpu_detail.index, gpu_detail.memory_percent
+                ));
             }
         }
     }
-    
+
     // Check for active training processes
-    let training_processes: Vec<_> = usage.top_processes
+    let training_processes: Vec<_> = usage
+        .top_processes
         .iter()
         .filter(|p| {
-            p.command.contains("python") && (
-                p.command.contains("train") ||
-                p.command.contains("training") ||
-                p.command.contains("main.py") ||
-                p.cpu_percent > ACTIVE_PROCESS_CPU_THRESHOLD_PERCENT || 
-                p.memory_mb > ACTIVE_PROCESS_MEMORY_THRESHOLD_MB
-            )
+            p.command.contains("python")
+                && (p.command.contains("train")
+                    || p.command.contains("training")
+                    || p.command.contains("main.py")
+                    || p.cpu_percent > ACTIVE_PROCESS_CPU_THRESHOLD_PERCENT
+                    || p.memory_mb > ACTIVE_PROCESS_MEMORY_THRESHOLD_MB)
         })
         .collect();
-    
+
     if !training_processes.is_empty() {
-        warnings.push(format!("Active training processes detected: {} process(es)", 
-            training_processes.len()));
+        warnings.push(format!(
+            "Active training processes detected: {} process(es)",
+            training_processes.len()
+        ));
         for proc in training_processes.iter().take(3) {
-            warnings.push(format!("  - PID {}: {} (CPU: {:.1}%, Mem: {:.1}MB)", 
-                proc.pid, proc.command, proc.cpu_percent, proc.memory_mb));
+            warnings.push(format!(
+                "  - PID {}: {} (CPU: {:.1}%, Mem: {:.1}MB)",
+                proc.pid, proc.command, proc.cpu_percent, proc.memory_mb
+            ));
         }
     }
-    
+
     if warnings.is_empty() {
         Ok(None)
     } else {
         Ok(Some(warnings.join("\n")))
     }
 }
-

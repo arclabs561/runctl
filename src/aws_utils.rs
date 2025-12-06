@@ -6,10 +6,10 @@
 use crate::error::{Result, TrainctlError};
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
-use indicatif::{ProgressBar, ProgressStyle};
 
 /// Polling configuration constants
 const SSM_COMMAND_MAX_ATTEMPTS: u32 = 60;
@@ -32,8 +32,11 @@ pub async fn execute_ssm_command(
     instance_id: &str,
     command: &str,
 ) -> Result<String> {
-    info!("Executing SSM command on instance {}: {}", instance_id, command);
-    
+    info!(
+        "Executing SSM command on instance {}: {}",
+        instance_id, command
+    );
+
     // Send command
     let response = client
         .send_command()
@@ -43,39 +46,40 @@ pub async fn execute_ssm_command(
         .send()
         .await
         .map_err(|e| TrainctlError::Ssm(format!("Failed to send SSM command: {}", e)))?;
-    
-    let command_id = response.command()
+
+    let command_id = response
+        .command()
         .and_then(|c| c.command_id())
         .ok_or_else(|| TrainctlError::Ssm("No command ID in response".to_string()))?
         .to_string();
-    
+
     info!("Command ID: {}, waiting for completion...", command_id);
-    
+
     // Poll for completion with exponential backoff and progress indicator
     let max_attempts = SSM_COMMAND_MAX_ATTEMPTS;
     let mut delay = Duration::from_secs(SSM_COMMAND_INITIAL_DELAY_SECS);
-    
+
     // Create progress bar for long-running commands
     let pb = ProgressBar::new(max_attempts as u64);
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} {msg}")
             .expect("Progress bar template should be valid")
-            .progress_chars("#>-")
+            .progress_chars("#>-"),
     );
     pb.set_message("Waiting for command completion...");
-    
+
     for attempt in 0..max_attempts {
         sleep(delay).await;
         pb.set_position((attempt + 1) as u64);
-        
+
         // Exponential backoff: 2s, 4s, 8s, then cap at max delay
         if attempt < 3 {
             delay = Duration::from_secs(SSM_COMMAND_INITIAL_DELAY_SECS.pow(attempt + 1));
         } else {
             delay = Duration::from_secs(SSM_COMMAND_MAX_DELAY_SECS);
         }
-        
+
         let invocation = client
             .get_command_invocation()
             .command_id(&command_id)
@@ -83,31 +87,32 @@ pub async fn execute_ssm_command(
             .send()
             .await
             .map_err(|e| TrainctlError::Ssm(format!("Failed to get command invocation: {}", e)))?;
-        
-        let status = invocation.status()
-            .map(|s| s.as_str())
-            .unwrap_or("Unknown");
-        
+
+        let status = invocation.status().map(|s| s.as_str()).unwrap_or("Unknown");
+
         match status {
             "Success" => {
                 pb.finish_with_message("Command completed");
-                let output = invocation.standard_output_content()
+                let output = invocation
+                    .standard_output_content()
                     .unwrap_or("")
                     .to_string();
-                let error_output = invocation.standard_error_content()
+                let error_output = invocation
+                    .standard_error_content()
                     .unwrap_or("")
                     .to_string();
-                
+
                 if !error_output.is_empty() && !error_output.trim().is_empty() {
                     warn!("Command stderr: {}", error_output);
                 }
-                
+
                 info!("SSM command completed successfully");
                 return Ok(output);
             }
             "Failed" | "Cancelled" | "TimedOut" => {
                 pb.finish_with_message("Command failed");
-                let error = invocation.standard_error_content()
+                let error = invocation
+                    .standard_error_content()
                     .unwrap_or("Unknown error")
                     .to_string();
                 return Err(TrainctlError::Ssm(format!("SSM command failed: {}", error)));
@@ -121,40 +126,40 @@ pub async fn execute_ssm_command(
             }
         }
     }
-    
+
     pb.finish_with_message("Command timed out");
-    Err(TrainctlError::Ssm(format!("SSM command timed out after {} attempts", max_attempts)))
+    Err(TrainctlError::Ssm(format!(
+        "SSM command timed out after {} attempts",
+        max_attempts
+    )))
 }
 
 /// Wait for instance to reach running state
 ///
 /// Polls EC2 API until instance is running and SSM is ready.
-pub async fn wait_for_instance_running(
-    client: &Ec2Client,
-    instance_id: &str,
-) -> Result<()> {
+pub async fn wait_for_instance_running(client: &Ec2Client, instance_id: &str) -> Result<()> {
     const MAX_ATTEMPTS: u32 = INSTANCE_WAIT_MAX_ATTEMPTS;
     const POLL_INTERVAL: Duration = Duration::from_secs(INSTANCE_WAIT_POLL_INTERVAL_SECS);
-    
+
     let pb = ProgressBar::new(u64::from(MAX_ATTEMPTS));
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} [{elapsed_precise}] {msg}")
-            .expect("Progress bar template should be valid")
+            .expect("Progress bar template should be valid"),
     );
     pb.set_message("Waiting for instance to start...");
-    
+
     for attempt in 0..MAX_ATTEMPTS {
         sleep(POLL_INTERVAL).await;
         pb.set_position((attempt + 1) as u64);
-        
+
         let response = client
             .describe_instances()
             .instance_ids(instance_id)
             .send()
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
-        
+
         let instance = response
             .reservations()
             .iter()
@@ -164,10 +169,9 @@ pub async fn wait_for_instance_running(
                 resource_type: "instance".to_string(),
                 resource_id: instance_id.to_string(),
             })?;
-        
-        let state = instance.state()
-            .and_then(|s| s.name());
-        
+
+        let state = instance.state().and_then(|s| s.name());
+
         match state.as_ref().map(|s| s.as_str()) {
             Some("running") => {
                 pb.set_message("Instance running, waiting for SSM...");
@@ -195,7 +199,7 @@ pub async fn wait_for_instance_running(
             }
         }
     }
-    
+
     pb.finish_with_message("Timeout");
     Err(TrainctlError::Resource {
         resource_type: "instance".to_string(),
@@ -221,37 +225,39 @@ pub async fn wait_for_volume_attachment(
 ) -> Result<()> {
     const MAX_ATTEMPTS: u32 = VOLUME_ATTACH_MAX_ATTEMPTS;
     const POLL_INTERVAL: Duration = Duration::from_secs(VOLUME_ATTACH_POLL_INTERVAL_SECS);
-    
+
     let pb = ProgressBar::new(u64::from(MAX_ATTEMPTS));
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} [{elapsed_precise}] {msg}")
-            .expect("Progress bar template should be valid")
+            .expect("Progress bar template should be valid"),
     );
     pb.set_message("Attaching volume...");
-    
+
     for attempt in 0..MAX_ATTEMPTS {
         sleep(POLL_INTERVAL).await;
         pb.set_position((attempt + 1) as u64);
-        
+
         let response = client
             .describe_volumes()
             .volume_ids(volume_id)
             .send()
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
-        
-        let volume = response.volumes()
+
+        let volume = response
+            .volumes()
             .first()
             .ok_or_else(|| TrainctlError::ResourceNotFound {
                 resource_type: "volume".to_string(),
                 resource_id: volume_id.to_string(),
             })?;
-        
-        let attachment = volume.attachments()
+
+        let attachment = volume
+            .attachments()
             .iter()
             .find(|a| a.instance_id().map(|id| id == instance_id).unwrap_or(false));
-        
+
         if let Some(att) = attachment {
             let state = att.state().map(|s| s.as_str()).unwrap_or("unknown");
             if state == "attached" {
@@ -264,7 +270,7 @@ pub async fn wait_for_volume_attachment(
             pb.set_message("Waiting for attachment...");
         }
     }
-    
+
     pb.finish_with_message("Attachment timeout");
     Err(TrainctlError::Resource {
         resource_type: "volume".to_string(),
@@ -283,49 +289,47 @@ pub async fn wait_for_volume_attachment(
 /// Wait for EBS volume to be detached
 ///
 /// Polls EC2 API until volume shows as available (detached).
-pub async fn wait_for_volume_detached(
-    client: &Ec2Client,
-    volume_id: &str,
-) -> Result<()> {
+pub async fn wait_for_volume_detached(client: &Ec2Client, volume_id: &str) -> Result<()> {
     const MAX_ATTEMPTS: u32 = VOLUME_DETACH_MAX_ATTEMPTS;
     const POLL_INTERVAL: Duration = Duration::from_secs(VOLUME_DETACH_POLL_INTERVAL_SECS);
-    
+
     let pb = ProgressBar::new(u64::from(MAX_ATTEMPTS));
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} [{elapsed_precise}] {msg}")
-            .expect("Progress bar template should be valid")
+            .expect("Progress bar template should be valid"),
     );
     pb.set_message("Detaching volume...");
-    
+
     for attempt in 0..MAX_ATTEMPTS {
         sleep(POLL_INTERVAL).await;
         pb.set_position((attempt + 1) as u64);
-        
+
         let response = client
             .describe_volumes()
             .volume_ids(volume_id)
             .send()
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe volume: {}", e)))?;
-        
-        let volume = response.volumes()
+
+        let volume = response
+            .volumes()
             .first()
             .ok_or_else(|| TrainctlError::ResourceNotFound {
                 resource_type: "volume".to_string(),
                 resource_id: volume_id.to_string(),
             })?;
-        
+
         let state = volume.state().map(|s| s.as_str()).unwrap_or("unknown");
         if state == "available" {
             pb.finish_with_message("Volume detached");
             info!("Volume {} detached", volume_id);
             return Ok(());
         }
-        
+
         pb.set_message(format!("State: {}...", state));
     }
-    
+
     pb.finish_with_message("Detachment timeout");
     Err(TrainctlError::Resource {
         resource_type: "volume".to_string(),
@@ -351,12 +355,12 @@ pub async fn count_running_instances(client: &Ec2Client) -> Result<i32> {
             aws_sdk_ec2::types::Filter::builder()
                 .name("instance-state-name")
                 .values("running")
-                .build()
+                .build(),
         )
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instances: {}", e)))?;
-    
+
     let count = response
         .reservations()
         .iter()
@@ -368,7 +372,6 @@ pub async fn count_running_instances(client: &Ec2Client) -> Result<i32> {
                 .unwrap_or(false)
         })
         .count() as i32;
-    
+
     Ok(count)
 }
-

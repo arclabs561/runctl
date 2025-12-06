@@ -3,10 +3,10 @@
 //! Provides retry policies for handling transient failures
 //! in cloud API calls and other operations.
 
-use crate::error::{Result, TrainctlError, IsRetryable};
-use std::time::Duration;
+use crate::error::{IsRetryable, Result, TrainctlError};
 use std::future::Future;
-use tracing::{warn, info};
+use std::time::Duration;
+use tracing::{info, warn};
 
 /// Default retry configuration constants
 const DEFAULT_INITIAL_RETRY_DELAY_MS: u64 = 100;
@@ -47,7 +47,7 @@ impl ExponentialBackoffPolicy {
             jitter_factor: DEFAULT_JITTER_FACTOR,
         }
     }
-    
+
     /// Create default policy (3 attempts)
     ///
     /// Note: This is not the `Default` trait implementation to avoid
@@ -55,18 +55,17 @@ impl ExponentialBackoffPolicy {
     pub fn default_policy() -> Self {
         Self::new(DEFAULT_MAX_ATTEMPTS)
     }
-    
+
     /// Create policy for cloud API calls (5 attempts)
     pub fn for_cloud_api() -> Self {
         Self::new(CLOUD_API_MAX_ATTEMPTS)
     }
-    
+
     /// Calculate backoff delay for given attempt number
     fn calculate_backoff(&self, attempt: u32) -> Duration {
-        let exponential = self.initial_delay.as_millis() as f64 
-            * 2f64.powi(attempt as i32);
+        let exponential = self.initial_delay.as_millis() as f64 * 2f64.powi(attempt as i32);
         let delay_ms = exponential.min(self.max_delay.as_millis() as f64);
-        
+
         // Add jitter to prevent thundering herd
         let jitter = delay_ms * self.jitter_factor * fastrand::f64();
         Duration::from_millis((delay_ms + jitter) as u64)
@@ -80,7 +79,7 @@ impl RetryPolicy for ExponentialBackoffPolicy {
         Fut: Future<Output = Result<T>> + Send,
     {
         let mut last_error = None;
-        
+
         for attempt in 0..self.max_attempts {
             match f().await {
                 Ok(result) => {
@@ -95,7 +94,7 @@ impl RetryPolicy for ExponentialBackoffPolicy {
                         warn!("Non-retryable error, aborting: {}", e);
                         return Err(e);
                     }
-                    
+
                     // Check if we've exhausted retries
                     if attempt == self.max_attempts - 1 {
                         warn!("Max retries ({}) reached", self.max_attempts);
@@ -106,26 +105,26 @@ impl RetryPolicy for ExponentialBackoffPolicy {
                             source: Some(Box::new(e)),
                         });
                     }
-                    
+
                     // Store error for potential return
                     last_error = Some(e);
                     // Safe: we just set last_error above, so unwrap is safe
                     let err = last_error.as_ref().expect("last_error should be Some here");
-                    
+
                     // Calculate and wait for backoff
                     let backoff = self.calculate_backoff(attempt);
                     warn!(
-                        "Retryable error (attempt {}/{}), retrying in {:?}: {}", 
-                        attempt + 1, 
-                        self.max_attempts, 
-                        backoff, 
+                        "Retryable error (attempt {}/{}), retrying in {:?}: {}",
+                        attempt + 1,
+                        self.max_attempts,
+                        backoff,
                         err
                     );
                     tokio::time::sleep(backoff).await;
                 }
             }
         }
-        
+
         // Should never reach here, but handle it anyway
         Err(last_error.unwrap_or_else(|| TrainctlError::Retryable {
             attempt: self.max_attempts,
@@ -148,4 +147,3 @@ impl RetryPolicy for NoRetryPolicy {
         f().await
     }
 }
-

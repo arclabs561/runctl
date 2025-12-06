@@ -20,10 +20,10 @@ pub type ResourceId = String;
 pub struct TrainingJob {
     pub script: PathBuf,
     pub args: Vec<String>,
-    pub data_source: Option<String>,  // S3 path, local path, etc.
-    pub output_dest: Option<String>,  // Where to save outputs
+    pub data_source: Option<String>, // S3 path, local path, etc.
+    pub output_dest: Option<String>, // Where to save outputs
     pub checkpoint_dir: Option<PathBuf>,
-    pub environment: Vec<(String, String)>,  // Environment variables
+    pub environment: Vec<(String, String)>, // Environment variables
 }
 
 /// Resource status information
@@ -35,7 +35,7 @@ pub struct ResourceStatus {
     pub id: ResourceId,
     pub name: Option<String>,
     pub state: ResourceState,
-    pub instance_type: Option<String>,  // GPU type, instance type, etc.
+    pub instance_type: Option<String>, // GPU type, instance type, etc.
     pub launch_time: Option<DateTime<Utc>>,
     pub cost_per_hour: f64,
     pub public_ip: Option<String>,
@@ -72,7 +72,7 @@ pub enum ResourceState {
 pub struct TrainingStatus {
     pub job_id: Option<String>,
     pub status: ExecutionStatus,
-    pub log_output: Option<String>,  // Path to log file or stream
+    pub log_output: Option<String>, // Path to log file or stream
     pub checkpoint_path: Option<PathBuf>,
 }
 
@@ -92,7 +92,7 @@ pub enum ExecutionStatus {
 /// Main trait for cloud training providers
 #[async_trait]
 /// Trait for abstracting training operations across cloud providers
-/// 
+///
 /// Currently unused by the CLI, but kept for future multi-cloud support.
 #[allow(dead_code)]
 pub trait TrainingProvider: Send + Sync {
@@ -113,18 +113,10 @@ pub trait TrainingProvider: Send + Sync {
     async fn list_resources(&self) -> Result<Vec<ResourceStatus>>;
 
     /// Execute a training job on a resource
-    async fn train(
-        &self,
-        resource_id: &ResourceId,
-        job: TrainingJob,
-    ) -> Result<TrainingStatus>;
+    async fn train(&self, resource_id: &ResourceId, job: TrainingJob) -> Result<TrainingStatus>;
 
     /// Monitor training progress (logs, checkpoints, etc.)
-    async fn monitor(
-        &self,
-        resource_id: &ResourceId,
-        follow: bool,
-    ) -> Result<()>;
+    async fn monitor(&self, resource_id: &ResourceId, follow: bool) -> Result<()>;
 
     /// Download results from a resource
     async fn download(
@@ -199,7 +191,10 @@ impl ProviderRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn TrainingProvider> {
-        self.providers.iter().find(|p| p.name() == name).map(|p| p.as_ref())
+        self.providers
+            .iter()
+            .find(|p| p.name() == name)
+            .map(|p| p.as_ref())
     }
 
     pub fn list(&self) -> Vec<&'static str> {
@@ -212,4 +207,3 @@ impl Default for ProviderRegistry {
         Self::new()
     }
 }
-

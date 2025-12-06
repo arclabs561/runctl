@@ -1,8 +1,8 @@
 //! AWS EC2 provider implementation
 
-use crate::provider::*;
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
+use crate::provider::*;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
@@ -11,7 +11,7 @@ use chrono::DateTime;
 use std::path::Path;
 
 /// AWS EC2 provider implementation
-/// 
+///
 /// Currently unused - CLI uses direct AWS implementations in aws.rs.
 /// Kept for potential future refactoring to use provider trait system.
 #[allow(dead_code)]
@@ -48,20 +48,23 @@ impl TrainingProvider for AwsProvider {
         _instance_type: &str,
         _options: CreateResourceOptions,
     ) -> Result<ResourceId> {
-        let _aws_cfg = self.config.aws.as_ref()
-            .ok_or_else(|| TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string())))?;
+        let _aws_cfg = self.config.aws.as_ref().ok_or_else(|| {
+            TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string()))
+        })?;
 
         // Implementation would call create_instance logic
         // For now, return a placeholder
         Err(TrainctlError::CloudProvider {
             provider: "aws".to_string(),
-            message: "AWS instance creation not yet fully implemented in provider trait".to_string(),
+            message: "AWS instance creation not yet fully implemented in provider trait"
+                .to_string(),
             source: None,
         })
     }
 
     async fn get_resource_status(&self, resource_id: &ResourceId) -> Result<ResourceStatus> {
-        let response = self.ec2_client
+        let response = self
+            .ec2_client
             .describe_instances()
             .instance_ids(resource_id)
             .send()
@@ -94,30 +97,27 @@ impl TrainingProvider for AwsProvider {
             .and_then(|lt| lt.to_millis().ok())
             .and_then(|ms| DateTime::from_timestamp(ms / 1000, 0));
 
-        let instance_type = instance
-            .instance_type()
-            .map(|t| t.as_str().to_string());
+        let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
 
-        let public_ip = instance
-            .public_ip_address()
-            .map(|ip| ip.to_string());
+        let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
 
         let tags: Vec<(String, String)> = instance
             .tags()
             .iter()
             .filter_map(|t| {
-                t.key().and_then(|k| t.value().map(|v| (k.to_string(), v.to_string())))
+                t.key()
+                    .and_then(|k| t.value().map(|v| (k.to_string(), v.to_string())))
             })
             .collect();
 
         // Estimate cost (simplified - would use pricing API in production)
-        let cost_per_hour = crate::resources::estimate_instance_cost(
-            instance_type.as_deref().unwrap_or("unknown")
-        );
+        let cost_per_hour =
+            crate::resources::estimate_instance_cost(instance_type.as_deref().unwrap_or("unknown"));
 
         Ok(ResourceStatus {
             id: resource_id.clone(),
-            name: tags.iter()
+            name: tags
+                .iter()
                 .find(|(k, _)| k == "Name")
                 .map(|(_, v)| v.clone()),
             state,
@@ -139,11 +139,7 @@ impl TrainingProvider for AwsProvider {
         })
     }
 
-    async fn train(
-        &self,
-        _resource_id: &ResourceId,
-        _job: TrainingJob,
-    ) -> Result<TrainingStatus> {
+    async fn train(&self, _resource_id: &ResourceId, _job: TrainingJob) -> Result<TrainingStatus> {
         // Implementation would use SSM to execute training
         Err(TrainctlError::CloudProvider {
             provider: "aws".to_string(),
@@ -152,11 +148,7 @@ impl TrainingProvider for AwsProvider {
         })
     }
 
-    async fn monitor(
-        &self,
-        _resource_id: &ResourceId,
-        _follow: bool,
-    ) -> Result<()> {
+    async fn monitor(&self, _resource_id: &ResourceId, _follow: bool) -> Result<()> {
         // Implementation would use SSM to tail logs
         Err(TrainctlError::CloudProvider {
             provider: "aws".to_string(),
@@ -194,4 +186,3 @@ impl TrainingProvider for AwsProvider {
         crate::resources::estimate_instance_cost(instance_type) * hours
     }
 }
-

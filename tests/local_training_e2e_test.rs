@@ -9,15 +9,19 @@ use tempfile::TempDir;
 fn test_python_script_execution() {
     let temp_dir = TempDir::new().unwrap();
     let script = temp_dir.path().join("test_script.py");
-    
+
     // Create a simple test script
-    fs::write(&script, r#"
+    fs::write(
+        &script,
+        r#"
 #!/usr/bin/env python3
 import sys
 print("Test script executed")
 sys.exit(0)
-"#).unwrap();
-    
+"#,
+    )
+    .unwrap();
+
     // Make executable
     #[cfg(unix)]
     {
@@ -26,16 +30,22 @@ sys.exit(0)
         perms.set_mode(0o755);
         fs::set_permissions(&script, perms).unwrap();
     }
-    
+
     // Test execution
     let output = Command::new("python3")
         .arg(&script)
         .output()
         .expect("Failed to execute script");
-    
-    assert!(output.status.success(), "Script should execute successfully");
+
+    assert!(
+        output.status.success(),
+        "Script should execute successfully"
+    );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Test script executed"), "Should see expected output");
+    assert!(
+        stdout.contains("Test script executed"),
+        "Should see expected output"
+    );
 }
 
 #[test]
@@ -46,10 +56,10 @@ fn test_uv_detection() {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    
+
     // Test should pass regardless (uv is optional)
     assert!(true);
-    
+
     if has_uv {
         println!("✓ uv is available");
     } else {
@@ -65,17 +75,19 @@ fn test_python_available() {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false);
-    
-    assert!(has_python3, "python3 should be available for local training");
-    
+
+    assert!(
+        has_python3,
+        "python3 should be available for local training"
+    );
+
     // Test Python version
     let output = Command::new("python3")
         .arg("--version")
         .output()
         .expect("Failed to check Python version");
-    
+
     assert!(output.status.success());
     let version = String::from_utf8_lossy(&output.stdout);
     println!("Python version: {}", version.trim());
 }
-

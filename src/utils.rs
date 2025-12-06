@@ -1,14 +1,15 @@
 use crate::error::{Result, TrainctlError};
-use std::path::Path;
 use chrono::{DateTime, Utc};
+use std::path::Path;
 
 pub fn ensure_dir(path: &Path) -> Result<()> {
     if !path.exists() {
-        std::fs::create_dir_all(path)
-            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+        std::fs::create_dir_all(path).map_err(|e| {
+            TrainctlError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("Failed to create directory {}: {}", path.display(), e),
-            )))?;
+            ))
+        })?;
     }
     Ok(())
 }
@@ -67,25 +68,25 @@ pub fn get_instance_cost(instance_type: &str) -> f64 {
         "t3.medium" => 0.0416,
         "t3.large" => 0.0832,
         "t3.xlarge" => 0.1664,
-        "t4g.micro" => 0.0084,  // ARM-based, cheaper
+        "t4g.micro" => 0.0084, // ARM-based, cheaper
         "t4g.small" => 0.0168,
         "t4g.medium" => 0.0336,
         "t4g.large" => 0.0672,
-        
+
         // General purpose CPU instances
         "m5.large" => 0.096,
         "m5.xlarge" => 0.192,
         "m5.2xlarge" => 0.384,
         "m5.4xlarge" => 0.768,
-        "m6i.large" => 0.096,   // Latest generation Intel
+        "m6i.large" => 0.096, // Latest generation Intel
         "m6i.xlarge" => 0.192,
         "m6i.2xlarge" => 0.384,
         "m6i.4xlarge" => 0.768,
-        "m7i.large" => 0.108,    // Latest generation Intel
+        "m7i.large" => 0.108, // Latest generation Intel
         "m7i.xlarge" => 0.216,
         "m7i.2xlarge" => 0.432,
         "m7i.4xlarge" => 0.864,
-        
+
         // Compute optimized
         "c5.large" => 0.085,
         "c5.xlarge" => 0.17,
@@ -95,42 +96,45 @@ pub fn get_instance_cost(instance_type: &str) -> f64 {
         "c6i.xlarge" => 0.17,
         "c6i.2xlarge" => 0.34,
         "c6i.4xlarge" => 0.68,
-        
+
         // GPU instances - Entry level
         "g4dn.xlarge" => 0.526,   // 1x T4 GPU
         "g4dn.2xlarge" => 0.752,  // 1x T4 GPU
         "g4dn.4xlarge" => 1.204,  // 1x T4 GPU
-        "g4dn.8xlarge" => 2.176, // 1x T4 GPU
+        "g4dn.8xlarge" => 2.176,  // 1x T4 GPU
         "g4dn.12xlarge" => 3.912, // 4x T4 GPU
         "g4dn.16xlarge" => 4.352, // 1x T4 GPU
-        
+
         // GPU instances - General purpose
-        "g5.xlarge" => 1.006,     // 1x A10G GPU
-        "g5.2xlarge" => 1.212,    // 1x A10G GPU
+        "g5.xlarge" => 1.006,    // 1x A10G GPU
+        "g5.2xlarge" => 1.212,   // 1x A10G GPU
         "g5.4xlarge" => 1.624,   // 1x A10G GPU
-        "g5.8xlarge" => 2.448,    // 1x A10G GPU
+        "g5.8xlarge" => 2.448,   // 1x A10G GPU
         "g5.12xlarge" => 3.672,  // 4x A10G GPU
         "g5.16xlarge" => 4.896,  // 1x A10G GPU
         "g5.24xlarge" => 7.344,  // 4x A10G GPU
         "g5.48xlarge" => 14.688, // 8x A10G GPU
-        
+
         // GPU instances - High performance
-        "p3.2xlarge" => 3.06,     // 1x V100 GPU (legacy)
-        "p3.8xlarge" => 12.24,    // 4x V100 GPU
-        "p3.16xlarge" => 24.48,   // 8x V100 GPU
-        "p4d.24xlarge" => 32.77,  // 8x A100 GPU
-        "p5.48xlarge" => 98.32,   // 8x H100 GPU (latest)
-        
+        "p3.2xlarge" => 3.06,    // 1x V100 GPU (legacy)
+        "p3.8xlarge" => 12.24,   // 4x V100 GPU
+        "p3.16xlarge" => 24.48,  // 8x V100 GPU
+        "p4d.24xlarge" => 32.77, // 8x A100 GPU
+        "p5.48xlarge" => 98.32,  // 8x H100 GPU (latest)
+
         // Trn2 instances (AWS Trainium2) - Best price-performance
         "trn2.2xlarge" => 1.34,   // 1x Trainium2 chip
         "trn2.32xlarge" => 21.44, // 16x Trainium2 chips
         "trn2.48xlarge" => 32.16, // 24x Trainium2 chips
-        
+
         // Default fallback - estimate based on instance type pattern
         _ => {
             if instance_type.starts_with("t3.") || instance_type.starts_with("t4g.") {
                 0.05
-            } else if instance_type.starts_with("m5.") || instance_type.starts_with("m6i.") || instance_type.starts_with("m7i.") {
+            } else if instance_type.starts_with("m5.")
+                || instance_type.starts_with("m6i.")
+                || instance_type.starts_with("m7i.")
+            {
                 0.2
             } else if instance_type.starts_with("c5.") || instance_type.starts_with("c6i.") {
                 0.2
@@ -145,7 +149,7 @@ pub fn get_instance_cost(instance_type: &str) -> f64 {
             } else if instance_type.starts_with("p5.") {
                 50.0
             } else if instance_type.starts_with("trn2.") {
-                10.0  // Trn2 offers 30-40% better price-performance
+                10.0 // Trn2 offers 30-40% better price-performance
             } else {
                 0.1 // Conservative default
             }
@@ -200,7 +204,7 @@ mod tests {
         let now = Utc::now();
         let old_time = now - chrono::Duration::hours(25);
         assert!(is_old_instance(Some(old_time), 24));
-        
+
         let recent_time = now - chrono::Duration::hours(1);
         assert!(!is_old_instance(Some(recent_time), 24));
     }
@@ -215,10 +219,9 @@ mod tests {
         use tempfile::TempDir;
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let test_dir = temp_dir.path().join("test_subdir");
-        
+
         assert!(ensure_dir(&test_dir).is_ok());
         assert!(test_dir.exists());
         assert!(test_dir.is_dir());
     }
 }
-

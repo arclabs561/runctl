@@ -7,11 +7,11 @@
 //!
 //! Cost: ~$0.10-0.50 per test run (creates/deletes volumes and instances)
 
+use aws_config::BehaviorVersion;
+use aws_sdk_ec2::Client as Ec2Client;
 use std::env;
 use std::time::Duration;
 use tokio::time::sleep;
-use aws_config::BehaviorVersion;
-use aws_sdk_ec2::Client as Ec2Client;
 use tracing::info;
 
 /// Check if E2E tests should run
@@ -31,24 +31,27 @@ macro_rules! require_e2e {
 
 /// Helper to tag resources for cleanup
 fn test_tag() -> String {
-    format!("trainctl-test-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap())
+    format!(
+        "trainctl-test-{}",
+        uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
+    )
 }
 
 #[tokio::test]
 #[ignore]
 async fn test_persistent_volume_creation_and_tagging() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     // Get default region/AZ
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     info!("Creating persistent volume in {}", az);
-    
+
     // Create persistent volume
     let volume_name = format!("{}-persistent", test_tag);
     let response = client
@@ -63,38 +66,38 @@ async fn test_persistent_volume_creation_and_tagging() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("Name")
                         .value(&volume_name)
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:persistent")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:protected")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = response.volume_id().expect("No volume ID").to_string();
     info!("Created persistent volume: {}", volume_id);
-    
+
     // Wait for volume to be available
     sleep(Duration::from_secs(5)).await;
-    
+
     // Verify tags
     let describe = client
         .describe_volumes()
@@ -102,22 +105,22 @@ async fn test_persistent_volume_creation_and_tagging() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     let volume = describe.volumes().first().expect("Volume not found");
     let tags = volume.tags();
-    
+
     let has_persistent = tags.iter().any(|t| {
-        t.key().map(|k| k == "trainctl:persistent").unwrap_or(false) &&
-        t.value().map(|v| v == "true").unwrap_or(false)
+        t.key().map(|k| k == "trainctl:persistent").unwrap_or(false)
+            && t.value().map(|v| v == "true").unwrap_or(false)
     });
     let has_protected = tags.iter().any(|t| {
-        t.key().map(|k| k == "trainctl:protected").unwrap_or(false) &&
-        t.value().map(|v| v == "true").unwrap_or(false)
+        t.key().map(|k| k == "trainctl:protected").unwrap_or(false)
+            && t.value().map(|v| v == "true").unwrap_or(false)
     });
-    
+
     assert!(has_persistent, "Volume should have trainctl:persistent tag");
     assert!(has_protected, "Volume should have trainctl:protected tag");
-    
+
     // Cleanup
     client
         .delete_volume()
@@ -132,14 +135,14 @@ async fn test_persistent_volume_creation_and_tagging() {
 #[ignore]
 async fn test_persistent_volume_protection_from_deletion() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create persistent volume
     let _volume_name = format!("{}-protected", test_tag);
     let response = client
@@ -154,25 +157,25 @@ async fn test_persistent_volume_protection_from_deletion() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:persistent")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = response.volume_id().expect("No volume ID").to_string();
     info!("Created protected volume: {}", volume_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Verify volume exists and is available
     let describe = client
         .describe_volumes()
@@ -180,19 +183,24 @@ async fn test_persistent_volume_protection_from_deletion() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     let volume = describe.volumes().first().expect("Volume not found");
-    let state = volume.state().map(|s| format!("{:?}", s)).unwrap_or_default();
+    let state = volume
+        .state()
+        .map(|s| format!("{:?}", s))
+        .unwrap_or_default();
     assert_eq!(state, "available", "Volume should be available");
-    
+
     // Verify it has persistent tag (simulating trainctl's check)
     let tags = volume.tags();
     let is_persistent = tags.iter().any(|t| {
-        t.key().map(|k| k == "trainctl:persistent" || k == "trainctl:protected").unwrap_or(false) &&
-        t.value().map(|v| v == "true").unwrap_or(false)
+        t.key()
+            .map(|k| k == "trainctl:persistent" || k == "trainctl:protected")
+            .unwrap_or(false)
+            && t.value().map(|v| v == "true").unwrap_or(false)
     });
     assert!(is_persistent, "Volume should be marked as persistent");
-    
+
     // Cleanup with force (test allows this)
     client
         .delete_volume()
@@ -207,14 +215,14 @@ async fn test_persistent_volume_protection_from_deletion() {
 #[ignore]
 async fn test_persistent_volume_survives_instance_termination() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create persistent volume
     let _volume_name = format!("{}-survives", test_tag);
     let vol_response = client
@@ -229,25 +237,25 @@ async fn test_persistent_volume_survives_instance_termination() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:persistent")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = vol_response.volume_id().expect("No volume ID").to_string();
     info!("Created persistent volume: {}", volume_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Note: This test would create an instance, attach volume, terminate instance
     // For cost reasons, we'll just verify the volume exists and can be deleted
     // In a full test, you'd:
@@ -255,7 +263,7 @@ async fn test_persistent_volume_survives_instance_termination() {
     // 2. Attach volume
     // 3. Terminate instance
     // 4. Verify volume still exists and is available
-    
+
     // Verify volume is available
     let describe = client
         .describe_volumes()
@@ -263,11 +271,14 @@ async fn test_persistent_volume_survives_instance_termination() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     let volume = describe.volumes().first().expect("Volume not found");
-    let state = volume.state().map(|s| format!("{:?}", s)).unwrap_or_default();
+    let state = volume
+        .state()
+        .map(|s| format!("{:?}", s))
+        .unwrap_or_default();
     assert_eq!(state, "available", "Volume should be available");
-    
+
     // Cleanup
     client
         .delete_volume()
@@ -282,14 +293,14 @@ async fn test_persistent_volume_survives_instance_termination() {
 #[ignore]
 async fn test_cleanup_skips_persistent_volumes() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create persistent volume
     let vol_persistent = client
         .create_volume()
@@ -303,23 +314,26 @@ async fn test_cleanup_skips_persistent_volumes() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:persistent")
                         .value("true")
-                        .build()
+                        .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create persistent volume");
-    
-    let persistent_id = vol_persistent.volume_id().expect("No volume ID").to_string();
+
+    let persistent_id = vol_persistent
+        .volume_id()
+        .expect("No volume ID")
+        .to_string();
     info!("Created persistent volume: {}", persistent_id);
-    
+
     // Create ephemeral volume
     let vol_ephemeral = client
         .create_volume()
@@ -333,19 +347,19 @@ async fn test_cleanup_skips_persistent_volumes() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create ephemeral volume");
-    
+
     let ephemeral_id = vol_ephemeral.volume_id().expect("No volume ID").to_string();
     info!("Created ephemeral volume: {}", ephemeral_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Simulate cleanup: delete ephemeral, skip persistent
     // Delete ephemeral (should succeed)
     client
@@ -355,7 +369,7 @@ async fn test_cleanup_skips_persistent_volumes() {
         .await
         .expect("Failed to delete ephemeral volume");
     info!("Deleted ephemeral volume: {}", ephemeral_id);
-    
+
     // Verify persistent still exists
     let describe = client
         .describe_volumes()
@@ -363,9 +377,12 @@ async fn test_cleanup_skips_persistent_volumes() {
         .send()
         .await
         .expect("Failed to describe persistent volume");
-    
-    assert!(!describe.volumes().is_empty(), "Persistent volume should still exist");
-    
+
+    assert!(
+        !describe.volumes().is_empty(),
+        "Persistent volume should still exist"
+    );
+
     // Cleanup persistent
     client
         .delete_volume()

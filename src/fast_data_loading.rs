@@ -26,9 +26,7 @@ pub enum DataLoadingStrategy {
         mount_point: PathBuf,
     },
     /// Local cache (fastest, but requires initial download)
-    LocalCache {
-        cache_dir: PathBuf,
-    },
+    LocalCache { cache_dir: PathBuf },
 }
 
 /// Data loading configuration
@@ -62,12 +60,14 @@ impl FastDataLoader {
     pub fn new(config: DataLoadingConfig) -> Self {
         Self { config }
     }
-    
+
     /// Prepare data for training (pre-warm, cache, etc.)
     pub async fn prepare_data(&self) -> Result<PathBuf> {
         match &self.config.strategy {
             DataLoadingStrategy::DirectS3 => {
-                warn!("Using DirectS3 strategy - this may be slow. Consider pre-warming EBS volume.");
+                warn!(
+                    "Using DirectS3 strategy - this may be slow. Consider pre-warming EBS volume."
+                );
                 // For DirectS3, return the S3 path - training script will download on-demand
                 if let Some(s3_source) = &self.config.s3_source {
                     Ok(PathBuf::from(s3_source))
@@ -77,33 +77,43 @@ impl FastDataLoader {
                     ))
                 }
             }
-            DataLoadingStrategy::PreWarmedEBS { volume_id: _, mount_point } => {
+            DataLoadingStrategy::PreWarmedEBS {
+                volume_id: _,
+                mount_point,
+            } => {
                 info!("Using pre-warmed EBS volume at: {}", mount_point.display());
                 // Verify mount point exists and is accessible
                 if !mount_point.exists() {
-                    return Err(TrainctlError::DataTransfer(
-                        format!("Mount point does not exist: {}", mount_point.display()),
-                    ));
+                    return Err(TrainctlError::DataTransfer(format!(
+                        "Mount point does not exist: {}",
+                        mount_point.display()
+                    )));
                 }
                 if !mount_point.is_dir() {
-                    return Err(TrainctlError::DataTransfer(
-                        format!("Mount point is not a directory: {}", mount_point.display()),
-                    ));
+                    return Err(TrainctlError::DataTransfer(format!(
+                        "Mount point is not a directory: {}",
+                        mount_point.display()
+                    )));
                 }
                 Ok(mount_point.clone())
             }
-            DataLoadingStrategy::ExistingEBS { volume_id: _, mount_point } => {
+            DataLoadingStrategy::ExistingEBS {
+                volume_id: _,
+                mount_point,
+            } => {
                 info!("Using existing EBS volume at: {}", mount_point.display());
                 // Verify mount point exists and is accessible
                 if !mount_point.exists() {
-                    return Err(TrainctlError::DataTransfer(
-                        format!("Mount point does not exist: {}", mount_point.display()),
-                    ));
+                    return Err(TrainctlError::DataTransfer(format!(
+                        "Mount point does not exist: {}",
+                        mount_point.display()
+                    )));
                 }
                 if !mount_point.is_dir() {
-                    return Err(TrainctlError::DataTransfer(
-                        format!("Mount point is not a directory: {}", mount_point.display()),
-                    ));
+                    return Err(TrainctlError::DataTransfer(format!(
+                        "Mount point is not a directory: {}",
+                        mount_point.display()
+                    )));
                 }
                 Ok(mount_point.clone())
             }
@@ -115,9 +125,10 @@ impl FastDataLoader {
                     let entries: Vec<_> = match std::fs::read_dir(cache_dir) {
                         Ok(dir) => dir.collect(),
                         Err(e) => {
-                            return Err(TrainctlError::DataTransfer(
-                                format!("Failed to read cache directory: {}", e),
-                            ));
+                            return Err(TrainctlError::DataTransfer(format!(
+                                "Failed to read cache directory: {}",
+                                e
+                            )));
                         }
                     };
                     if entries.is_empty() {
@@ -127,22 +138,23 @@ impl FastDataLoader {
                     Ok(cache_dir.clone())
                 } else {
                     // Create cache directory
-                    std::fs::create_dir_all(cache_dir)
-                        .map_err(|e| TrainctlError::DataTransfer(
-                            format!("Failed to create cache directory: {}", e),
-                        ))?;
+                    std::fs::create_dir_all(cache_dir).map_err(|e| {
+                        TrainctlError::DataTransfer(format!(
+                            "Failed to create cache directory: {}",
+                            e
+                        ))
+                    })?;
                     // Would download here, but for now just return the path
                     Ok(cache_dir.clone())
                 }
             }
         }
     }
-    
+
     /// Generate optimized data loading script for training
     pub fn generate_loading_script(&self, data_path: &Path) -> Result<String> {
         let script = match &self.config.strategy {
-            DataLoadingStrategy::PreWarmedEBS { .. } | 
-            DataLoadingStrategy::ExistingEBS { .. } => {
+            DataLoadingStrategy::PreWarmedEBS { .. } | DataLoadingStrategy::ExistingEBS { .. } => {
                 // EBS volumes are already fast, use standard loading
                 self.standard_loading_script(data_path)
             }
@@ -155,10 +167,10 @@ impl FastDataLoader {
                 self.standard_loading_script(data_path)
             }
         };
-        
+
         Ok(script)
     }
-    
+
     fn standard_loading_script(&self, data_path: &Path) -> String {
         format!(
             r#"
@@ -186,9 +198,12 @@ dataloader = DataLoader(
             self.config.parallel_workers
         )
     }
-    
+
     fn parallel_s3_loading_script(&self, data_path: &Path) -> String {
-        let s3_source = self.config.s3_source.as_deref()
+        let s3_source = self
+            .config
+            .s3_source
+            .as_deref()
             .unwrap_or("s3://bucket/data");
         let standard_script = self.standard_loading_script(data_path);
         format!(
@@ -220,31 +235,32 @@ subprocess.run([
             standard_script
         )
     }
-    
+
     #[allow(dead_code)]
     async fn verify_ebs_mount(&self, mount_point: &Path) -> Result<()> {
         if !mount_point.exists() {
-            return Err(TrainctlError::DataTransfer(
-                format!("EBS mount point does not exist: {}", mount_point.display()),
-            ));
+            return Err(TrainctlError::DataTransfer(format!(
+                "EBS mount point does not exist: {}",
+                mount_point.display()
+            )));
         }
-        
+
         // Check if it's actually a mount point
         use std::process::Command;
         let output = Command::new("mountpoint")
             .arg("-q")
             .arg(mount_point)
             .output();
-        
+
         if let Ok(output) = output {
             if !output.status.success() {
                 warn!("Path {} may not be a mount point", mount_point.display());
             }
         }
-        
+
         Ok(())
     }
-    
+
     #[allow(dead_code)]
     async fn download_to_temp(&self) -> Result<PathBuf> {
         // Would use data_transfer module here
@@ -252,7 +268,7 @@ subprocess.run([
         std::fs::create_dir_all(&temp_dir)?;
         Ok(temp_dir)
     }
-    
+
     #[allow(dead_code)]
     async fn download_to_cache(&self, cache_dir: &Path) -> Result<PathBuf> {
         std::fs::create_dir_all(cache_dir)?;
@@ -274,8 +290,7 @@ pub fn recommend_data_strategy(
             mount_point: PathBuf::from("/mnt/training-data"),
         };
     }
-    
+
     // If data is small or one-time, use direct S3
     DataLoadingStrategy::DirectS3
 }
-

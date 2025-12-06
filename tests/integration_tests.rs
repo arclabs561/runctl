@@ -50,22 +50,28 @@ fn test_checkpoint_operations() {
     use std::fs;
     use std::path::Path;
     use tempfile::TempDir;
-    
+
     let temp_dir = TempDir::new().unwrap();
     let checkpoint_dir = temp_dir.path().join("checkpoints");
     fs::create_dir_all(&checkpoint_dir).unwrap();
-    
+
     // Create a dummy checkpoint
     let checkpoint_file = checkpoint_dir.join("checkpoint_epoch_1.json");
     fs::write(&checkpoint_file, r#"{"epoch": 1, "loss": 0.5}"#).unwrap();
-    
+
     // Test list checkpoints
     let output = Command::new("cargo")
         .args(&["run", "--release", "--"])
-        .args(&["checkpoint", "list", checkpoint_dir.to_str().unwrap(), "--output", "json"])
+        .args(&[
+            "checkpoint",
+            "list",
+            checkpoint_dir.to_str().unwrap(),
+            "--output",
+            "json",
+        ])
         .output()
         .expect("Failed to execute checkpoint list");
-    
+
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let _json: serde_json::Value = serde_json::from_str(&stdout)
@@ -78,7 +84,7 @@ fn test_checkpoint_operations() {
 fn test_project_name_scenarios() {
     use std::env;
     use std::path::Path;
-    
+
     // Test with various directory names
     let test_cases = vec![
         ("my-project", "my-project"),
@@ -87,21 +93,31 @@ fn test_project_name_scenarios() {
         ("project with spaces", "project-with-spaces"),
         ("project/with/slashes", "project-with-slashes"),
     ];
-    
+
     for (dir_name, expected_sanitized) in test_cases {
         let sanitized: String = dir_name
             .chars()
-            .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
-                c
-            } else {
-                '-'
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                    c
+                } else {
+                    '-'
+                }
             })
             .collect();
-        
+
         // Remove consecutive dashes
-        let sanitized = sanitized.split('-').filter(|s| !s.is_empty()).collect::<Vec<_>>().join("-");
-        
-        assert_eq!(sanitized, expected_sanitized, "Failed to sanitize: {}", dir_name);
+        let sanitized = sanitized
+            .split('-')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("-");
+
+        assert_eq!(
+            sanitized, expected_sanitized,
+            "Failed to sanitize: {}",
+            dir_name
+        );
     }
 }
 
@@ -113,14 +129,14 @@ fn test_json_output_consistency() {
     // - success: bool
     // - data: {...}
     // - message: string (optional)
-    
+
     let commands = vec![
         vec!["aws", "create", "--instance-type", "t3.micro", "--dry-run"],
         vec!["aws", "ebs", "list"],
         vec!["resources", "list"],
         vec!["config", "show"],
     ];
-    
+
     for cmd in commands {
         let output = Command::new("cargo")
             .args(&["run", "--release", "--"])
@@ -128,12 +144,12 @@ fn test_json_output_consistency() {
             .args(&["--output", "json"])
             .output()
             .expect(&format!("Failed to execute: {:?}", cmd));
-        
+
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let json: serde_json::Value = serde_json::from_str(&stdout)
                 .expect(&format!("Invalid JSON from {:?}: {}", cmd, stdout));
-            
+
             // Check for common fields
             assert!(json.is_object(), "JSON should be an object");
         }
@@ -144,7 +160,7 @@ fn test_json_output_consistency() {
 #[test]
 fn test_validation_across_commands() {
     use trainctl::validation::*;
-    
+
     // Test that validation catches invalid inputs before AWS API calls
     let invalid_cases = vec![
         ("instance_id", "invalid", validate_instance_id),
@@ -154,10 +170,14 @@ fn test_validation_across_commands() {
         ("project_name", "", validate_project_name),
         ("path", "../invalid", validate_path),
     ];
-    
+
     for (field, value, validator) in invalid_cases {
         let result = validator(value);
-        assert!(result.is_err(), "Should reject invalid {}: {}", field, value);
+        assert!(
+            result.is_err(),
+            "Should reject invalid {}: {}",
+            field,
+            value
+        );
     }
 }
-

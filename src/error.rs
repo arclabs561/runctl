@@ -3,15 +3,15 @@
 //! This module provides structured error handling with retry awareness
 //! and clear error categorization.
 
-use thiserror::Error;
 use crate::provider::ResourceId;
+use thiserror::Error;
 
 /// Main error type for trainctl
 #[derive(Error, Debug)]
 pub enum TrainctlError {
     #[error("Configuration error: {0}")]
     Config(#[from] ConfigError),
-    
+
     #[error("Cloud provider error: {provider} - {message}")]
     CloudProvider {
         provider: String,
@@ -19,7 +19,7 @@ pub enum TrainctlError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
-    
+
     #[error("Resource error: {resource_type} - {operation} failed")]
     Resource {
         resource_type: String,
@@ -29,19 +29,19 @@ pub enum TrainctlError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
-    
+
     #[error("Resource already exists: {resource_type} - {resource_id}")]
     ResourceExists {
         resource_type: String,
         resource_id: ResourceId,
     },
-    
+
     #[error("Resource not found: {resource_type} - {resource_id}")]
     ResourceNotFound {
         resource_type: String,
         resource_id: ResourceId,
     },
-    
+
     #[error("Retryable error (attempt {attempt}/{max_attempts}): {reason}")]
     Retryable {
         attempt: u32,
@@ -50,31 +50,31 @@ pub enum TrainctlError {
         #[source]
         source: Option<Box<dyn std::error::Error + Send + Sync>>,
     },
-    
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("AWS SDK error: {0}")]
     Aws(String),
-    
+
     #[error("S3 error: {0}")]
     S3(String),
-    
+
     #[error("SSM error: {0}")]
     Ssm(String),
-    
+
     #[error("Validation error: {field} - {reason}")]
     Validation { field: String, reason: String },
-    
+
     #[error("Cost tracking error: {0}")]
     CostTracking(String),
-    
+
     #[error("Cleanup error: {0}")]
     Cleanup(String),
-    
+
     #[error("Data transfer error: {0}")]
     DataTransfer(String),
-    
+
     #[error("JSON serialization error: {0}")]
     Json(#[from] serde_json::Error),
 }
@@ -84,16 +84,16 @@ pub enum TrainctlError {
 pub enum ConfigError {
     #[error("Invalid cloud provider: {0}")]
     InvalidProvider(String),
-    
+
     #[error("Missing required field: {0}")]
     MissingField(String),
-    
+
     #[error("Invalid value for {field}: {reason}")]
     InvalidValue { field: String, reason: String },
-    
+
     #[error("Config file not found: {0}")]
     NotFound(String),
-    
+
     #[error("Failed to parse config: {0}")]
     ParseError(String),
 }
@@ -102,7 +102,7 @@ pub enum ConfigError {
 pub type Result<T> = std::result::Result<T, TrainctlError>;
 
 /// Trait for determining if an error is retryable
-/// 
+///
 /// Reserved for future retry logic integration with custom error types.
 #[allow(dead_code)]
 pub trait IsRetryable {
@@ -122,4 +122,3 @@ impl IsRetryable for TrainctlError {
 
 // Helper to convert AWS SDK errors
 // Note: AWS SDK v1 errors are complex, so we handle them manually in code
-

@@ -32,4 +32,3 @@ async fn test_persistent_volume_protection() {
     // This would require actual AWS API calls
     assert!(true);
 }
-

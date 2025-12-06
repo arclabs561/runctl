@@ -10,11 +10,11 @@
 //!
 //! Cost: ~$0.20-1.00 per test run (creates instances/volumes)
 
+use aws_config::BehaviorVersion;
+use aws_sdk_ec2::Client as Ec2Client;
 use std::env;
 use std::time::Duration;
 use tokio::time::sleep;
-use aws_config::BehaviorVersion;
-use aws_sdk_ec2::Client as Ec2Client;
 use tracing::info;
 
 fn should_run_e2e() -> bool {
@@ -31,24 +31,30 @@ macro_rules! require_e2e {
 }
 
 fn test_tag() -> String {
-    format!("trainctl-test-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap())
+    format!(
+        "trainctl-test-{}",
+        uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
+    )
 }
 
 #[tokio::test]
 #[ignore]
 async fn test_volume_attachment_az_validation() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az1 = format!("{}-1a", region);
     let az2 = format!("{}-1b", region);
-    
-    info!("Testing AZ validation: volume in {}, instance in {}", az1, az2);
-    
+
+    info!(
+        "Testing AZ validation: volume in {}, instance in {}",
+        az1, az2
+    );
+
     // Create volume in AZ-1a
     let vol_response = client
         .create_volume()
@@ -62,19 +68,19 @@ async fn test_volume_attachment_az_validation() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = vol_response.volume_id().expect("No volume ID").to_string();
     info!("Created volume {} in {}", volume_id, az1);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Try to attach to instance in different AZ (would fail in real scenario)
     // For this test, we just verify the volume is in the correct AZ
     let describe = client
@@ -83,16 +89,16 @@ async fn test_volume_attachment_az_validation() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     let volume = describe.volumes().first().expect("Volume not found");
     let volume_az = volume.availability_zone().expect("No AZ");
     assert_eq!(volume_az, az1, "Volume should be in {}", az1);
-    
+
     // In a full test, you'd:
     // 1. Create instance in az2
     // 2. Try to attach volume from az1
     // 3. Verify attachment fails with AZ mismatch error
-    
+
     // Cleanup
     client
         .delete_volume()
@@ -107,14 +113,14 @@ async fn test_volume_attachment_az_validation() {
 #[ignore]
 async fn test_volume_deletion_with_snapshots() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create volume
     let vol_response = client
         .create_volume()
@@ -128,19 +134,19 @@ async fn test_volume_deletion_with_snapshots() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = vol_response.volume_id().expect("No volume ID").to_string();
     info!("Created volume: {}", volume_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Create snapshot
     let snap_response = client
         .create_snapshot()
@@ -153,19 +159,22 @@ async fn test_volume_deletion_with_snapshots() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create snapshot");
-    
-    let snapshot_id = snap_response.snapshot_id().expect("No snapshot ID").to_string();
+
+    let snapshot_id = snap_response
+        .snapshot_id()
+        .expect("No snapshot ID")
+        .to_string();
     info!("Created snapshot: {}", snapshot_id);
-    
+
     sleep(Duration::from_secs(10)).await; // Wait for snapshot to complete
-    
+
     // Verify snapshot exists
     let snap_describe = client
         .describe_snapshots()
@@ -173,11 +182,17 @@ async fn test_volume_deletion_with_snapshots() {
         .send()
         .await
         .expect("Failed to describe snapshot");
-    
-    let snapshot = snap_describe.snapshots().first().expect("Snapshot not found");
+
+    let snapshot = snap_describe
+        .snapshots()
+        .first()
+        .expect("Snapshot not found");
     let snap_volume_id = snapshot.volume_id().expect("No volume ID in snapshot");
-    assert_eq!(snap_volume_id, volume_id, "Snapshot should reference volume");
-    
+    assert_eq!(
+        snap_volume_id, volume_id,
+        "Snapshot should reference volume"
+    );
+
     // Verify we can list snapshots for this volume
     let volume_snapshots = client
         .describe_snapshots()
@@ -185,17 +200,20 @@ async fn test_volume_deletion_with_snapshots() {
             aws_sdk_ec2::types::Filter::builder()
                 .name("volume-id")
                 .values(&volume_id)
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to list snapshots");
-    
-    assert!(!volume_snapshots.snapshots().is_empty(), "Should have snapshots for volume");
-    
+
+    assert!(
+        !volume_snapshots.snapshots().is_empty(),
+        "Should have snapshots for volume"
+    );
+
     // In a full test, trainctl would warn before deleting volume with snapshots
     // For now, we just verify the snapshot exists
-    
+
     // Cleanup: Delete snapshot first, then volume
     client
         .delete_snapshot()
@@ -204,9 +222,9 @@ async fn test_volume_deletion_with_snapshots() {
         .await
         .expect("Failed to delete snapshot");
     info!("Deleted snapshot: {}", snapshot_id);
-    
+
     sleep(Duration::from_secs(2)).await;
-    
+
     client
         .delete_volume()
         .volume_id(&volume_id)
@@ -220,14 +238,14 @@ async fn test_volume_deletion_with_snapshots() {
 #[ignore]
 async fn test_attached_volume_deletion_protection() {
     require_e2e!();
-    
+
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let test_tag = test_tag();
-    
+
     let region = aws_config.region().unwrap().as_ref();
     let az = format!("{}-1a", region);
-    
+
     // Create volume
     let vol_response = client
         .create_volume()
@@ -241,19 +259,19 @@ async fn test_attached_volume_deletion_protection() {
                     aws_sdk_ec2::types::Tag::builder()
                         .key("trainctl:test")
                         .value(&test_tag)
-                        .build()
+                        .build(),
                 )
-                .build()
+                .build(),
         )
         .send()
         .await
         .expect("Failed to create volume");
-    
+
     let volume_id = vol_response.volume_id().expect("No volume ID").to_string();
     info!("Created volume: {}", volume_id);
-    
+
     sleep(Duration::from_secs(5)).await;
-    
+
     // Verify volume is available (not attached)
     let describe = client
         .describe_volumes()
@@ -261,18 +279,18 @@ async fn test_attached_volume_deletion_protection() {
         .send()
         .await
         .expect("Failed to describe volume");
-    
+
     let volume = describe.volumes().first().expect("Volume not found");
     let attachments = volume.attachments();
     assert!(attachments.is_empty(), "Volume should not be attached");
-    
+
     // In a full test, you'd:
     // 1. Create instance
     // 2. Attach volume
     // 3. Try to delete volume (should fail with "volume is attached" error)
     // 4. Detach volume
     // 5. Delete volume (should succeed)
-    
+
     // Cleanup
     client
         .delete_volume()

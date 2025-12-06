@@ -4,12 +4,12 @@
 //! to enable cost awareness and safe cleanup.
 
 use crate::error::{Result, TrainctlError};
-use crate::provider::{ResourceId, ResourceStatus, ResourceState};
-use serde::{Serialize, Deserialize};
+use crate::provider::{ResourceId, ResourceState, ResourceStatus};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use chrono::{DateTime, Utc};
 
 /// Resource usage metrics
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,18 +43,18 @@ impl ResourceTracker {
             resources: Arc::new(Mutex::new(HashMap::new())),
         }
     }
-    
+
     /// Register a new resource
     pub async fn register(&self, status: ResourceStatus) -> Result<()> {
         let mut resources = self.resources.lock().await;
-        
+
         if resources.contains_key(&status.id) {
             return Err(TrainctlError::ResourceExists {
                 resource_type: "resource".to_string(),
                 resource_id: status.id.clone(),
             });
         }
-        
+
         resources.insert(
             status.id.clone(),
             TrackedResource {
@@ -65,50 +65,53 @@ impl ResourceTracker {
                 tags: HashMap::new(),
             },
         );
-        
+
         Ok(())
     }
-    
+
     /// Update resource status and usage
-    pub async fn update_usage(
-        &self,
-        resource_id: &ResourceId,
-        usage: ResourceUsage,
-    ) -> Result<()> {
+    pub async fn update_usage(&self, resource_id: &ResourceId, usage: ResourceUsage) -> Result<()> {
         let mut resources = self.resources.lock().await;
-        
-        let resource = resources.get_mut(resource_id)
-            .ok_or_else(|| TrainctlError::ResourceNotFound {
-                resource_type: "resource".to_string(),
-                resource_id: resource_id.clone(),
-            })?;
-        
+
+        let resource =
+            resources
+                .get_mut(resource_id)
+                .ok_or_else(|| TrainctlError::ResourceNotFound {
+                    resource_type: "resource".to_string(),
+                    resource_id: resource_id.clone(),
+                })?;
+
         resource.usage_history.push(usage);
-        
+
         // Keep only last 1000 usage records
         if resource.usage_history.len() > 1000 {
             resource.usage_history.remove(0);
         }
-        
+
         Ok(())
     }
-    
+
     /// Get all running resources
     pub async fn get_running(&self) -> Vec<TrackedResource> {
         let resources = self.resources.lock().await;
         resources
             .values()
-            .filter(|r| matches!(r.status.state, ResourceState::Running | ResourceState::Starting))
+            .filter(|r| {
+                matches!(
+                    r.status.state,
+                    ResourceState::Running | ResourceState::Starting
+                )
+            })
             .cloned()
             .collect()
     }
-    
+
     /// Get total cost of all resources
     pub async fn get_total_cost(&self) -> f64 {
         let resources = self.resources.lock().await;
         resources.values().map(|r| r.accumulated_cost).sum()
     }
-    
+
     /// Get resources by tag
     pub async fn get_by_tag(&self, key: &str, value: &str) -> Vec<TrackedResource> {
         let resources = self.resources.lock().await;
@@ -118,23 +121,24 @@ impl ResourceTracker {
             .cloned()
             .collect()
     }
-    
+
     /// Get resource by ID
     pub async fn get_by_id(&self, resource_id: &ResourceId) -> Option<TrackedResource> {
         let resources = self.resources.lock().await;
         resources.get(resource_id).cloned()
     }
-    
+
     /// Check if resource exists
     pub async fn exists(&self, resource_id: &ResourceId) -> bool {
         let resources = self.resources.lock().await;
         resources.contains_key(resource_id)
     }
-    
+
     /// Remove resource (after cleanup)
     pub async fn remove(&self, resource_id: &ResourceId) -> Result<()> {
         let mut resources = self.resources.lock().await;
-        resources.remove(resource_id)
+        resources
+            .remove(resource_id)
             .ok_or_else(|| TrainctlError::ResourceNotFound {
                 resource_type: "resource".to_string(),
                 resource_id: resource_id.clone(),
@@ -148,4 +152,3 @@ impl Default for ResourceTracker {
         Self::new()
     }
 }
-

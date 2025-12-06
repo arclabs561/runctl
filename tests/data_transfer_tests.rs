@@ -2,8 +2,8 @@
 //!
 //! Tests verify path parsing, location detection, and transfer logic.
 
-use trainctl::data_transfer::{DataLocation, TransferOptions};
 use std::path::PathBuf;
+use trainctl::data_transfer::{DataLocation, TransferOptions};
 
 #[test]
 fn test_data_location_s3() {
@@ -31,7 +31,7 @@ fn test_data_location_local() {
 fn test_data_location_training_instance() {
     let loc = DataLocation::TrainingInstance(
         "i-1234567890abcdef0".to_string(),
-        PathBuf::from("/data/training")
+        PathBuf::from("/data/training"),
     );
     match loc {
         DataLocation::TrainingInstance(instance_id, remote_path) => {
@@ -61,7 +61,7 @@ fn test_transfer_options_custom() {
         resume: false,
         exclude: vec!["*.log".to_string()],
     };
-    
+
     assert_eq!(options.parallel, Some(8));
     assert!(options.compression);
     assert!(!options.verify);
@@ -74,13 +74,13 @@ fn test_s3_path_parsing() {
     // Test S3 path parsing logic
     let s3_path = "s3://my-bucket/path/to/file.txt";
     assert!(s3_path.starts_with("s3://"));
-    
+
     let path_part = &s3_path[5..]; // Skip "s3://"
     let parts: Vec<&str> = path_part.splitn(2, '/').collect();
     assert_eq!(parts.len(), 2);
     assert_eq!(parts[0], "my-bucket");
     assert_eq!(parts[1], "path/to/file.txt");
-    
+
     // Test root key
     let root_path = "s3://bucket/";
     let root_part = &root_path[5..];
@@ -94,14 +94,10 @@ fn test_data_location_display() {
     let s3_loc = DataLocation::S3("s3://bucket/key".to_string());
     // Just verify it can be created
     let _ = s3_loc;
-    
+
     let local_loc = DataLocation::Local(PathBuf::from("/tmp/data"));
     let _ = local_loc;
-    
-    let instance_loc = DataLocation::TrainingInstance(
-        "i-123".to_string(),
-        PathBuf::from("/data")
-    );
+
+    let instance_loc = DataLocation::TrainingInstance("i-123".to_string(), PathBuf::from("/data"));
     let _ = instance_loc;
 }
-

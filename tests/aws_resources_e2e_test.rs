@@ -1,13 +1,13 @@
 //! End-to-end tests for AWS resource management
-//! 
+//!
 //! These tests require AWS credentials and will interact with real AWS resources.
 //! Run with: TRAINCTL_E2E=1 cargo test --test aws_resources_test --features e2e
 //!
 //! Safety: Tests use dry-run mode and cleanup after themselves.
 
-use std::env;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
+use std::env;
 use tracing::info;
 
 /// Check if E2E tests should run (require explicit opt-in)
@@ -39,7 +39,8 @@ async fn test_list_aws_instances() {
     for reservation in response.reservations() {
         for instance in reservation.instances() {
             total_instances += 1;
-            let state = instance.state()
+            let state = instance
+                .state()
                 .and_then(|s| s.name())
                 .map(|s| s.as_str())
                 .unwrap_or("unknown");
@@ -47,16 +48,23 @@ async fn test_list_aws_instances() {
             if state == "running" {
                 running_count += 1;
                 let instance_id = instance.instance_id().unwrap_or("unknown");
-                let instance_type = instance.instance_type()
+                let instance_type = instance
+                    .instance_type()
                     .map(|t| format!("{}", t))
                     .unwrap_or_else(|| "unknown".to_string());
-                info!("Found running instance: {} ({})", instance_id, instance_type);
+                info!(
+                    "Found running instance: {} ({})",
+                    instance_id, instance_type
+                );
             }
         }
     }
 
-    info!("Total instances: {}, Running: {}", total_instances, running_count);
-    
+    info!(
+        "Total instances: {}, Running: {}",
+        total_instances, running_count
+    );
+
     // Test passes if we can list instances (even if none are running)
     assert!(total_instances >= 0);
 }
@@ -82,17 +90,19 @@ async fn test_resource_summary() {
 
     for reservation in response.reservations() {
         for instance in reservation.instances() {
-            let state = instance.state()
+            let state = instance
+                .state()
                 .and_then(|s| s.name())
                 .map(|s| s.as_str())
                 .unwrap_or("unknown");
 
             if state == "running" {
                 let instance_id = instance.instance_id().unwrap_or("unknown").to_string();
-                let instance_type = instance.instance_type()
+                let instance_type = instance
+                    .instance_type()
                     .map(|t| format!("{}", t))
                     .unwrap_or_else(|| "unknown".to_string());
-                
+
                 // Rough cost estimate
                 let cost = match instance_type.as_str() {
                     "t3.micro" => 0.0104,
@@ -113,7 +123,7 @@ async fn test_resource_summary() {
     info!("Resource summary:");
     info!("  Running instances: {}", running_instances.len());
     info!("  Estimated hourly cost: ${:.2}", total_cost);
-    
+
     for (id, instance_type, cost) in &running_instances {
         info!("    {} ({}) - ${}/hour", id, instance_type, cost);
     }
@@ -134,10 +144,12 @@ async fn test_zombie_detection() {
 
     let response = client
         .describe_instances()
-        .filters(aws_sdk_ec2::types::Filter::builder()
-            .name("instance-state-name")
-            .values("running")
-            .build())
+        .filters(
+            aws_sdk_ec2::types::Filter::builder()
+                .name("instance-state-name")
+                .values("running")
+                .build(),
+        )
         .send()
         .await
         .expect("Failed to describe instances");
@@ -149,14 +161,17 @@ async fn test_zombie_detection() {
         for instance in reservation.instances() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
             let tags = instance.tags();
-            
+
             // Check if instance has trainctl tags
             let has_trainctl_tag = tags.iter().any(|tag| {
-                tag.key().map(|k| k.starts_with("trainctl:")).unwrap_or(false)
+                tag.key()
+                    .map(|k| k.starts_with("trainctl:"))
+                    .unwrap_or(false)
             });
-            
+
             // Check if instance is old (>24 hours)
-            let is_old = instance.launch_time()
+            let is_old = instance
+                .launch_time()
                 .map(|lt| {
                     let launch = chrono::DateTime::<chrono::Utc>::from_timestamp(lt.secs(), 0)
                         .unwrap_or_default();
@@ -173,7 +188,10 @@ async fn test_zombie_detection() {
     }
 
     if !zombies.is_empty() {
-        eprintln!("⚠️  WARNING: Found {} potential zombie instances", zombies.len());
+        eprintln!(
+            "⚠️  WARNING: Found {} potential zombie instances",
+            zombies.len()
+        );
         eprintln!("   Review these: {:?}", zombies);
     } else {
         info!("✅ No zombie instances detected");
@@ -196,10 +214,12 @@ async fn test_cleanup_dry_run() {
 
     let response = client
         .describe_instances()
-        .filters(aws_sdk_ec2::types::Filter::builder()
-            .name("instance-state-name")
-            .values("running")
-            .build())
+        .filters(
+            aws_sdk_ec2::types::Filter::builder()
+                .name("instance-state-name")
+                .values("running")
+                .build(),
+        )
         .send()
         .await
         .expect("Failed to describe instances");
@@ -210,11 +230,13 @@ async fn test_cleanup_dry_run() {
         for instance in reservation.instances() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
             let tags = instance.tags();
-            
+
             // Check if protected
             let is_protected = tags.iter().any(|tag| {
-                tag.key().map(|k| k == "trainctl:protected" || k == "trainctl:important").unwrap_or(false) &&
-                tag.value().map(|v| v == "true").unwrap_or(false)
+                tag.key()
+                    .map(|k| k == "trainctl:protected" || k == "trainctl:important")
+                    .unwrap_or(false)
+                    && tag.value().map(|v| v == "true").unwrap_or(false)
             });
 
             if !is_protected {
@@ -223,7 +245,10 @@ async fn test_cleanup_dry_run() {
         }
     }
 
-    info!("Dry-run cleanup would affect {} instances", candidates.len());
+    info!(
+        "Dry-run cleanup would affect {} instances",
+        candidates.len()
+    );
     for candidate in &candidates {
         info!("  Would cleanup: {}", candidate);
     }
@@ -231,4 +256,3 @@ async fn test_cleanup_dry_run() {
     // Test passes - dry-run doesn't actually delete
     assert!(true);
 }
-

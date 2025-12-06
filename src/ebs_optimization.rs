@@ -37,16 +37,16 @@ pub struct OptimizedVolumeConfig {
 /// For general: 100 IOPS/GB (up to max)
 pub fn calculate_optimal_iops(size_gb: i32, use_case: VolumeUseCase) -> i32 {
     let iops_per_gb = match use_case {
-        VolumeUseCase::DataLoading => 500,  // Maximum performance for data loading
-        VolumeUseCase::Checkpoints => 300,   // High IOPS for frequent writes
+        VolumeUseCase::DataLoading => 500, // Maximum performance for data loading
+        VolumeUseCase::Checkpoints => 300, // High IOPS for frequent writes
         VolumeUseCase::GeneralPurpose => 100, // Moderate performance
-        VolumeUseCase::Archive => 0,         // Use baseline only
+        VolumeUseCase::Archive => 0,       // Use baseline only
     };
-    
+
     if iops_per_gb == 0 {
         return 3000; // Baseline only
     }
-    
+
     // gp3: up to 500 IOPS per GB, max 80,000 IOPS
     // Minimum volume size for max IOPS: 160 GB
     let calculated = 3000 + (size_gb * iops_per_gb);
@@ -73,12 +73,12 @@ pub fn optimize_volume_config(
     volume_type: Option<&str>,
 ) -> Result<OptimizedVolumeConfig> {
     let vol_type = volume_type.unwrap_or("gp3").to_string();
-    
+
     match vol_type.as_str() {
         "gp3" => {
             let iops = calculate_optimal_iops(size_gb, use_case);
             let throughput = calculate_optimal_throughput(iops);
-            
+
             let recommendation = match use_case {
                 VolumeUseCase::DataLoading => format!(
                     "Data loading optimized: {} IOPS, {} MiB/s throughput for {} GB volume. \
@@ -100,7 +100,7 @@ pub fn optimize_volume_config(
                     Cost-optimized for infrequent access.",
                 ),
             };
-            
+
             Ok(OptimizedVolumeConfig {
                 volume_type: vol_type,
                 iops: Some(iops),
@@ -113,7 +113,7 @@ pub fn optimize_volume_config(
             // No optimization needed - performance tied to size
             Ok(OptimizedVolumeConfig {
                 volume_type: vol_type,
-                iops: None, // gp2 doesn't support IOPS provisioning
+                iops: None,       // gp2 doesn't support IOPS provisioning
                 throughput: None, // gp2 doesn't support throughput provisioning
                 recommendation: format!(
                     "gp2 volume: {} IOPS (3 IOPS/GB), 250 MiB/s throughput. \
@@ -131,7 +131,7 @@ pub fn optimize_volume_config(
                 }
                 _ => 3000, // Baseline
             };
-            
+
             Ok(OptimizedVolumeConfig {
                 volume_type: vol_type,
                 iops: Some(iops),
@@ -163,15 +163,16 @@ pub fn optimize_volume_config(
                 volume_type: vol_type,
                 iops: None,
                 throughput: None,
-                recommendation: format!(
-                    "sc1 volume: 250 MiB/s throughput. Lowest cost option. \
-                    Best for archival storage. Minimum size: 125 GB.",
-                ),
+                  recommendation: "sc1 volume: 250 MiB/s throughput. Lowest cost option. \
+                    Best for archival storage. Minimum size: 125 GB.".to_string(),
             })
         }
         _ => Err(TrainctlError::Validation {
             field: "volume_type".to_string(),
-            reason: format!("Unsupported volume type: {}. Use: gp3, gp2, io2, st1, sc1", vol_type),
+            reason: format!(
+                "Unsupported volume type: {}. Use: gp3, gp2, io2, st1, sc1",
+                vol_type
+            ),
         }),
     }
 }
@@ -243,6 +244,6 @@ Recommendations:
   • Checkpoints: gp3 or io2 (if multi-attach needed)
   • General purpose: gp3 (default)
   • Archive: sc1 or gp3 (if random access needed)
-"#.to_string()
+"#
+    .to_string()
 }
-

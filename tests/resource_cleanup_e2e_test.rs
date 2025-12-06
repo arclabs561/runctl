@@ -3,9 +3,9 @@
 //! Tests that resources are properly cleaned up after E2E tests.
 //! Run with: TRAINCTL_E2E=1 cargo test --test resource_cleanup_test --features e2e
 
-use std::env;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
+use std::env;
 use tracing::info;
 
 /// Check if E2E tests should run
@@ -27,10 +27,12 @@ async fn test_cleanup_orphaned_resources() {
     // List all running instances
     let response = client
         .describe_instances()
-        .filters(aws_sdk_ec2::types::Filter::builder()
-            .name("instance-state-name")
-            .values("running")
-            .build())
+        .filters(
+            aws_sdk_ec2::types::Filter::builder()
+                .name("instance-state-name")
+                .values("running")
+                .build(),
+        )
         .send()
         .await
         .expect("Failed to describe instances");
@@ -42,14 +44,17 @@ async fn test_cleanup_orphaned_resources() {
         for instance in reservation.instances() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
             let tags = instance.tags();
-            
+
             // Check if instance has trainctl test tags
             let is_test_instance = tags.iter().any(|tag| {
-                tag.key().map(|k| k.starts_with("trainctl:test")).unwrap_or(false)
+                tag.key()
+                    .map(|k| k.starts_with("trainctl:test"))
+                    .unwrap_or(false)
             });
-            
+
             // Check if instance is old (>24 hours) and untagged
-            let is_old = instance.launch_time()
+            let is_old = instance
+                .launch_time()
                 .map(|lt| {
                     let launch = chrono::DateTime::<chrono::Utc>::from_timestamp(lt.secs(), 0)
                         .unwrap_or_default();
@@ -67,7 +72,10 @@ async fn test_cleanup_orphaned_resources() {
     }
 
     if orphaned_count > 0 {
-        eprintln!("⚠️  WARNING: Found {} potential orphaned test instances", orphaned_count);
+        eprintln!(
+            "⚠️  WARNING: Found {} potential orphaned test instances",
+            orphaned_count
+        );
         eprintln!("   Instance IDs: {:?}", test_instances);
         eprintln!("   Review these manually before deleting!");
         eprintln!("   Use: trainctl resources cleanup --dry-run");
@@ -102,7 +110,8 @@ async fn test_list_all_resources() {
 
     for reservation in response.reservations() {
         for instance in reservation.instances() {
-            let state = instance.state()
+            let state = instance
+                .state()
                 .and_then(|s| s.name())
                 .map(|s| s.as_str())
                 .unwrap_or("unknown");
@@ -124,4 +133,3 @@ async fn test_list_all_resources() {
     // This test just reports, doesn't fail
     assert!(true);
 }
-

@@ -3,9 +3,9 @@
 //! These tests use proptest's state machine testing to verify complex
 //! state transitions and invariants in resource management.
 
+use chrono::Utc;
 use proptest::prelude::*;
 use proptest::test_runner::Config as ProptestConfig;
-use chrono::Utc;
 
 /// Resource state machine for testing
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,7 +44,7 @@ impl ResourceLifecycle {
             stop_count: 0,
         }
     }
-    
+
     fn apply(&mut self, action: ResourceAction) -> Result<(), String> {
         match (&self.state, action) {
             (ResourceState::None, ResourceAction::Create) => {
@@ -78,25 +78,25 @@ impl ResourceLifecycle {
             }
         }
     }
-    
+
     fn invariants(&self) -> Vec<String> {
         let mut violations = Vec::new();
-        
+
         // Invariant 1: If terminated, must have been created
         if self.state == ResourceState::Terminated && !self.created {
             violations.push("Terminated resource must have been created".to_string());
         }
-        
+
         // Invariant 2: Start count should be >= stop count (can't stop more than started)
         if self.stop_count > self.start_count {
             violations.push("Stop count cannot exceed start count".to_string());
         }
-        
+
         // Invariant 3: If running or stopped, must have been created
         if matches!(self.state, ResourceState::Running | ResourceState::Stopped) && !self.created {
             violations.push("Running/stopped resource must have been created".to_string());
         }
-        
+
         violations
     }
 }
@@ -113,69 +113,69 @@ fn resource_action_strategy() -> impl Strategy<Value = ResourceAction> {
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
-    
+
     #[test]
     fn test_resource_lifecycle_invariants(
         actions in prop::collection::vec(resource_action_strategy(), 1..50)
     ) {
         let mut lifecycle = ResourceLifecycle::new();
-        
+
         // Apply all actions
         for action in actions {
             let _ = lifecycle.apply(action);
         }
-        
+
         // Check invariants
         let violations = lifecycle.invariants();
         assert!(violations.is_empty(), "Invariant violations: {:?}", violations);
     }
-    
+
     #[test]
     fn test_resource_state_transitions_terminated_implies_created(
         actions in prop::collection::vec(resource_action_strategy(), 1..50)
     ) {
         let mut lifecycle = ResourceLifecycle::new();
         let actions_clone = actions.clone();
-        
+
         for action in actions_clone {
             let _ = lifecycle.apply(action);
         }
-        
+
         // Property: If terminated, must have been created
         if lifecycle.state == ResourceState::Terminated {
-            assert!(lifecycle.created, 
+            assert!(lifecycle.created,
                 "Terminated resource must have been created. Actions: {:?}", actions);
         }
     }
-    
+
     #[test]
     fn test_resource_state_transitions_start_stop_balance(
         actions in prop::collection::vec(resource_action_strategy(), 1..50)
     ) {
         let mut lifecycle = ResourceLifecycle::new();
         let actions_clone = actions.clone();
-        
+
         for action in actions_clone {
             let _ = lifecycle.apply(action);
         }
-        
+
         // Property: Start count should be >= stop count
         assert!(lifecycle.start_count >= lifecycle.stop_count,
             "Start count {} should be >= stop count {}. Actions: {:?}",
             lifecycle.start_count, lifecycle.stop_count, actions);
     }
-    
+
     #[test]
     fn test_resource_state_transitions_running_implies_created(
         actions in prop::collection::vec(resource_action_strategy(), 1..50)
     ) {
         let mut lifecycle = ResourceLifecycle::new();
         let actions_clone = actions.clone();
-        
+
         for action in actions_clone {
             let _ = lifecycle.apply(action);
         }
-        
+
         // Property: If running or stopped, must have been created
         if matches!(lifecycle.state, ResourceState::Running | ResourceState::Stopped) {
             assert!(lifecycle.created,
@@ -221,7 +221,7 @@ impl VolumeLifecycle {
             persistent: false,
         }
     }
-    
+
     fn apply(&mut self, action: VolumeAction) -> Result<(), String> {
         match (&self.state, action) {
             (VolumeState::None, VolumeAction::Create { persistent }) => {
@@ -261,32 +261,33 @@ impl VolumeLifecycle {
             _ => Err(format!("Invalid transition from {:?}", self.state)),
         }
     }
-    
+
     fn invariants(&self) -> Vec<String> {
         let mut violations = Vec::new();
-        
+
         // Invariant 1: If in use, must be attached
         if self.state == VolumeState::InUse && !self.attached {
             violations.push("In-use volume must be attached".to_string());
         }
-        
+
         // Invariant 2: If attached, must have instance_id
         if self.attached && self.instance_id.is_none() {
             violations.push("Attached volume must have instance_id".to_string());
         }
-        
+
         // Invariant 3: If deleted, must have been created
         if self.state == VolumeState::Deleted && !self.created {
             violations.push("Deleted volume must have been created".to_string());
         }
-        
+
         violations
     }
 }
 
 fn volume_action_strategy() -> impl Strategy<Value = VolumeAction> {
     prop_oneof![
-        prop_oneof![Just(false), Just(true)].prop_map(|persistent| VolumeAction::Create { persistent }),
+        prop_oneof![Just(false), Just(true)]
+            .prop_map(|persistent| VolumeAction::Create { persistent }),
         (r"[a-z0-9-]+").prop_map(|id| VolumeAction::Attach { instance_id: id }),
         Just(VolumeAction::Detach),
         prop_oneof![Just(false), Just(true)].prop_map(|force| VolumeAction::Delete { force }),
@@ -295,39 +296,39 @@ fn volume_action_strategy() -> impl Strategy<Value = VolumeAction> {
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(1000))]
-    
+
     #[test]
     fn test_volume_lifecycle_invariants(
         actions in prop::collection::vec(volume_action_strategy(), 1..30)
     ) {
         let mut lifecycle = VolumeLifecycle::new();
-        
+
         for action in actions {
             let _ = lifecycle.apply(action);
         }
-        
+
         let violations = lifecycle.invariants();
         assert!(violations.is_empty(), "Invariant violations: {:?}", violations);
     }
-    
+
     #[test]
     fn test_volume_persistent_protection(
         actions in prop::collection::vec(volume_action_strategy(), 1..30)
     ) {
         let mut lifecycle = VolumeLifecycle::new();
-        
+
         // First action must be Create
         if let Some(VolumeAction::Create { persistent }) = actions.first() {
             let _ = lifecycle.apply(VolumeAction::Create { persistent: *persistent });
-            
+
             // Apply remaining actions
             for action in actions.iter().skip(1) {
                 let result = lifecycle.apply(action.clone());
-                
+
                 // If trying to delete persistent without force, should fail
                 if let VolumeAction::Delete { force: false } = action {
                     if lifecycle.persistent && lifecycle.state == VolumeState::Available {
-                        assert!(result.is_err(), 
+                        assert!(result.is_err(),
                             "Should not be able to delete persistent volume without force");
                     }
                 }
@@ -358,16 +359,19 @@ impl CostTracker {
             total_accumulated: 0.0,
         }
     }
-    
+
     fn add_resource(&mut self, hourly: f64, launch_time: Option<chrono::DateTime<chrono::Utc>>) {
-        self.resources.push(ResourceCost { hourly, launch_time });
+        self.resources.push(ResourceCost {
+            hourly,
+            launch_time,
+        });
         self.total_hourly += hourly;
         if let Some(lt) = launch_time {
             let hours = (Utc::now() - lt).num_hours();
             self.total_accumulated += hourly * hours.max(0) as f64;
         }
     }
-    
+
     fn remove_resource(&mut self, index: usize) {
         if index < self.resources.len() {
             let resource = self.resources.remove(index);
@@ -379,7 +383,9 @@ impl CostTracker {
                 self.total_hourly = self.resources.iter().map(|r| r.hourly).sum();
             }
             // Recalculate accumulated from remaining resources
-            self.total_accumulated = self.resources.iter()
+            self.total_accumulated = self
+                .resources
+                .iter()
                 .map(|r| {
                     if let Some(lt) = r.launch_time {
                         let hours = (Utc::now() - lt).num_hours().max(0) as f64;
@@ -391,10 +397,10 @@ impl CostTracker {
                 .sum();
         }
     }
-    
+
     fn invariants(&self) -> Vec<String> {
         let mut violations = Vec::new();
-        
+
         // Invariant 1: Total hourly should equal sum of resource hourly costs
         let sum_hourly: f64 = self.resources.iter().map(|r| r.hourly).sum();
         if (self.total_hourly - sum_hourly).abs() > 0.01 {
@@ -403,16 +409,16 @@ impl CostTracker {
                 self.total_hourly, sum_hourly
             ));
         }
-        
+
         // Invariant 2: Costs should be non-negative
         if self.total_hourly < 0.0 {
             violations.push("Total hourly cost cannot be negative".to_string());
         }
-        
+
         if self.total_accumulated < 0.0 {
             violations.push("Total accumulated cost cannot be negative".to_string());
         }
-        
+
         violations
     }
 }
@@ -436,7 +442,7 @@ proptest! {
         )
     ) {
         let mut tracker = CostTracker::new();
-        
+
         for op in operations {
             match op {
                 (true, hourly, launch_time) => {
@@ -452,9 +458,8 @@ proptest! {
                 }
             }
         }
-        
+
         let violations = tracker.invariants();
         assert!(violations.is_empty(), "Invariant violations: {:?}", violations);
     }
 }
-

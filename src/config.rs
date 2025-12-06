@@ -1,4 +1,4 @@
-use crate::error::{Result, TrainctlError, ConfigError};
+use crate::error::{ConfigError, Result, TrainctlError};
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -62,7 +62,8 @@ impl Default for Config {
                 api_key: None,
                 default_gpu: "NVIDIA GeForce RTX 4080 SUPER".to_string(),
                 default_disk_gb: 30,
-                default_image: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04".to_string(),
+                default_image: "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04"
+                    .to_string(),
             }),
             aws: Some(AwsConfig {
                 region: "us-east-1".to_string(),
@@ -73,7 +74,7 @@ impl Default for Config {
                 iam_instance_profile: None,
                 s3_bucket: None,
                 default_project_name: None, // Auto-detect from current directory
-                user_id: None, // Auto-detect from username
+                user_id: None,              // Auto-detect from username
             }),
             local: Some(LocalConfig {
                 default_device: "auto".to_string(),
@@ -113,10 +114,13 @@ impl Config {
         };
 
         if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
-                .map_err(|e| TrainctlError::Config(ConfigError::ParseError(
-                    format!("Failed to read config {}: {}", config_path.display(), e)
-                )))?;
+            let content = std::fs::read_to_string(&config_path).map_err(|e| {
+                TrainctlError::Config(ConfigError::ParseError(format!(
+                    "Failed to read config {}: {}",
+                    config_path.display(),
+                    e
+                )))
+            })?;
             let config: Config = toml::from_str(&content)
                 .map_err(|_e| TrainctlError::Config(ConfigError::ParseError(
                     format!("Failed to parse config: {}\n  Common issues:\n    - Invalid TOML syntax\n    - Missing required fields\n    - Incorrect value types\n  Tip: Run 'trainctl init' to create a new config file", config_path.display())
@@ -126,22 +130,27 @@ impl Config {
             // Use defaults but warn if user explicitly provided a path
             if path.is_some() {
                 eprintln!("WARNING: Config file not found: {}", config_path.display());
-                eprintln!("   Using default configuration. Run 'trainctl init' to create a config file.");
+                eprintln!(
+                    "   Using default configuration. Run 'trainctl init' to create a config file."
+                );
             }
             Ok(Config::default())
         }
     }
 
     pub fn save(&self, path: &Path) -> Result<()> {
-        let content = toml::to_string_pretty(self)
-            .map_err(|e| TrainctlError::Config(ConfigError::ParseError(
-                format!("Failed to serialize config: {}", e)
-            )))?;
-        std::fs::write(path, content)
-            .map_err(|e| TrainctlError::Io(std::io::Error::new(
+        let content = toml::to_string_pretty(self).map_err(|e| {
+            TrainctlError::Config(ConfigError::ParseError(format!(
+                "Failed to serialize config: {}",
+                e
+            )))
+        })?;
+        std::fs::write(path, content).map_err(|e| {
+            TrainctlError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("Failed to write config {}: {}", path.display(), e),
-            )))?;
+            ))
+        })?;
         Ok(())
     }
 }
@@ -199,7 +208,11 @@ pub fn init_config(output: &Path) -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_command(cmd: ConfigCommands, config_path: Option<&Path>, output_format: &str) -> Result<()> {
+pub async fn handle_command(
+    cmd: ConfigCommands,
+    config_path: Option<&Path>,
+    output_format: &str,
+) -> Result<()> {
     match cmd {
         ConfigCommands::Show { .. } => {
             let config = Config::load(config_path)?;
@@ -242,75 +255,96 @@ pub async fn handle_command(cmd: ConfigCommands, config_path: Option<&Path>, out
                 }
                 println!("  Checkpoint:");
                 println!("    Directory: {}", config.checkpoint.dir.display());
-                println!("    Save Interval: {} epochs", config.checkpoint.save_interval);
+                println!(
+                    "    Save Interval: {} epochs",
+                    config.checkpoint.save_interval
+                );
                 println!("    Keep Last N: {}", config.checkpoint.keep_last_n);
                 println!("  Monitoring:");
                 println!("    Log Directory: {}", config.monitoring.log_dir.display());
-                println!("    Update Interval: {} seconds", config.monitoring.update_interval_secs);
+                println!(
+                    "    Update Interval: {} seconds",
+                    config.monitoring.update_interval_secs
+                );
                 println!("    Enable Warnings: {}", config.monitoring.enable_warnings);
             }
             Ok(())
         }
-        ConfigCommands::Set { key, value, config: config_file } => {
+        ConfigCommands::Set {
+            key,
+            value,
+            config: config_file,
+        } => {
             let config_path = config_file.as_deref().or(config_path);
             let mut config = Config::load(config_path)?;
-            
+
             // Clone value for display before it's moved
             let value_display = value.clone();
-            
+
             // Simple key-value setting (basic implementation)
             // For full dot notation support, would need a more sophisticated parser
             if key == "aws.region" {
                 if let Some(aws) = &mut config.aws {
                     aws.region = value;
                 } else {
-                    return Err(TrainctlError::Config(ConfigError::MissingField("aws".to_string())));
+                    return Err(TrainctlError::Config(ConfigError::MissingField(
+                        "aws".to_string(),
+                    )));
                 }
             } else if key == "aws.default_instance_type" {
                 if let Some(aws) = &mut config.aws {
                     aws.default_instance_type = value;
                 } else {
-                    return Err(TrainctlError::Config(ConfigError::MissingField("aws".to_string())));
+                    return Err(TrainctlError::Config(ConfigError::MissingField(
+                        "aws".to_string(),
+                    )));
                 }
             } else if key == "aws.default_ami" {
                 if let Some(aws) = &mut config.aws {
                     aws.default_ami = value;
                 } else {
-                    return Err(TrainctlError::Config(ConfigError::MissingField("aws".to_string())));
+                    return Err(TrainctlError::Config(ConfigError::MissingField(
+                        "aws".to_string(),
+                    )));
                 }
             } else if key == "aws.use_spot" {
                 if let Some(aws) = &mut config.aws {
-                    let bool_value = value.parse::<bool>()
-                        .map_err(|_| TrainctlError::Config(ConfigError::InvalidValue {
+                    let bool_value = value.parse::<bool>().map_err(|_| {
+                        TrainctlError::Config(ConfigError::InvalidValue {
                             field: key.clone(),
                             reason: format!("Invalid boolean value: {}", value_display),
-                        }))?;
+                        })
+                    })?;
                     aws.use_spot = bool_value;
                 } else {
-                    return Err(TrainctlError::Config(ConfigError::MissingField("aws".to_string())));
+                    return Err(TrainctlError::Config(ConfigError::MissingField(
+                        "aws".to_string(),
+                    )));
                 }
             } else if key == "checkpoint.save_interval" {
-                config.checkpoint.save_interval = value.parse::<u32>()
-                    .map_err(|_| TrainctlError::Config(ConfigError::InvalidValue {
+                config.checkpoint.save_interval = value.parse::<u32>().map_err(|_| {
+                    TrainctlError::Config(ConfigError::InvalidValue {
                         field: key.clone(),
                         reason: format!("Invalid number: {}", value_display),
-                    }))?;
+                    })
+                })?;
             } else if key == "checkpoint.keep_last_n" {
-                config.checkpoint.keep_last_n = value.parse::<u32>()
-                    .map_err(|_| TrainctlError::Config(ConfigError::InvalidValue {
+                config.checkpoint.keep_last_n = value.parse::<u32>().map_err(|_| {
+                    TrainctlError::Config(ConfigError::InvalidValue {
                         field: key.clone(),
                         reason: format!("Invalid number: {}", value_display),
-                    }))?;
+                    })
+                })?;
             } else {
                 return Err(TrainctlError::Config(ConfigError::InvalidValue {
                     field: key,
                     reason: "Unknown configuration key. Supported keys: aws.region, aws.default_instance_type, aws.default_ami, aws.use_spot, checkpoint.save_interval, checkpoint.keep_last_n".to_string(),
                 }));
             }
-            
+
             let save_path = config_path.unwrap_or_else(|| Path::new(".trainctl.toml"));
             config.save(save_path)?;
-            
+
             if output_format == "json" {
                 let result = serde_json::json!({
                     "success": true,
@@ -325,7 +359,9 @@ pub async fn handle_command(cmd: ConfigCommands, config_path: Option<&Path>, out
             }
             Ok(())
         }
-        ConfigCommands::Validate { config: config_file } => {
+        ConfigCommands::Validate {
+            config: config_file,
+        } => {
             let config_path = config_file.as_deref().or(config_path);
             match Config::load(config_path) {
                 Ok(_config) => {
@@ -384,13 +420,16 @@ mod tests {
     fn test_config_save_and_load() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test_config.toml");
-        
+
         let config = Config::default();
         assert!(config.save(&config_path).is_ok());
         assert!(config_path.exists());
-        
+
         let loaded = Config::load(Some(&config_path)).unwrap();
-        assert_eq!(loaded.checkpoint.save_interval, config.checkpoint.save_interval);
+        assert_eq!(
+            loaded.checkpoint.save_interval,
+            config.checkpoint.save_interval
+        );
         assert_eq!(loaded.checkpoint.keep_last_n, config.checkpoint.keep_last_n);
     }
 
@@ -398,7 +437,7 @@ mod tests {
     fn test_config_load_nonexistent() {
         let temp_dir = TempDir::new().unwrap();
         let fake_path = temp_dir.path().join("nonexistent.toml");
-        
+
         // Should return default config
         let config = Config::load(Some(&fake_path)).unwrap();
         assert_eq!(config.checkpoint.save_interval, 5);
@@ -409,7 +448,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("invalid.toml");
         std::fs::write(&config_path, "invalid toml content {").unwrap();
-        
+
         let result = Config::load(Some(&config_path));
         assert!(result.is_err());
     }
@@ -418,13 +457,12 @@ mod tests {
     fn test_init_config() {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("init_test.toml");
-        
+
         assert!(init_config(&config_path).is_ok());
         assert!(config_path.exists());
-        
+
         // Verify it's valid TOML
         let config = Config::load(Some(&config_path)).unwrap();
         assert!(config.runpod.is_some());
     }
 }
-

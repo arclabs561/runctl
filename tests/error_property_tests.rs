@@ -3,7 +3,7 @@
 //! Tests that verify error types and error handling properties.
 
 use proptest::prelude::*;
-use trainctl::error::{TrainctlError, ConfigError, IsRetryable};
+use trainctl::error::{ConfigError, IsRetryable, TrainctlError};
 
 proptest! {
     #[test]
@@ -16,20 +16,20 @@ proptest! {
             message: message.clone(),
             source: None,
         };
-        
+
         let display = format!("{}", err);
-        
+
         // Properties:
         // 1. Should contain provider name
         prop_assert!(display.contains(&provider));
-        
+
         // 2. Should contain message
         prop_assert!(display.contains(&message));
-        
+
         // 3. Should not be empty
         prop_assert!(!display.is_empty());
     }
-    
+
     #[test]
     fn test_config_error_display(
         field in r"[a-zA-Z0-9_]+",
@@ -39,17 +39,17 @@ proptest! {
             field: field.clone(),
             reason: reason.clone(),
         };
-        
+
         let display = format!("{}", err);
-        
+
         // Properties:
         // 1. Should contain field name
         prop_assert!(display.contains(&field));
-        
+
         // 2. Should contain reason
         prop_assert!(display.contains(&reason));
     }
-    
+
     #[test]
     fn test_error_retryability_properties(
         error_type in prop_oneof![
@@ -77,9 +77,9 @@ proptest! {
             )),
             _ => TrainctlError::DataTransfer("test".to_string()),
         };
-        
+
         let is_retryable = err.is_retryable();
-        
+
         // Properties:
         // 1. Retryable errors should be retryable
         if matches!(error_type, "retryable" | "cloud_provider" | "io") {
@@ -98,7 +98,7 @@ proptest! {
     ) {
         let config_err = ConfigError::InvalidProvider(provider.clone());
         let trainctl_err: TrainctlError = config_err.into();
-        
+
         // Property: Should convert to TrainctlError::Config
         match trainctl_err {
             TrainctlError::Config(_) => {
@@ -110,4 +110,3 @@ proptest! {
         }
     }
 }
-

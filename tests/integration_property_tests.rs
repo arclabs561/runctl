@@ -3,10 +3,10 @@
 //! Property-based tests that verify integration between modules
 //! and end-to-end workflows.
 
+use chrono::{Duration, Utc};
 use proptest::prelude::*;
-use trainctl::utils::{format_duration, calculate_accumulated_cost};
 use trainctl::resources::estimate_instance_cost;
-use chrono::{Utc, Duration};
+use trainctl::utils::{calculate_accumulated_cost, format_duration};
 
 proptest! {
     #[test]
@@ -17,16 +17,16 @@ proptest! {
         let hourly_cost = estimate_instance_cost(&instance_type);
         let launch_time = Utc::now() - Duration::hours(hours);
         let accumulated = calculate_accumulated_cost(hourly_cost, Some(launch_time));
-        
+
         // Accumulated should be approximately hourly * hours
         let expected = hourly_cost * hours as f64;
         let tolerance = expected * 0.01 + 0.01; // 1% or 1 cent
-        
+
         assert!((accumulated - expected).abs() < tolerance,
             "Accumulated cost {} should be close to {} (hourly: {}, hours: {})",
             accumulated, expected, hourly_cost, hours);
     }
-    
+
     #[test]
     fn test_config_roundtrip_property(
         region in r"[a-z]+-[a-z]+-[0-9]+",
@@ -51,11 +51,11 @@ log_dir = "logs"
 update_interval_secs = 10
 enable_warnings = true
 "#, region, instance_type, bucket);
-        
+
         // Should parse as valid TOML
         let parsed: Result<toml::Value, _> = toml::from_str(&config_str);
         prop_assert!(parsed.is_ok(), "Config should parse: {}", config_str);
-        
+
         if let Ok(config_val) = parsed {
             // Should be able to extract values
             if let Some(aws) = config_val.get("aws") {
@@ -64,7 +64,7 @@ enable_warnings = true
             }
         }
     }
-    
+
     #[test]
     fn test_duration_format_roundtrip(
         hours in 0u64..24u64,
@@ -73,10 +73,10 @@ enable_warnings = true
     ) {
         let total_seconds = hours * 3600 + minutes * 60 + seconds;
         let formatted = format_duration(total_seconds);
-        
+
         // Formatted string should not be empty
         prop_assert!(!formatted.is_empty());
-        
+
         // Should contain appropriate time units based on format_duration implementation
         // format_duration only supports h, m, s (not days)
         if hours > 0 {
@@ -92,7 +92,7 @@ enable_warnings = true
         // Always contains 's' even if 0
         prop_assert!(formatted.contains('s'), "Should contain 's': {}", formatted);
     }
-    
+
     #[test]
     fn test_cost_threshold_properties(
         hourly_costs in prop::collection::vec(0.0f64..100.0f64, 1..20)
@@ -100,14 +100,14 @@ enable_warnings = true
         let total_hourly: f64 = hourly_costs.iter().sum();
         let daily_cost = total_hourly * 24.0;
         let weekly_cost = daily_cost * 7.0;
-        
+
         // Properties:
         // 1. Daily should be 24x hourly
         prop_assert!((daily_cost - total_hourly * 24.0).abs() < 0.01);
-        
+
         // 2. Weekly should be 7x daily
         prop_assert!((weekly_cost - daily_cost * 7.0).abs() < 0.01);
-        
+
         // 3. All costs should be non-negative
         prop_assert!(total_hourly >= 0.0);
         prop_assert!(daily_cost >= 0.0);
@@ -133,7 +133,7 @@ proptest! {
         // Simulate state transitions
         let mut current_state = "none";
         let mut created = false;
-        
+
         for state in states {
             match (current_state, state) {
                 ("none", "created") => {
@@ -157,12 +157,12 @@ proptest! {
                 }
             }
         }
-        
+
         // Property: If terminated, must have been created
         if current_state == "terminated" {
             prop_assert!(created, "Terminated resource must have been created");
         }
-        
+
         // Property: State should be valid
         prop_assert!(matches!(
             current_state,
@@ -181,14 +181,14 @@ proptest! {
         // For gp3: IOPS = min(3000 + size * iops_per_gb, 16000)
         let base_iops = 3000;
         let calculated_iops = (base_iops + size_gb * iops_per_gb).min(16000);
-        
+
         // Properties:
         // 1. IOPS should be at least base
         prop_assert!(calculated_iops >= base_iops);
-        
+
         // 2. IOPS should not exceed max
         prop_assert!(calculated_iops <= 16000);
-        
+
         // 3. For small volumes, should be base + size * iops_per_gb
         if size_gb < 1000 {
             let expected = base_iops + size_gb * iops_per_gb;
@@ -207,7 +207,7 @@ proptest! {
         // AWS tag constraints
         let key_valid = key.len() <= 128 && !key.starts_with("aws:");
         let value_valid = value.len() <= 256;
-        
+
         if key_valid && value_valid {
             // Should be valid tag
             prop_assert!(!key.is_empty());
@@ -225,14 +225,14 @@ proptest! {
         filename in r"[a-z0-9._-]+"
     ) {
         let s3_path = format!("s3://{}/{}{}", bucket, key_prefix, filename);
-        
+
         // Properties:
         // 1. Should start with s3://
         prop_assert!(s3_path.starts_with("s3://"));
-        
+
         // 2. Should contain bucket
         prop_assert!(s3_path.contains(&bucket));
-        
+
         // 3. Should be parseable
         let path_part = &s3_path[5..];
         let parts: Vec<&str> = path_part.splitn(2, '/').collect();
@@ -249,11 +249,11 @@ proptest! {
     ) {
         if hex_part.len() >= 8 && hex_part.len() <= 17 {
             let instance_id = format!("i-{}", hex_part);
-            
+
             // Properties:
             // 1. Should start with i-
             prop_assert!(instance_id.starts_with("i-"));
-            
+
             // 2. Should be valid length (i- + 8-17 hex chars)
             prop_assert!(instance_id.len() >= 10);
             prop_assert!(instance_id.len() <= 19);
@@ -269,11 +269,11 @@ proptest! {
     ) {
         if hex_part.len() >= 8 && hex_part.len() <= 17 {
             let volume_id = format!("vol-{}", hex_part);
-            
+
             // Properties:
             // 1. Should start with vol-
             prop_assert!(volume_id.starts_with("vol-"));
-            
+
             // 2. Should be valid length
             prop_assert!(volume_id.len() >= 12);
             prop_assert!(volume_id.len() <= 21);
@@ -291,21 +291,21 @@ proptest! {
     ) {
         let time1 = Utc::now() - Duration::hours(hours1);
         let time2 = Utc::now() - Duration::hours(hours2);
-        
+
         let cost1 = calculate_accumulated_cost(hourly_cost, Some(time1));
         let cost2 = calculate_accumulated_cost(hourly_cost, Some(time2));
-        
+
         // Property: Longer running should cost more
         if hours1 < hours2 {
             prop_assert!(cost1 <= cost2,
                 "Cost for {} hours ({}) should be <= cost for {} hours ({})",
                 hours1, cost1, hours2, cost2);
         }
-        
+
         // Property: Cost should scale linearly
         let ratio1 = cost1 / hourly_cost;
         let ratio2 = cost2 / hourly_cost;
-        
+
         prop_assert!((ratio1 - hours1 as f64).abs() < 0.1);
         prop_assert!((ratio2 - hours2 as f64).abs() < 0.1);
     }
@@ -321,21 +321,20 @@ proptest! {
         // AWS AZ format is region-az_letter (e.g., us-east-1a)
         // The region already contains the number, so we append just the letter
         let az = format!("{}{}", region, az_letter);
-        
+
         // Properties:
         // 1. Should contain region
         prop_assert!(az.contains(&region));
-        
+
         // 2. Should end with az_letter (no dash, just letter appended)
         prop_assert!(az.ends_with(&az_letter));
-        
+
         // 3. Should have correct format (region + single letter)
         let parts: Vec<&str> = region.split('-').collect();
         prop_assert!(parts.len() >= 3, "Region should have at least 3 parts");
-        
+
         // Last character should be the AZ letter
         let last_char = az.chars().last().unwrap();
         prop_assert_eq!(last_char.to_string(), az_letter);
     }
 }
-

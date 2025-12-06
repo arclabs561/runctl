@@ -1,13 +1,13 @@
 //! RunPod provider implementation
 
-use crate::provider::*;
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
+use crate::provider::*;
 use async_trait::async_trait;
 use std::path::Path;
 
 /// RunPod provider implementation
-/// 
+///
 /// Currently a stub - not yet implemented.
 /// Kept for future RunPod integration.
 #[allow(dead_code)]
@@ -30,13 +30,14 @@ impl TrainingProvider for RunpodProvider {
 
     async fn create_resource(
         &self,
-        _instance_type: &str,  // GPU type for RunPod
+        _instance_type: &str, // GPU type for RunPod
         _options: CreateResourceOptions,
     ) -> Result<ResourceId> {
         // Implementation would use runpodctl
         Err(TrainctlError::CloudProvider {
             provider: "runpod".to_string(),
-            message: "RunPod resource creation not yet fully implemented in provider trait".to_string(),
+            message: "RunPod resource creation not yet fully implemented in provider trait"
+                .to_string(),
             source: None,
         })
     }
@@ -59,11 +60,7 @@ impl TrainingProvider for RunpodProvider {
         })
     }
 
-    async fn train(
-        &self,
-        _resource_id: &ResourceId,
-        _job: TrainingJob,
-    ) -> Result<TrainingStatus> {
+    async fn train(&self, _resource_id: &ResourceId, _job: TrainingJob) -> Result<TrainingStatus> {
         // Implementation would use runpodctl exec
         Err(TrainctlError::CloudProvider {
             provider: "runpod".to_string(),
@@ -72,11 +69,7 @@ impl TrainingProvider for RunpodProvider {
         })
     }
 
-    async fn monitor(
-        &self,
-        _resource_id: &ResourceId,
-        _follow: bool,
-    ) -> Result<()> {
+    async fn monitor(&self, _resource_id: &ResourceId, _follow: bool) -> Result<()> {
         // Implementation would use runpodctl logs
         Err(TrainctlError::CloudProvider {
             provider: "runpod".to_string(),
@@ -114,9 +107,8 @@ impl TrainingProvider for RunpodProvider {
             "RTX 4080" | "RTX 4080 SUPER" => 0.79,
             "RTX 4090" => 1.39,
             "A100" => 2.99,
-            _ => 0.79,  // Default
+            _ => 0.79, // Default
         };
         cost_per_hour * hours
     }
 }
-

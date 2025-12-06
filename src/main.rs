@@ -219,7 +219,6 @@ enum Commands {
     },
 }
 
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -228,7 +227,7 @@ async fn main() -> Result<()> {
     let filter = if cli.verbose {
         EnvFilter::new("debug")
     } else {
-        EnvFilter::new("warn")  // Changed from "info" to "warn" to suppress INFO logs
+        EnvFilter::new("warn") // Changed from "info" to "warn" to suppress INFO logs
     };
 
     tracing_subscriber::fmt()
@@ -241,64 +240,78 @@ async fn main() -> Result<()> {
 
     // Execute command with error handling for JSON output
     let result: anyhow::Result<()> = match cli.command {
-        Commands::Local { script, args } => {
-            local::train(script, args, &config).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        Commands::Runpod { subcommand } => {
-            runpod::handle_command(subcommand, &config).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        Commands::Aws { subcommand } => {
-            aws::handle_command(subcommand, &config, &cli.output).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        Commands::Monitor { log, checkpoint, follow } => {
-            monitor::monitor(log, checkpoint, follow).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        Commands::Checkpoint { subcommand } => {
-            checkpoint::handle_command(subcommand, &cli.output).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
+        Commands::Local { script, args } => local::train(script, args, &config)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        Commands::Runpod { subcommand } => runpod::handle_command(subcommand, &config)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        Commands::Aws { subcommand } => aws::handle_command(subcommand, &config, &cli.output)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        Commands::Monitor {
+            log,
+            checkpoint,
+            follow,
+        } => monitor::monitor(log, checkpoint, follow)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        Commands::Checkpoint { subcommand } => checkpoint::handle_command(subcommand, &cli.output)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
         Commands::Config { subcommand } => {
-            config::handle_command(subcommand, cli.config.as_deref(), &cli.output).await
+            config::handle_command(subcommand, cli.config.as_deref(), &cli.output)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
-        Commands::S3 { subcommand } => {
-            s3::handle_command(subcommand, &config, &cli.output).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
+        Commands::S3 { subcommand } => s3::handle_command(subcommand, &config, &cli.output)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
         Commands::Resources { subcommand } => {
-            resources::handle_command(subcommand, &config, &cli.output).await
+            resources::handle_command(subcommand, &config, &cli.output)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
         Commands::Init { output } => {
-            config::init_config(&output)
-                .map_err(|e| anyhow::anyhow!("{}", e))?;
+            config::init_config(&output).map_err(|e| anyhow::anyhow!("{}", e))?;
             Ok(())
         }
         Commands::Status { detailed } => {
-            resources::show_quick_status(detailed, &config, &cli.output).await
+            resources::show_quick_status(detailed, &config, &cli.output)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
-        Commands::Top { interval } => {
-            dashboard::run_dashboard(&config, interval).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        Commands::Transfer { source, destination, parallel, compress, verify, resume } => {
-            data_transfer::handle_transfer(source, destination, parallel, compress, verify, resume, &config).await
-                .map_err(|e| anyhow::anyhow!("{}", e))
-        }
+        Commands::Top { interval } => dashboard::run_dashboard(&config, interval)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        Commands::Transfer {
+            source,
+            destination,
+            parallel,
+            compress,
+            verify,
+            resume,
+        } => data_transfer::handle_transfer(
+            source,
+            destination,
+            parallel,
+            compress,
+            verify,
+            resume,
+            &config,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e)),
         Commands::Exec { command, args } => {
             // Exec command - run arbitrary command with trainctl environment
             // For now, treat as local training with the command as script
             let script = PathBuf::from(&command);
-            local::train(script, args, &config).await
+            local::train(script, args, &config)
+                .await
                 .map_err(|e| anyhow::anyhow!("{}", e))
         }
     };
-    
+
     // Handle errors with JSON format if requested
     if let Err(e) = result {
         if cli.output == "json" {
@@ -316,7 +329,6 @@ async fn main() -> Result<()> {
             return Err(e);
         }
     }
-    
+
     Ok(())
 }
-
