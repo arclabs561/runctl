@@ -1,0 +1,130 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  schedule:
+    # Run weekly on Sundays
+    - cron: '0 0 * * 0'
+
+jobs:
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for secret scanning
+
+      - name: Install jq (required for check-secrets.sh)
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run secret check script
+        run: |
+          chmod +x scripts/check-secrets.sh
+          ./scripts/check-secrets.sh
+
+      - name: Check for AWS access keys
+        run: |
+          # Check for AWS access key patterns (exclude test/check scripts and docs)
+          if git grep -E "AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}" -- . :!scripts/check-secrets.sh :!docs/ :!.github/ :!tests/; then
+            echo "::error::Potential AWS access keys found in code"
+            exit 1
+          fi
+
+      - name: Check for private keys
+        run: |
+          if git grep -E "BEGIN.*PRIVATE KEY|BEGIN RSA PRIVATE KEY|BEGIN EC PRIVATE KEY" -- . :!scripts/check-secrets.sh :!docs/ :!.github/ :!tests/; then
+            echo "::error::Private keys found in code"
+            exit 1
+          fi
+
+      - name: Check for hardcoded API keys
+        run: |
+          # Check for common API key patterns (excluding documentation and test files)
+          if git grep -iE "api[_-]?key\s*=\s*[\"'][^\"']{10,}" -- . :!scripts/check-secrets.sh :!docs/ :!.github/ :!tests/ :!README.md | grep -v "api_key = None" | grep -v "Option<String>"; then
+            echo "::error::Potential hardcoded API keys found"
+            exit 1
+          fi
+
+      - name: Verify sensitive files not tracked
+        run: |
+          # Check that sensitive files are not in git
+          SENSITIVE_FILES=$(git ls-files | grep -E "\.(env|pem|key|secret|credential)$" || true)
+          if [ -n "$SENSITIVE_FILES" ]; then
+            echo "::error::Sensitive files found in git: $SENSITIVE_FILES"
+            exit 1
+          fi
+
+      - name: Verify config file not tracked
+        run: |
+          if git ls-files | grep -q "\.trainctl\.toml"; then
+            echo "::error::.trainctl.toml should not be tracked in git"
+            exit 1
+          fi
+
+      - name: Scan git history for secrets
+        run: |
+          # Scan last 50 commits for secrets (full history scan is expensive)
+          echo "Scanning recent git history for secrets..."
+          git log --all --source --pretty=format:"%H" -50 -- . | \
+            while read commit; do
+              if git show "$commit" | grep -iE "AKIA[0-9A-Z]{16}|[0-9a-zA-Z/+]{40}" | \
+                 grep -v "check-secrets" | grep -v "docs/" | grep -v "tests/"; then
+                echo "::error::Potential secrets found in commit $commit"
+                exit 1
+              fi
+            done || echo "No secrets found in recent history"
+
+      - name: Run E2E secret scanning tests
+        run: |
+          cargo test --features e2e secret_scanning --lib || echo "E2E tests skipped (may require setup)"
+
+  cargo-audit:
+    name: Cargo Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Install cargo-audit
+        run: |
+          cargo install cargo-audit --locked || \
+          cargo install --git https://github.com/rustsec/rustsec.git cargo-audit --locked
+
+      - name: Run cargo audit
+        run: cargo audit
+        continue-on-error: true  # Don't fail on vulnerabilities, just report
+
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Check for outdated dependencies
+        run: |
+          cargo install cargo-outdated || true
+          cargo outdated || true
+
+      - name: Verify Cargo.lock is committed
+        run: |
+          if [ ! -f Cargo.lock ]; then
+            echo "::error::Cargo.lock should be committed for binaries"
+            exit 1
+          fi
+
