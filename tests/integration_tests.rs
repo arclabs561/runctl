@@ -48,7 +48,7 @@ fn test_s3_operations() {
 #[test]
 fn test_checkpoint_operations() {
     use std::fs;
-    
+
     use tempfile::TempDir;
 
     let temp_dir = TempDir::new().unwrap();
@@ -82,9 +82,6 @@ fn test_checkpoint_operations() {
 /// Test project name derivation in different scenarios
 #[test]
 fn test_project_name_scenarios() {
-    
-    
-
     // Test with various directory names
     let test_cases = vec![
         ("my-project", "my-project"),

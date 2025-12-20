@@ -1,6 +1,5 @@
 //! Tests for S3 operations
 
-
 #[test]
 fn test_s3_path_validation() {
     // Valid S3 paths

@@ -113,7 +113,6 @@ mod error_tests {
 }
 
 mod s3_path_tests {
-    
 
     #[test]
     fn test_parse_s3_path_valid() {
@@ -150,7 +149,7 @@ mod s3_path_tests {
 }
 
 mod instance_type_tests {
-    
+
     use trainctl::resources::estimate_instance_cost;
 
     #[test]
@@ -194,7 +193,6 @@ mod instance_type_tests {
 }
 
 mod volume_tests {
-    
 
     #[test]
     fn test_volume_size_constraints() {
@@ -231,7 +229,6 @@ mod volume_tests {
 }
 
 mod tag_tests {
-    
 
     #[test]
     fn test_tag_key_constraints() {
@@ -371,7 +368,6 @@ mod tag_tests {
 }
 
 mod az_tests {
-    
 
     #[test]
     fn test_az_format_validation() {
@@ -407,8 +403,7 @@ mod az_tests {
 }
 
 mod retry_tests {
-    
-    
+
     use trainctl::retry::ExponentialBackoffPolicy;
 
     #[test]
@@ -468,7 +463,7 @@ mod data_transfer_tests {
 }
 
 mod cost_tests {
-    
+
     use chrono::{Duration, Utc};
     use trainctl::utils::calculate_accumulated_cost;
 
@@ -507,7 +502,6 @@ mod cost_tests {
 }
 
 mod validation_tests {
-    
 
     #[test]
     fn test_instance_id_format() {
