@@ -7,7 +7,7 @@ use chrono::Utc;
 use std::env;
 use trainctl::provider::{ResourceState, ResourceStatus};
 use trainctl::resource_tracking::ResourceTracker;
-use trainctl::safe_cleanup::{safe_cleanup, CleanupResult, CleanupSafety};
+use trainctl::safe_cleanup::{safe_cleanup, CleanupSafety};
 
 /// Check if E2E tests should run
 fn should_run_e2e() -> bool {

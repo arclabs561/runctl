@@ -1,7 +1,6 @@
 //! Integration tests for trainctl
 
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 use trainctl::config::{init_config, Config};
 

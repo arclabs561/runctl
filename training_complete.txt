@@ -1,3 +1,0 @@
-Training completed successfully at 1764944236.671579
-Final checkpoint: checkpoints/final_checkpoint.json
-Validation: PASSED

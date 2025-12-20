@@ -6,7 +6,7 @@
 //! - File selection logic
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tempfile::TempDir;
 
 // Helper function to match the internal implementation

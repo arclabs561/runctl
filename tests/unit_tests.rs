@@ -316,7 +316,7 @@ fn test_cost_thresholds() {
 
 #[test]
 fn test_retry_attempt_counting() {
-    use std::time::Duration;
+    
     use trainctl::retry::ExponentialBackoffPolicy;
 
     let policy = ExponentialBackoffPolicy::for_cloud_api();

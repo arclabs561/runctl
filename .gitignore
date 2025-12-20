@@ -73,3 +73,7 @@ uv.lock
 # Temporary review files
 PROJECT_STATUS_REVIEW.md
 TEST_COVERAGE_SUMMARY.md
+CODE_REVIEW.md
+
+# Training artifacts
+training_complete.txt

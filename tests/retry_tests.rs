@@ -4,7 +4,7 @@
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use trainctl::error::{IsRetryable, Result, TrainctlError};
+use trainctl::error::{IsRetryable, TrainctlError};
 use trainctl::retry::{ExponentialBackoffPolicy, NoRetryPolicy, RetryPolicy};
 
 #[test]
@@ -15,8 +15,8 @@ fn test_exponential_backoff_creation() {
 }
 
 #[test]
-fn test_exponential_backoff_default() {
-    let policy = ExponentialBackoffPolicy::default();
+fn test_exponential_backoff_default_policy() {
+    let policy = ExponentialBackoffPolicy::default_policy();
     // Default policy should have 3 attempts
     let _ = policy;
 }

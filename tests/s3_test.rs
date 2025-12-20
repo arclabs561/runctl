@@ -1,6 +1,5 @@
 //! Tests for S3 operations
 
-use std::path::PathBuf;
 
 #[test]
 fn test_s3_path_validation() {

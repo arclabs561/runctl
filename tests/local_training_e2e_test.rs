@@ -1,7 +1,6 @@
 //! End-to-end tests for local training execution
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 

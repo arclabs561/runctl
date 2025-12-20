@@ -1,6 +1,5 @@
 //! Tests for multi-project and tagging functionality
 
-use trainctl::config::Config;
 
 // Note: These tests require the functions to be public or use integration test approach
 // For now, testing the logic indirectly through public APIs

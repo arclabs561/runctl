@@ -121,6 +121,7 @@ pub fn extract_checkpoint_info(checkpoint_path: &Path) -> Result<CheckpointInfo>
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // Fields used for checkpoint inspection/display
 pub struct CheckpointInfo {
     pub path: PathBuf,
     pub size: u64,

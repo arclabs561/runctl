@@ -48,7 +48,7 @@ fn test_s3_operations() {
 #[test]
 fn test_checkpoint_operations() {
     use std::fs;
-    use std::path::Path;
+    
     use tempfile::TempDir;
 
     let temp_dir = TempDir::new().unwrap();
@@ -82,8 +82,8 @@ fn test_checkpoint_operations() {
 /// Test project name derivation in different scenarios
 #[test]
 fn test_project_name_scenarios() {
-    use std::env;
-    use std::path::Path;
+    
+    
 
     // Test with various directory names
     let test_cases = vec![
@@ -162,22 +162,29 @@ fn test_validation_across_commands() {
     use trainctl::validation::*;
 
     // Test that validation catches invalid inputs before AWS API calls
-    let invalid_cases = vec![
-        ("instance_id", "invalid", validate_instance_id),
-        ("volume_id", "invalid", validate_volume_id),
-        ("snapshot_id", "invalid", validate_snapshot_id),
-        ("s3_path", "invalid", validate_s3_path),
-        ("project_name", "", validate_project_name),
-        ("path", "../invalid", validate_path),
-    ];
-
-    for (field, value, validator) in invalid_cases {
-        let result = validator(value);
-        assert!(
-            result.is_err(),
-            "Should reject invalid {}: {}",
-            field,
-            value
-        );
-    }
+    // Each validator is tested individually to avoid function pointer type issues
+    assert!(
+        validate_instance_id("invalid").is_err(),
+        "Should reject invalid instance_id"
+    );
+    assert!(
+        validate_volume_id("invalid").is_err(),
+        "Should reject invalid volume_id"
+    );
+    assert!(
+        validate_snapshot_id("invalid").is_err(),
+        "Should reject invalid snapshot_id"
+    );
+    assert!(
+        validate_s3_path("invalid").is_err(),
+        "Should reject invalid s3_path"
+    );
+    assert!(
+        validate_project_name("").is_err(),
+        "Should reject empty project_name"
+    );
+    assert!(
+        validate_path("../invalid").is_err(),
+        "Should reject path traversal"
+    );
 }
