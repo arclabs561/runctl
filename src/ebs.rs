@@ -223,6 +223,7 @@ pub async fn handle_command(cmd: EbsCommands, config: &Config, _output_format: &
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_volume(
     size: i32,
     volume_type: String,

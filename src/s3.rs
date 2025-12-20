@@ -1167,8 +1167,8 @@ async fn download_directory_recursive_parallel(
         // Calculate local file path
         let relative_key = if key_prefix.is_empty() {
             key.clone()
-        } else if key.starts_with(key_prefix) {
-            key[key_prefix.len()..].trim_start_matches('/').to_string()
+        } else if let Some(stripped) = key.strip_prefix(key_prefix) {
+            stripped.trim_start_matches('/').to_string()
         } else {
             continue; // Skip if doesn't match prefix
         };

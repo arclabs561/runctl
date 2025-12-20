@@ -375,10 +375,10 @@ pub async fn handle_command(
                         println!("{}", serde_json::to_string_pretty(&result)?);
                     } else {
                         println!("✓ Configuration is valid");
-                        if config_path.is_none() {
-                            println!("  Using default configuration (no config file found)");
+                        if let Some(path) = config_path {
+                            println!("  Loaded from: {}", path.display());
                         } else {
-                            println!("  Loaded from: {}", config_path.unwrap().display());
+                            println!("  Using default configuration (no config file found)");
                         }
                     }
                     Ok(())

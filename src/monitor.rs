@@ -66,10 +66,10 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
                 }
             })
             .map_err(|e| {
-                TrainctlError::Io(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to create file watcher: {}", e),
-                ))
+                TrainctlError::Io(std::io::Error::other(format!(
+                    "Failed to create file watcher: {}",
+                    e
+                )))
             })?;
 
         watcher
@@ -164,12 +164,7 @@ async fn monitor_checkpoint(checkpoint_dir: &Path) -> Result<()> {
                     .file_name()
                     .map(|n| n.to_string_lossy().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
-                println!(
-                    "  {} - {} ({})",
-                    file_name,
-                    format!("{:?}", modified),
-                    format_size(*size)
-                );
+                println!("  {} - {:?} ({})", file_name, modified, format_size(*size));
             }
             last_checkpoints = checkpoints;
         }

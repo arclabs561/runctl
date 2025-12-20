@@ -493,7 +493,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             .await
         }
         AwsCommands::Ebs { subcommand } => {
-            crate::ebs::handle_command(subcommand, &config, output_format).await
+            crate::ebs::handle_command(subcommand, config, output_format).await
         }
     }
 }
@@ -785,11 +785,11 @@ async fn find_deep_learning_ami(client: &Ec2Client, _region: &str) -> Result<Str
         }
     }
 
-    return Err(TrainctlError::CloudProvider {
+    Err(TrainctlError::CloudProvider {
         provider: "aws".to_string(),
         message: "No Deep Learning AMI found with any pattern".to_string(),
         source: None,
-    });
+    })
 }
 
 /// Generate user data script for instance initialization
@@ -1204,6 +1204,7 @@ async fn create_spot_instance(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_ondemand_instance(
     client: &Ec2Client,
     instance_type: &str,
@@ -1370,7 +1371,7 @@ async fn train_on_instance(
             let paths = [
                 format!("~/.ssh/{}.pem", k),
                 format!("~/.ssh/{}", k),
-                format!("~/.ssh/id_rsa"),
+                "~/.ssh/id_rsa".to_string(),
             ];
             paths.iter().find_map(|p| {
                 let expanded = shellexpand::tilde(p).to_string();
@@ -1448,10 +1449,8 @@ async fn train_on_instance(
             } else {
                 return Err(e);
             }
-        } else {
-            if output_format != "json" {
-                println!("   Code synced successfully");
-            }
+        } else if output_format != "json" {
+            println!("   Code synced successfully");
         }
     }
 
@@ -2216,8 +2215,8 @@ async fn show_processes(
         if !usage.disk_usage.is_empty() {
             println!("\nFILESYSTEM:");
             println!(
-                "{:<20} {:>8} {:>8} {:>8} {:>6} {}",
-                "FILESYSTEM", "SIZE", "USED", "AVAIL", "USE%", "MOUNTED"
+                "{:<20} {:>8} {:>8} {:>8} {:>6} MOUNTED",
+                "FILESYSTEM", "SIZE", "USED", "AVAIL", "USE%"
             );
             println!("{}", "-".repeat(80));
             for disk in &usage.disk_usage {
