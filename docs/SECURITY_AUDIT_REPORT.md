@@ -1,7 +1,7 @@
 # Security Audit Report
 
 **Date**: December 4, 2025  
-**Repository**: https://github.com/arclabs561/trainctl  
+**Repository**: https://github.com/arclabs561/runctl  
 **Status**: ✅ **CLEAN - No secrets found**
 
 ## Executive Summary
@@ -27,7 +27,7 @@
 | .env Files in Git | ✅ PASS | No .env files tracked |
 | Credential Files | ✅ PASS | No credential files tracked |
 | .gitignore Coverage | ✅ PASS | All patterns covered |
-| Config File Handling | ✅ PASS | .trainctl.toml ignored |
+| Config File Handling | ✅ PASS | .runctl.toml ignored |
 
 ### Manual Verification
 
@@ -35,7 +35,7 @@
 - ✅ No AWS secret keys in codebase
 - ✅ No private keys (BEGIN PRIVATE KEY) in codebase
 - ✅ No hardcoded API keys in source code
-- ✅ Config files properly ignored (.trainctl.toml)
+- ✅ Config files properly ignored (.runctl.toml)
 - ✅ No .env files in git
 
 ## Static Checking
@@ -84,7 +84,7 @@
 ## GitHub Repository Status
 
 ### Current Status
-- **Remote URL**: `https://github.com/arclabs561/trainctl.git`
+- **Remote URL**: `https://github.com/arclabs561/runctl.git`
 - **Visibility**: **PRIVATE** ✅
   - HTTP status: 404 (not publicly accessible)
   - Repository exists but requires authentication
@@ -108,7 +108,7 @@
 ## Cargo Publish Status
 
 ### Current Status
-- **Package Name**: `trainctl`
+- **Package Name**: `runctl`
 - **Version**: `0.1.0`
 - **Published**: **NO** ✅
   - Not found on crates.io

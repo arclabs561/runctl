@@ -1,4 +1,4 @@
-# Testing trainctl
+# Testing runctl
 
 ## Quick Test Commands
 
@@ -13,19 +13,19 @@ cargo check
 cargo test
 
 # Test CLI help
-./target/debug/trainctl --help
+./target/debug/runctl --help
 
 # Test init
-./target/debug/trainctl init
-cat .trainctl.toml
+./target/debug/runctl init
+cat .runctl.toml
 
 # Test checkpoint listing
 mkdir -p checkpoints
 touch checkpoints/test.pt
-./target/debug/trainctl checkpoint list checkpoints/
+./target/debug/runctl checkpoint list checkpoints/
 
 # Test checkpoint info
-./target/debug/trainctl checkpoint info checkpoints/test.pt
+./target/debug/runctl checkpoint info checkpoints/test.pt
 ```
 
 ## Integration Testing

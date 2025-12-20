@@ -1,6 +1,6 @@
 //! E2E tests for resource safety and edge case handling
 //!
-//! Tests verify that trainctl respects important nuances:
+//! Tests verify that runctl respects important nuances:
 //! - Instance termination with attached volumes
 //! - AZ validation for volume attachment
 //! - Snapshot dependencies
@@ -32,7 +32,7 @@ macro_rules! require_e2e {
 
 fn test_tag() -> String {
     format!(
-        "trainctl-test-{}",
+        "runctl-test-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
     )
 }
@@ -66,7 +66,7 @@ async fn test_volume_attachment_az_validation() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -132,7 +132,7 @@ async fn test_volume_deletion_with_snapshots() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -157,7 +157,7 @@ async fn test_volume_deletion_with_snapshots() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Snapshot)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -211,7 +211,7 @@ async fn test_volume_deletion_with_snapshots() {
         "Should have snapshots for volume"
     );
 
-    // In a full test, trainctl would warn before deleting volume with snapshots
+    // In a full test, runctl would warn before deleting volume with snapshots
     // For now, we just verify the snapshot exists
 
     // Cleanup: Delete snapshot first, then volume
@@ -257,7 +257,7 @@ async fn test_attached_volume_deletion_protection() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )

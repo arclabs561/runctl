@@ -5,8 +5,8 @@
 
 use chrono::{Duration, Utc};
 use proptest::prelude::*;
-use trainctl::resources::estimate_instance_cost;
-use trainctl::utils::{calculate_accumulated_cost, format_duration};
+use runctl::resources::estimate_instance_cost;
+use runctl::utils::{calculate_accumulated_cost, format_duration};
 
 proptest! {
     #[test]

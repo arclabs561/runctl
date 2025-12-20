@@ -2,7 +2,7 @@
 
 ## Current State
 
-trainctl supports `--output json` for structured output, but implementation is inconsistent across commands.
+runctl supports `--output json` for structured output, but implementation is inconsistent across commands.
 
 ## Commands with JSON Support
 
@@ -139,7 +139,7 @@ import subprocess
 import re
 
 result = subprocess.run(
-    ["trainctl", "aws", "create", "--instance-type", "g4dn.xlarge"],
+    ["runctl", "aws", "create", "--instance-type", "g4dn.xlarge"],
     capture_output=True,
     text=True
 )

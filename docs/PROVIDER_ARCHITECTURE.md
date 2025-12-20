@@ -2,7 +2,7 @@
 
 ## Overview
 
-`trainctl` uses a provider-agnostic architecture that allows it to work with any cloud training platform (AWS, RunPod, Lyceum AI, etc.) through a unified interface.
+`runctl` uses a provider-agnostic architecture that allows it to work with any cloud training platform (AWS, RunPod, Lyceum AI, etc.) through a unified interface.
 
 ## Design Principles
 

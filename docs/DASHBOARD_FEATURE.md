@@ -14,10 +14,10 @@ The dashboard provides a ratatui-based interactive interface for monitoring:
 
 ```bash
 # Launch dashboard with default 5-second update interval
-trainctl dashboard
+runctl dashboard
 
 # Custom update interval (in seconds)
-trainctl dashboard --interval 10
+runctl dashboard --interval 10
 ```
 
 ## Features

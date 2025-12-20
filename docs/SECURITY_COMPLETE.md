@@ -21,18 +21,18 @@ All critical security improvements have been completed automatically. Your AWS s
    - Unused key deleted
 
 3. **✅ CloudTrail Enabled**
-   - Trail: `trainctl-audit-trail`
+   - Trail: `runctl-audit-trail`
    - Status: **Logging all API calls**
    - Multi-region: Enabled
    - Log validation: Enabled
-   - S3 bucket: `trainctl-cloudtrail-logs-*`
+   - S3 bucket: `runctl-cloudtrail-logs-*`
 
 ### Automation & Tools (100% Complete)
 
 4. **✅ Security Scripts Created**
    - `scripts/check-aws-credentials.sh` - Security check
    - `scripts/setup-cloudtrail.sh` - CloudTrail setup
-   - `scripts/setup-trainctl-user.sh` - Limited user creation
+   - `scripts/setup-runctl-user.sh` - Limited user creation
    - `scripts/setup-github-oidc.sh` - OIDC setup
    - `scripts/improve-security.sh` - Comprehensive improvements
    - `scripts/assume-test-role.sh` - Temporary credentials (fixed)
@@ -94,7 +94,7 @@ These are nice-to-have but not required given current secure setup:
 
 2. **Limited-Permission User**
    - Better isolation
-   - Run: `./scripts/setup-trainctl-user.sh`
+   - Run: `./scripts/setup-runctl-user.sh`
 
 3. **Use Roles for Daily Work**
    - Temporary credentials
@@ -114,7 +114,7 @@ source scripts/assume-test-role.sh
 
 ### View CloudTrail Logs
 ```bash
-aws s3 ls s3://trainctl-cloudtrail-logs-*/
+aws s3 ls s3://runctl-cloudtrail-logs-*/
 aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=RunInstances
 ```
 
@@ -128,7 +128,7 @@ aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,Attribut
 ### Scripts (6)
 - `scripts/check-aws-credentials.sh`
 - `scripts/setup-cloudtrail.sh`
-- `scripts/setup-trainctl-user.sh`
+- `scripts/setup-runctl-user.sh`
 - `scripts/setup-github-oidc.sh`
 - `scripts/improve-security.sh`
 - `scripts/assume-test-role.sh` (fixed)

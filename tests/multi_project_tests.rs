@@ -41,14 +41,9 @@ fn test_tag_format() {
     let project_name = "test-project";
     let user_id = "alice";
 
-    let name_tag = format!(
-        "trainctl-{}-{}-{}",
-        user_id,
-        project_name,
-        &instance_id[..8]
-    );
+    let name_tag = format!("runctl-{}-{}-{}", user_id, project_name, &instance_id[..8]);
 
-    assert_eq!(name_tag, "trainctl-alice-test-project-i-123456");
+    assert_eq!(name_tag, "runctl-alice-test-project-i-123456");
     assert!(name_tag.len() <= 128); // AWS tag value limit
 }
 
@@ -57,9 +52,9 @@ fn test_tag_keys() {
     // Verify all expected tag keys
     let expected_keys = vec![
         "Name",
-        "trainctl:created",
-        "trainctl:project",
-        "trainctl:user",
+        "runctl:created",
+        "runctl:project",
+        "runctl:user",
         "CreatedBy",
     ];
 
@@ -74,24 +69,24 @@ fn test_tag_keys() {
 fn test_project_filtering_logic() {
     // Test the filtering logic for project tags
     let tags1 = vec![
-        ("trainctl:project".to_string(), "project-a".to_string()),
+        ("runctl:project".to_string(), "project-a".to_string()),
         ("Name".to_string(), "instance-1".to_string()),
     ];
 
     let tags2 = vec![
-        ("trainctl:project".to_string(), "project-b".to_string()),
+        ("runctl:project".to_string(), "project-b".to_string()),
         ("Name".to_string(), "instance-2".to_string()),
     ];
 
     // Filter by project-a
     let matches_project_a = tags1
         .iter()
-        .any(|(k, v)| k == "trainctl:project" && v == "project-a");
+        .any(|(k, v)| k == "runctl:project" && v == "project-a");
     assert!(matches_project_a);
 
     let matches_project_a_2 = tags2
         .iter()
-        .any(|(k, v)| k == "trainctl:project" && v == "project-a");
+        .any(|(k, v)| k == "runctl:project" && v == "project-a");
     assert!(!matches_project_a_2);
 }
 
@@ -99,23 +94,23 @@ fn test_project_filtering_logic() {
 fn test_user_filtering_logic() {
     // Test the filtering logic for user tags
     let tags1 = vec![
-        ("trainctl:user".to_string(), "alice".to_string()),
+        ("runctl:user".to_string(), "alice".to_string()),
         ("Name".to_string(), "instance-1".to_string()),
     ];
 
     let tags2 = vec![
-        ("trainctl:user".to_string(), "bob".to_string()),
+        ("runctl:user".to_string(), "bob".to_string()),
         ("Name".to_string(), "instance-2".to_string()),
     ];
 
     // Filter by alice
     let matches_alice = tags1
         .iter()
-        .any(|(k, v)| k == "trainctl:user" && v == "alice");
+        .any(|(k, v)| k == "runctl:user" && v == "alice");
     assert!(matches_alice);
 
     let matches_alice_2 = tags2
         .iter()
-        .any(|(k, v)| k == "trainctl:user" && v == "alice");
+        .any(|(k, v)| k == "runctl:user" && v == "alice");
     assert!(!matches_alice_2);
 }

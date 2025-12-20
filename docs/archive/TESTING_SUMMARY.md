@@ -35,17 +35,17 @@ December 5, 2024
 1. **Spot Flag Configuration** ✅ FIXED
    - **Issue**: `spot` was defined as positional argument, causing clap panic
    - **Fix**: Changed to `#[arg(long)]` flag
-   - **Impact**: `trainctl aws create --spot` now works correctly
+   - **Impact**: `runctl aws create --spot` now works correctly
 
 2. **Spot Max Price** ✅ FIXED
    - **Issue**: `spot_max_price` was positional argument
    - **Fix**: Changed to `#[arg(long)]` flag
-   - **Impact**: `trainctl aws create --spot-max-price 0.10` now works
+   - **Impact**: `runctl aws create --spot-max-price 0.10` now works
 
 3. **No Fallback Flag** ✅ FIXED
    - **Issue**: `no_fallback` was positional argument
    - **Fix**: Changed to `#[arg(long)]` flag
-   - **Impact**: `trainctl aws create --no-fallback` now works
+   - **Impact**: `runctl aws create --no-fallback` now works
 
 4. **Unused Imports** ✅ FIXED
    - **Issue**: `use crate::error::TrainctlError;` unused in `src/aws.rs`
@@ -91,7 +91,7 @@ December 5, 2024
 1. **EBS Command Location**
    - EBS commands are nested under `aws ebs`, not top-level
    - This is intentional design (EBS is AWS-specific)
-   - Users should use: `trainctl aws ebs create ...`
+   - Users should use: `runctl aws ebs create ...`
 
 2. **Examples in Help Text**
    - Some commands missing examples (low priority)
@@ -139,28 +139,28 @@ python3 test_training_script.py
 
 ### CLI Help Tests
 ```bash
-trainctl --help
-trainctl aws --help
-trainctl aws create --help
-trainctl ebs --help  # Note: nested under aws ebs
-trainctl s3 --help
-trainctl checkpoint --help
-trainctl resources --help
-trainctl config --help
-trainctl top --help
+runctl --help
+runctl aws --help
+runctl aws create --help
+runctl ebs --help  # Note: nested under aws ebs
+runctl s3 --help
+runctl checkpoint --help
+runctl resources --help
+runctl config --help
+runctl top --help
 ```
 
 ### Validation Tests
 ```bash
-trainctl aws train invalid-id train.py  # Should show validation error
-trainctl ebs attach invalid-volume-id i-123  # Should show validation error
+runctl aws train invalid-id train.py  # Should show validation error
+runctl ebs attach invalid-volume-id i-123  # Should show validation error
 ```
 
 ### JSON Output Tests
 ```bash
-trainctl --output json resources list
-trainctl --output json resources status
-trainctl --output json checkpoint list ./checkpoints/
+runctl --output json resources list
+runctl --output json resources status
+runctl --output json checkpoint list ./checkpoints/
 ```
 
 ### E2E Tests (Requires AWS)

@@ -30,14 +30,14 @@
 **Example Pain Point:**
 ```bash
 # Current: See instance, then manually type command
-trainctl resources list
+runctl resources list
 # See: i-087eaff7f386856ba running
-trainctl aws terminate i-087eaff7f386856ba  # Manual copy-paste
+runctl aws terminate i-087eaff7f386856ba  # Manual copy-paste
 ```
 
 **Better:** Interactive selection
 ```bash
-trainctl resources list --interactive
+runctl resources list --interactive
 # Arrow keys to select, 't' to terminate, 'Enter' for details
 ```
 
@@ -88,7 +88,7 @@ i-0ac87df252bcdb371  running   t3.medium  39m      $0.0416   $0.03    34.239.180
 
 **Missing:**
 ```bash
-trainctl resources list --filter running --sort cost --limit 5
+runctl resources list --filter running --sort cost --limit 5
 ```
 
 ---
@@ -102,7 +102,7 @@ trainctl resources list --filter running --sort cost --limit 5
 4. Confirming
 
 **Missing Quick Actions:**
-- `trainctl resources list --interactive` with:
+- `runctl resources list --interactive` with:
   - `t` - terminate selected
   - `s` - SSH to instance
   - `m` - monitor instance
@@ -117,7 +117,7 @@ trainctl resources list --filter running --sort cost --limit 5
 **Problem:** Static snapshot. No auto-refresh or live monitoring.
 
 **Missing:**
-- `trainctl resources watch` - auto-refresh every N seconds
+- `runctl resources watch` - auto-refresh every N seconds
 - Live cost updates
 - Real-time state changes
 - Progress indicators for long operations
@@ -173,7 +173,7 @@ Press '?' for help, 't' to terminate, 's' to SSH, 'Enter' for details
 
 **Missing:**
 ```bash
-trainctl resources compare --instances i-xxx,i-yyy
+runctl resources compare --instances i-xxx,i-yyy
 ```
 
 ---
@@ -200,8 +200,8 @@ trainctl resources compare --instances i-xxx,i-yyy
 
 **Missing:**
 ```bash
-trainctl resources list --export csv --output resources.csv
-trainctl resources snapshot --save resources-2025-12-03.json
+runctl resources list --export csv --output resources.csv
+runctl resources snapshot --save resources-2025-12-03.json
 ```
 
 ---
@@ -227,7 +227,7 @@ trainctl resources snapshot --save resources-2025-12-03.json
 
 **Missing:**
 ```bash
-trainctl resources cleanup --interactive
+runctl resources cleanup --interactive
 # Select multiple with space, then 't' to terminate all
 ```
 
@@ -278,7 +278,7 @@ trainctl resources cleanup --interactive
 
 1. **Add Tabular Output Format**
    ```bash
-   trainctl resources list --table
+   runctl resources list --table
    ```
    - Aligned columns
    - Easy scanning
@@ -286,13 +286,13 @@ trainctl resources cleanup --interactive
 
 2. **Add Filtering**
    ```bash
-   trainctl resources list --filter running --sort cost
+   runctl resources list --filter running --sort cost
    ```
 
 3. **Add Quick Actions**
    ```bash
-   trainctl resources list --interactive
-   # Or: trainctl resources <instance-id> terminate
+   runctl resources list --interactive
+   # Or: runctl resources <instance-id> terminate
    ```
 
 4. **Improve Default View**
@@ -310,7 +310,7 @@ trainctl resources cleanup --interactive
 
 6. **Live Monitoring Mode**
    ```bash
-   trainctl resources watch --interval 5s
+   runctl resources watch --interval 5s
    ```
 
 7. **Better Visual Hierarchy**
@@ -373,7 +373,7 @@ trainctl resources cleanup --interactive
 ### 1. Tabular Output (Immediate)
 
 ```bash
-trainctl resources list --table
+runctl resources list --table
 ```
 
 Output:
@@ -390,7 +390,7 @@ Output:
 ### 2. Interactive Mode (High Value)
 
 ```bash
-trainctl resources list --interactive
+runctl resources list --interactive
 ```
 
 Features:
@@ -406,19 +406,19 @@ Features:
 
 ```bash
 # Default: compact, running only, sorted by cost
-trainctl resources list
+runctl resources list
 
 # Show all including terminated
-trainctl resources list --all
+runctl resources list --all
 
 # Detailed view
-trainctl resources list --detailed
+runctl resources list --detailed
 ```
 
 ### 4. Watch Mode
 
 ```bash
-trainctl resources watch --interval 5s
+runctl resources watch --interval 5s
 # Auto-refreshes, highlights changes
 ```
 
@@ -426,10 +426,10 @@ trainctl resources watch --interval 5s
 
 ```bash
 # From list view, quick terminate
-trainctl resources terminate i-087eaff7f386856ba
+runctl resources terminate i-087eaff7f386856ba
 
 # Or interactive selection
-trainctl resources terminate --interactive
+runctl resources terminate --interactive
 ```
 
 ---

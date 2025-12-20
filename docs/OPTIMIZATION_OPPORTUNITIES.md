@@ -1,4 +1,4 @@
-# Optimization Opportunities for trainctl
+# Optimization Opportunities for runctl
 
 ## EBS Volume Optimization
 
@@ -17,7 +17,7 @@ See [EBS_OPTIMIZATION.md](EBS_OPTIMIZATION.md) for detailed EBS strategies.
 
 ```bash
 # Cluster placement group for low latency
-trainctl aws create --placement-group cluster
+runctl aws create --placement-group cluster
 ```
 
 **Benefits:**
@@ -29,7 +29,7 @@ trainctl aws create --placement-group cluster
 
 ```bash
 # Use instances with enhanced networking (SR-IOV)
-trainctl aws create --instance-type c5n.2xlarge  # Enhanced networking
+runctl aws create --instance-type c5n.2xlarge  # Enhanced networking
 ```
 
 **Benefits:**
@@ -55,7 +55,7 @@ trainctl aws create --instance-type c5n.2xlarge  # Enhanced networking
 
 ```bash
 # Use s5cmd for parallel S3 downloads
-trainctl s3 download --parallel 10 s3://bucket/data/ ./data/
+runctl s3 download --parallel 10 s3://bucket/data/ ./data/
 ```
 
 **Current:** Sequential downloads (slow)
@@ -65,7 +65,7 @@ trainctl s3 download --parallel 10 s3://bucket/data/ ./data/
 
 ```bash
 # Compress before upload, decompress on download
-trainctl s3 upload --compress ./data/ s3://bucket/data/
+runctl s3 upload --compress ./data/ s3://bucket/data/
 ```
 
 **Benefits:**
@@ -77,7 +77,7 @@ trainctl s3 upload --compress ./data/ s3://bucket/data/
 
 ```bash
 # Only transfer changed files
-trainctl s3 sync --incremental ./data/ s3://bucket/data/
+runctl s3 sync --incremental ./data/ s3://bucket/data/
 ```
 
 **Benefits:**
@@ -88,7 +88,7 @@ trainctl s3 sync --incremental ./data/ s3://bucket/data/
 
 ```bash
 # For cross-region transfers
-trainctl s3 upload --use-acceleration ./data/ s3://bucket/data/
+runctl s3 upload --use-acceleration ./data/ s3://bucket/data/
 ```
 
 **Benefits:**
@@ -101,7 +101,7 @@ trainctl s3 upload --use-acceleration ./data/ s3://bucket/data/
 
 ```bash
 # Auto-select instance type based on workload
-trainctl aws create --auto-select \
+runctl aws create --auto-select \
     --dataset-size 100GB \
     --training-time 2h
 ```
@@ -115,7 +115,7 @@ trainctl aws create --auto-select \
 
 ```bash
 # Launch across multiple instance types for availability
-trainctl aws create --spot \
+runctl aws create --spot \
     --diversify-types c5.2xlarge,c5.4xlarge,m5.2xlarge
 ```
 
@@ -128,7 +128,7 @@ trainctl aws create --spot \
 
 ```bash
 # Use capacity reservations for critical training
-trainctl aws create --capacity-reservation cr-xxxxx
+runctl aws create --capacity-reservation cr-xxxxx
 ```
 
 **Benefits:**
@@ -142,7 +142,7 @@ trainctl aws create --capacity-reservation cr-xxxxx
 
 ```bash
 # Only save changed model weights
-trainctl checkpoint save --incremental ./checkpoint.pt
+runctl checkpoint save --incremental ./checkpoint.pt
 ```
 
 **Benefits:**
@@ -154,7 +154,7 @@ trainctl checkpoint save --incremental ./checkpoint.pt
 
 ```bash
 # Compress checkpoints before upload
-trainctl checkpoint save --compress ./checkpoint.pt
+runctl checkpoint save --compress ./checkpoint.pt
 ```
 
 **Benefits:**
@@ -166,7 +166,7 @@ trainctl checkpoint save --compress ./checkpoint.pt
 
 ```bash
 # Deduplicate checkpoints (same weights = same hash)
-trainctl checkpoint save --deduplicate ./checkpoint.pt
+runctl checkpoint save --deduplicate ./checkpoint.pt
 ```
 
 **Benefits:**
@@ -177,7 +177,7 @@ trainctl checkpoint save --deduplicate ./checkpoint.pt
 
 ```bash
 # Upload checkpoints in background
-trainctl checkpoint save --async-upload ./checkpoint.pt
+runctl checkpoint save --async-upload ./checkpoint.pt
 ```
 
 **Benefits:**
@@ -191,7 +191,7 @@ trainctl checkpoint save --async-upload ./checkpoint.pt
 
 ```bash
 # Accumulate gradients across multiple batches
-trainctl local train.py --gradient-accumulation 4
+runctl local train.py --gradient-accumulation 4
 ```
 
 **Benefits:**
@@ -203,7 +203,7 @@ trainctl local train.py --gradient-accumulation 4
 
 ```bash
 # Use FP16/BF16 for faster training
-trainctl local train.py --mixed-precision
+runctl local train.py --mixed-precision
 ```
 
 **Benefits:**
@@ -215,7 +215,7 @@ trainctl local train.py --mixed-precision
 
 ```bash
 # Optimize data loading
-trainctl local train.py \
+runctl local train.py \
     --num-workers 4 \
     --prefetch-factor 2 \
     --pin-memory
@@ -230,7 +230,7 @@ trainctl local train.py \
 
 ```bash
 # Stop training early if no improvement
-trainctl local train.py \
+runctl local train.py \
     --early-stopping \
     --patience 10
 ```
@@ -246,7 +246,7 @@ trainctl local train.py \
 
 ```bash
 # Extract metrics from logs automatically
-trainctl monitor --extract-metrics training.log
+runctl monitor --extract-metrics training.log
 ```
 
 **Benefits:**
@@ -258,7 +258,7 @@ trainctl monitor --extract-metrics training.log
 
 ```bash
 # Track costs in real-time
-trainctl resources summary --cost-tracking
+runctl resources summary --cost-tracking
 ```
 
 **Benefits:**
@@ -270,7 +270,7 @@ trainctl resources summary --cost-tracking
 
 ```bash
 # Profile training performance
-trainctl local train.py --profile
+runctl local train.py --profile
 ```
 
 **Benefits:**
@@ -284,7 +284,7 @@ trainctl local train.py --profile
 
 ```bash
 # Chain multiple operations
-trainctl pipeline run training_pipeline.yaml
+runctl pipeline run training_pipeline.yaml
 ```
 
 **Benefits:**
@@ -296,7 +296,7 @@ trainctl pipeline run training_pipeline.yaml
 
 ```bash
 # Cache preprocessed data
-trainctl local preprocess.py --cache ./cache/
+runctl local preprocess.py --cache ./cache/
 ```
 
 **Benefits:**
@@ -308,7 +308,7 @@ trainctl local preprocess.py --cache ./cache/
 
 ```bash
 # Auto-detect and install dependencies
-trainctl local train.py --auto-deps
+runctl local train.py --auto-deps
 ```
 
 **Benefits:**
@@ -322,7 +322,7 @@ trainctl local train.py --auto-deps
 
 ```bash
 # Diversify across availability zones
-trainctl aws create --spot \
+runctl aws create --spot \
     --diversify-azs \
     --max-price 0.10
 ```
@@ -336,7 +336,7 @@ trainctl aws create --spot \
 
 ```bash
 # Use reserved instances for predictable workloads
-trainctl aws create --reserved-instance
+runctl aws create --reserved-instance
 ```
 
 **Benefits:**
@@ -348,7 +348,7 @@ trainctl aws create --reserved-instance
 
 ```bash
 # Use savings plans for flexible workloads
-trainctl aws create --savings-plan
+runctl aws create --savings-plan
 ```
 
 **Benefits:**
@@ -360,7 +360,7 @@ trainctl aws create --savings-plan
 
 ```bash
 # Auto-scale based on workload
-trainctl aws create --auto-scale \
+runctl aws create --auto-scale \
     --min-instances 1 \
     --max-instances 10
 ```
@@ -376,7 +376,7 @@ trainctl aws create --auto-scale \
 
 ```bash
 # Use IAM roles instead of access keys
-trainctl aws create --iam-role training-role
+runctl aws create --iam-role training-role
 ```
 
 **Benefits:**
@@ -388,7 +388,7 @@ trainctl aws create --iam-role training-role
 
 ```bash
 # Launch in private subnet
-trainctl aws create --subnet private-subnet
+runctl aws create --subnet private-subnet
 ```
 
 **Benefits:**
@@ -400,8 +400,8 @@ trainctl aws create --subnet private-subnet
 
 ```bash
 # Encrypt EBS volumes and S3 buckets
-trainctl aws create --encrypt-volumes
-trainctl s3 upload --encrypt ./data/ s3://bucket/data/
+runctl aws create --encrypt-volumes
+runctl s3 upload --encrypt ./data/ s3://bucket/data/
 ```
 
 **Benefits:**

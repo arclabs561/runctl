@@ -23,10 +23,10 @@ pub enum ResourceCommands {
         /// Filter by platform (aws, runpod, local, all)
         #[arg(long, default_value = "all")]
         platform: String,
-        /// Filter by project name (from trainctl:project tag)
+        /// Filter by project name (from runctl:project tag)
         #[arg(long)]
         project: Option<String>,
-        /// Filter by user (from trainctl:user tag)
+        /// Filter by user (from runctl:user tag)
         #[arg(long)]
         user: Option<String>,
         /// Output format (table, compact, detailed)
@@ -250,7 +250,7 @@ pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &
     // Detailed output with better formatting
     let header_style = Style::new().bold().cyan();
     println!("{}", header_style.apply_to("=".repeat(80)));
-    println!("{}", header_style.apply_to("trainctl Status"));
+    println!("{}", header_style.apply_to("runctl Status"));
     println!("{}", header_style.apply_to("=".repeat(80)));
 
     // Quick resource summary
@@ -451,8 +451,8 @@ async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
             .collect();
         let cmd_str = cmd.join(" ");
 
-        // Filter out system processes and trainctl itself
-        if cmd_str.contains("trainctl")
+        // Filter out system processes and runctl itself
+        if cmd_str.contains("runctl")
             || cmd_str.contains("ps aux")
             || cmd_str.contains("runpodctl")
             || cmd_str.contains("ripgrep")
@@ -687,7 +687,7 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) 
         filtered_instances.retain(|inst| {
             inst.tags
                 .iter()
-                .any(|(k, v)| k == "trainctl:project" && v == project)
+                .any(|(k, v)| k == "runctl:project" && v == project)
         });
     }
 
@@ -696,7 +696,7 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) 
         filtered_instances.retain(|inst| {
             inst.tags
                 .iter()
-                .any(|(k, v)| k == "trainctl:user" && v == user)
+                .any(|(k, v)| k == "runctl:user" && v == user)
         });
     }
 
@@ -931,23 +931,23 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) 
                     old_warning_display
                 );
 
-                // Show key tags in summary (Name, project, trainctl tags)
+                // Show key tags in summary (Name, project, runctl tags)
                 if !inst.tags.is_empty() {
                     let key_tags: Vec<String> = inst
                         .tags
                         .iter()
                         .filter(|(k, _)| {
                             k == "Name"
-                                || k == "trainctl:project"
-                                || k == "trainctl:created"
+                                || k == "runctl:project"
+                                || k == "runctl:created"
                                 || k == "CreatedBy"
                         })
                         .take(3)
                         .map(|(k, v)| {
                             // Clean up tag keys for display
-                            let display_key = if k == "trainctl:project" {
+                            let display_key = if k == "runctl:project" {
                                 "project"
-                            } else if k == "trainctl:created" {
+                            } else if k == "runctl:created" {
                                 "created"
                             } else {
                                 k
@@ -1131,7 +1131,7 @@ async fn list_local_processes(detailed: bool) -> Result<()> {
         let cmd_str = cmd.join(" ");
 
         // Filter out system processes
-        if cmd_str.contains("trainctl")
+        if cmd_str.contains("runctl")
             || cmd_str.contains("ps aux")
             || cmd_str.contains("runpodctl")
             || cmd_str.contains("ripgrep")
@@ -1337,7 +1337,7 @@ async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
             .red()
             .bold()
         );
-        println!("   Run 'trainctl resources cleanup --dry-run' to identify cleanup candidates.");
+        println!("   Run 'runctl resources cleanup --dry-run' to identify cleanup candidates.");
     }
 
     println!();
@@ -1419,9 +1419,9 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
             let is_protected = instance.tags().iter().any(|t| {
                 t.key()
                     .map(|k| {
-                        k == "trainctl:protected"
-                            || k == "trainctl:important"
-                            || k == "trainctl:persistent"
+                        k == "runctl:protected"
+                            || k == "runctl:important"
+                            || k == "runctl:persistent"
                     })
                     .unwrap_or(false)
                     && t.value().map(|v| v == "true").unwrap_or(false)
@@ -1438,13 +1438,13 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
 
             if let Some(lt) = launch_time {
                 if lt < cutoff {
-                    // Check if it has trainctl tags
-                    let has_trainctl_tag = instance
+                    // Check if it has runctl tags
+                    let has_runctl_tag = instance
                         .tags()
                         .iter()
-                        .any(|t| t.key().map(|k| k.contains("trainctl")).unwrap_or(false));
+                        .any(|t| t.key().map(|k| k.contains("runctl")).unwrap_or(false));
 
-                    if !has_trainctl_tag {
+                    if !has_runctl_tag {
                         zombies.push(instance_id);
                     }
                 }
@@ -1452,7 +1452,7 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
         }
     }
 
-    // Also check for orphaned volumes (available, no trainctl tags, not persistent)
+    // Also check for orphaned volumes (available, no runctl tags, not persistent)
     let volumes_response = client
         .describe_volumes()
         .filters(
@@ -1471,7 +1471,7 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
 
         // Skip persistent volumes
         let is_persistent = volume.tags().iter().any(|t| {
-            t.key().map(|k| k == "trainctl:persistent").unwrap_or(false)
+            t.key().map(|k| k == "runctl:persistent").unwrap_or(false)
                 && t.value().map(|v| v == "true").unwrap_or(false)
         });
 
@@ -1479,13 +1479,13 @@ async fn cleanup_zombies(dry_run: bool, force: bool, _config: &Config) -> Result
             continue;
         }
 
-        // Check if has trainctl tags (if not, might be orphaned)
-        let has_trainctl_tag = volume
+        // Check if has runctl tags (if not, might be orphaned)
+        let has_runctl_tag = volume
             .tags()
             .iter()
-            .any(|t| t.key().map(|k| k.contains("trainctl")).unwrap_or(false));
+            .any(|t| t.key().map(|k| k.contains("runctl")).unwrap_or(false));
 
-        if !has_trainctl_tag {
+        if !has_runctl_tag {
             orphaned_volumes.push(volume_id);
         }
     }
@@ -1661,9 +1661,9 @@ async fn show_insights(_config: &Config, output_format: &str) -> Result<()> {
     }
 
     println!("\n🔧 Actions:");
-    println!("  trainctl resources list --detailed    # See all resources");
-    println!("  trainctl resources cleanup --dry-run  # Preview cleanup");
-    println!("  trainctl resources cleanup --force    # Cleanup zombies");
+    println!("  runctl resources list --detailed    # See all resources");
+    println!("  runctl resources cleanup --dry-run  # Preview cleanup");
+    println!("  runctl resources cleanup --force    # Cleanup zombies");
 
     Ok(())
 }
@@ -1905,7 +1905,7 @@ fn generate_html(summary: &serde_json::Value) -> Result<String> {
         r#"<!DOCTYPE html>
 <html>
 <head>
-    <title>trainctl Resource Report</title>
+    <title>runctl Resource Report</title>
     <style>
         body { font-family: monospace; margin: 20px; }
         table { border-collapse: collapse; width: 100%; }

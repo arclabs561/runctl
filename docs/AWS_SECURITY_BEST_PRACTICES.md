@@ -1,8 +1,8 @@
-# AWS Security Best Practices for trainctl
+# AWS Security Best Practices for runctl
 
 ## Overview
 
-This document consolidates AWS security best practices specifically for trainctl usage, based on AWS recommendations and security research.
+This document consolidates AWS security best practices specifically for runctl usage, based on AWS recommendations and security research.
 
 ## Root Credentials: Never Use
 
@@ -75,15 +75,15 @@ Grant only the **minimum permissions** needed to perform a task.
 4. **Add permissions incrementally** if needed
 5. **Review and remove** unused permissions regularly
 
-### Example: trainctl Permissions
+### Example: runctl Permissions
 
-**What trainctl needs:**
+**What runctl needs:**
 - EC2: Describe, Create, Start, Stop, Terminate instances
 - EBS: Describe, Create, Attach, Detach, Delete volumes
 - S3: GetObject, PutObject, DeleteObject, ListBucket
 - SSM: SendCommand, GetCommandInvocation
 
-**What trainctl does NOT need:**
+**What runctl does NOT need:**
 - IAM: Create users, roles, policies
 - Organizations: Account management
 - Billing: Cost management
@@ -127,15 +127,15 @@ source scripts/assume-test-role.sh
 - **Compliance**: Meet organizational requirements
 - **Automation**: Enable policy-based controls
 
-### trainctl Tagging Strategy
+### runctl Tagging Strategy
 
 ```json
 {
   "Environment": "test|production",
   "Project": "project-name",
-  "CreatedBy": "trainctl",
-  "trainctl:created": "2025-12-04",
-  "trainctl:project": "project-name"
+  "CreatedBy": "runctl",
+  "runctl:created": "2025-12-04",
+  "runctl:project": "project-name"
 }
 ```
 
@@ -166,7 +166,7 @@ Permission boundaries set the **maximum permissions** an IAM entity can have, re
 - **Enforce organizational limits**: Prevent accidental over-permissioning
 - **Defense in depth**: Multiple layers of security
 
-### Example for trainctl
+### Example for runctl
 
 ```json
 {
@@ -195,8 +195,8 @@ Enable CloudTrail to log all API calls:
 ```bash
 # Enable CloudTrail
 aws cloudtrail create-trail \
-  --name trainctl-audit-trail \
-  --s3-bucket-name trainctl-audit-logs
+  --name runctl-audit-trail \
+  --s3-bucket-name runctl-audit-logs
 ```
 
 ### GuardDuty

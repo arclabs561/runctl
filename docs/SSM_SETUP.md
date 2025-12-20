@@ -3,8 +3,8 @@
 ## Issue Found During Testing
 
 Some instances may not have SSM connectivity, which is required for:
-- Process monitoring (`trainctl aws processes`)
-- Training execution (`trainctl aws train`)
+- Process monitoring (`runctl aws processes`)
+- Training execution (`runctl aws train`)
 - Code syncing (when using SSM)
 - Command execution on instances
 
@@ -48,12 +48,12 @@ aws iam add-role-to-instance-profile \
 
 Then use when creating instances:
 ```bash
-trainctl aws create t3.micro --iam-instance-profile EC2-SSM-Profile
+runctl aws create t3.micro --iam-instance-profile EC2-SSM-Profile
 ```
 
 ### Option 2: Use SSH Fallback
 
-If SSM is not available, trainctl should fall back to SSH. Ensure:
+If SSM is not available, runctl should fall back to SSH. Ensure:
 - SSH key is configured (`--key-name`)
 - Security group allows SSH (port 22)
 - Instance has public IP or VPN access
@@ -75,7 +75,7 @@ sudo snap start amazon-ssm-agent
 
 ## Current Implementation
 
-trainctl currently:
+runctl currently:
 - ✅ Prefers SSM when IAM instance profile is detected
 - ✅ Falls back to SSH when SSM unavailable
 - ⚠️ May fail if neither SSM nor SSH is configured

@@ -2,7 +2,7 @@
 
 ## Current Status
 
-We have **13 E2E test files** covering various aspects of trainctl, but **we haven't actually run a full training workflow end-to-end** yet.
+We have **13 E2E test files** covering various aspects of runctl, but **we haven't actually run a full training workflow end-to-end** yet.
 
 ## Available E2E Tests
 
@@ -77,13 +77,13 @@ TRAINCTL_E2E=1 cargo test --features e2e -- --ignored
 
 ### ❌ Not Yet Tested End-to-End
 
-1. **Full Training Workflow with trainctl CLI**
-   - Create instance via `trainctl aws create`
-   - Sync code via `trainctl aws train --sync-code`
-   - Start training via `trainctl aws train`
-   - Monitor via `trainctl aws monitor`
+1. **Full Training Workflow with runctl CLI**
+   - Create instance via `runctl aws create`
+   - Sync code via `runctl aws train --sync-code`
+   - Start training via `runctl aws train`
+   - Monitor via `runctl aws monitor`
    - Verify checkpoints created
-   - Cleanup via `trainctl aws terminate`
+   - Cleanup via `runctl aws terminate`
 
 2. **Code Syncing Verification**
    - Verify files actually sync to instance
@@ -111,7 +111,7 @@ TRAINCTL_E2E=1 cargo test --features e2e -- --ignored
 
 1. **Fix remaining test compilation errors** ✅ (in progress)
 2. **Run local test script** ✅ (works)
-3. **Run E2E test with actual trainctl CLI** (TODO)
+3. **Run E2E test with actual runctl CLI** (TODO)
 4. **Verify code syncing works** (TODO)
 5. **Test with real training script** (TODO)
 6. **Test checkpoint upload/download** (TODO)

@@ -1,7 +1,7 @@
-# Cursor Rules for trainctl
+# Cursor Rules for runctl
 
 ## Project Overview
-trainctl is a Rust CLI tool for ML training orchestration across multiple cloud providers (AWS, RunPod, Lyceum AI) with unified checkpoint management, cost tracking, and resource lifecycle management.
+runctl is a Rust CLI tool for ML training orchestration across multiple cloud providers (AWS, RunPod, Lyceum AI) with unified checkpoint management, cost tracking, and resource lifecycle management.
 
 ## Architecture Principles
 

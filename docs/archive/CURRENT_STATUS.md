@@ -39,7 +39,7 @@
 
 ### 4. Service Auto-Creation
 - Pre-install common ML libraries (numpy, pandas)
-- Create cache directory (`/opt/trainctl-cache`)
+- Create cache directory (`/opt/runctl-cache`)
 - Improved dependency management
 
 ### 5. E2E Test Coverage

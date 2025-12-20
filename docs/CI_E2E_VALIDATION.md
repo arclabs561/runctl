@@ -36,7 +36,7 @@
    - Status: Running
 
 4. **Tests** (19909386324) - ❌ `completed` (failure) - 7m18s
-   - Commit: "Initial commit: trainctl - ML training orchestration CLI"
+   - Commit: "Initial commit: runctl - ML training orchestration CLI"
    - Status: ❌ Failed (likely initial setup issue)
 
 ---

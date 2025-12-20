@@ -135,7 +135,7 @@ This document provides modern recommendations for CPU, GPU, storage, and memory 
 6. **Stage-specific instances** - use cheaper instances for preprocessing/evaluation
 7. **Auto-scaling** - scale down when not training
 
-## Implementation in trainctl
+## Implementation in runctl
 
 The following functions provide these recommendations:
 

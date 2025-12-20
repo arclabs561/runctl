@@ -2,7 +2,7 @@
 
 ## Summary
 
-Continued comprehensive improvements to trainctl codebase, addressing clippy warnings, dead code, and preparing for production readiness.
+Continued comprehensive improvements to runctl codebase, addressing clippy warnings, dead code, and preparing for production readiness.
 
 ## Completed This Session
 
@@ -63,7 +63,7 @@ Continued comprehensive improvements to trainctl codebase, addressing clippy war
 3. **Training job detection blocking**: Add blocking logic (currently warns only)
 
 ### Medium Priority
-4. **Dependency caching**: Implement full caching system using `/opt/trainctl-cache`
+4. **Dependency caching**: Implement full caching system using `/opt/runctl-cache`
 5. **Incremental sync validation**: Test rsync fallback with real instances
 6. **GPU support**: Auto-detect and verify GPU availability
 

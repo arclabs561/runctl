@@ -108,7 +108,7 @@
    pip3 install --system torch torchvision numpy pandas
    ```
 2. **Add dependency caching**:
-   - Cache pip packages in `/opt/trainctl-cache/`
+   - Cache pip packages in `/opt/runctl-cache/`
    - Reuse between instances
 3. **Better GPU support**:
    - Detect GPU instances

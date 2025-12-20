@@ -58,7 +58,7 @@ async fn create_pod(name: Option<String>, gpu: String, disk: u32, config: &Confi
     }
 
     let pod_name =
-        name.unwrap_or_else(|| format!("trainctl-{}", &uuid::Uuid::new_v4().to_string()[..8]));
+        name.unwrap_or_else(|| format!("runctl-{}", &uuid::Uuid::new_v4().to_string()[..8]));
 
     let runpod_config = config.runpod.as_ref().ok_or_else(|| {
         TrainctlError::Config(crate::error::ConfigError::MissingField(
@@ -169,10 +169,7 @@ async fn train_on_pod(
             )))
         })?;
         println!("Training started in background");
-        println!(
-            "   Monitor with: trainctl runpod monitor {} --follow",
-            pod_id
-        );
+        println!("   Monitor with: runctl runpod monitor {} --follow", pod_id);
     } else {
         train_cmd.status().map_err(|e| {
             TrainctlError::Io(std::io::Error::other(format!("Training failed: {}", e)))

@@ -1,12 +1,12 @@
-# Rename Summary: train-ops → trainctl
+# Rename Summary: train-ops → runctl
 
 ## ✅ Completed Changes
 
 ### Core Configuration
 - ✅ `Cargo.toml`: Package name, binary name, lib name updated
 - ✅ All source files updated (`main.rs`, `config.rs`, `local.rs`, `runpod.rs`, `resources.rs`, `lib.rs`)
-- ✅ Config file references: `.train-ops.toml` → `.trainctl.toml`
-- ✅ Config directory: `~/.config/train-ops/` → `~/.config/trainctl/`
+- ✅ Config file references: `.train-ops.toml` → `.runctl.toml`
+- ✅ Config directory: `~/.config/train-ops/` → `~/.config/runctl/`
 - ✅ Environment variables: `TRAIN_OPS_*` → `TRAINCTL_*`
 
 ### Documentation
@@ -15,8 +15,8 @@
 - ✅ Migration guide created
 
 ### Code References
-- ✅ Command name in CLI: `train-ops` → `trainctl`
-- ✅ Pod naming: `train-ops-*` → `trainctl-*`
+- ✅ Command name in CLI: `train-ops` → `runctl`
+- ✅ Pod naming: `train-ops-*` → `runctl-*`
 - ✅ AWS tag references updated
 - ✅ Process filtering updated
 - ✅ HTML report titles updated
@@ -33,8 +33,8 @@ You'll need to rename the directory manually:
 
 ```bash
 cd /Users/arc/Documents/dev
-mv infra-utils trainctl
-cd trainctl
+mv infra-utils runctl
+cd runctl
 ```
 
 ### 2. Update Your Environment
@@ -48,35 +48,35 @@ After renaming the directory:
 
 ```bash
 # Verify it works
-./target/release/trainctl --version
-./target/release/trainctl --help
+./target/release/runctl --version
+./target/release/runctl --help
 
 # Test a command
-./target/release/trainctl resources list
+./target/release/runctl resources list
 ```
 
 ### 4. Update Existing Config Files
 
 If you have existing config files:
 ```bash
-mv .train-ops.toml .trainctl.toml
+mv .train-ops.toml .runctl.toml
 # or
-mv ~/.config/train-ops/config.toml ~/.config/trainctl/config.toml
+mv ~/.config/train-ops/config.toml ~/.config/runctl/config.toml
 ```
 
 ## 📝 What Changed
 
 | Item | Old | New |
 |------|-----|-----|
-| Tool name | `train-ops` | `trainctl` |
-| Package name | `train-ops` | `trainctl` |
-| Binary name | `train-ops` | `trainctl` |
-| Library name | `train_ops` | `trainctl` |
-| Config file | `.train-ops.toml` | `.trainctl.toml` |
-| Config dir | `~/.config/train-ops/` | `~/.config/trainctl/` |
+| Tool name | `train-ops` | `runctl` |
+| Package name | `train-ops` | `runctl` |
+| Binary name | `train-ops` | `runctl` |
+| Library name | `train_ops` | `runctl` |
+| Config file | `.train-ops.toml` | `.runctl.toml` |
+| Config dir | `~/.config/train-ops/` | `~/.config/runctl/` |
 | Env vars | `TRAIN_OPS_*` | `TRAINCTL_*` |
-| AWS tags | `train-ops` | `trainctl` |
-| Pod names | `train-ops-*` | `trainctl-*` |
+| AWS tags | `train-ops` | `runctl` |
+| Pod names | `train-ops-*` | `runctl-*` |
 
 ## ✨ Benefits
 
@@ -90,5 +90,5 @@ mv ~/.config/train-ops/config.toml ~/.config/trainctl/config.toml
 The codebase is fully updated and ready. Just:
 1. Rename the directory
 2. Rebuild
-3. Start using `trainctl`!
+3. Start using `runctl`!
 

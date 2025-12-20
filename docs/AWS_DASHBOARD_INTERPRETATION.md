@@ -75,7 +75,7 @@ If your `admin` IAM user credentials are compromised:
 1. Go to **IAM → Users → admin**
 2. Click **Permissions** tab
 3. You'll see: `AdministratorAccess` via `admingroup`
-4. **Consider**: Creating a limited-permission user for trainctl
+4. **Consider**: Creating a limited-permission user for runctl
 
 ## Using Your 34 Roles
 
@@ -117,7 +117,7 @@ Set up OIDC to use roles directly (no secrets needed):
 1. Check **IAM → Users → admin** in console
 2. Enable MFA on admin user
 3. Delete unused access key
-4. Consider creating limited-permission user for trainctl
+4. Consider creating limited-permission user for runctl
 5. Use your 34 roles for temporary credentials
 
 The dashboard is correct about root user security, but doesn't show IAM user issues. Check the Users section for admin user details.

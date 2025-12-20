@@ -11,11 +11,11 @@ Based on the analysis of your AWS configuration, here are the prioritized securi
 ### Critical (Do Immediately)
 1. 🔴 **Enable MFA** - **CRITICAL**: Admin user with AdministratorAccess has NO MFA enabled
 2. 🔴 **Delete unused access key** - Key `AKIAXXXXXXXXXXXXXXXX` from 2024 is not in use, delete it
-3. 🔴 **Create limited-permission user** - Admin user has FULL AdministratorAccess, create trainctl-specific user
+3. 🔴 **Create limited-permission user** - Admin user has FULL AdministratorAccess, create runctl-specific user
 
 ### High Priority (Do This Week)
 4. ✅ **Migrate to IAM roles** - Use temporary credentials instead of long-term keys
-5. ✅ **Apply least privilege** - Create specific policies for trainctl operations
+5. ✅ **Apply least privilege** - Create specific policies for runctl operations
 6. ✅ **Enable CloudTrail** - Enable audit logging for all API calls
 
 ### Medium Priority (Do This Month)
@@ -79,7 +79,7 @@ aws iam enable-mfa-device \
 
 **Priority**: Critical
 
-### 2. Create Limited-Permission User for trainctl
+### 2. Create Limited-Permission User for runctl
 
 **Current Risk**: Admin user has `AdministratorAccess` via `admingroup` - **FULL UNLIMITED ACCESS**
 
@@ -91,36 +91,36 @@ aws iam enable-mfa-device \
 
 **Recommended Action**:
 
-1. **Create trainctl-specific policy**:
+1. **Create runctl-specific policy**:
 ```bash
 # Use the policy from scripts/setup-test-role.sh
 # Modify for production use (remove test tag requirements)
 ```
 
-2. **Create dedicated IAM user for trainctl**:
+2. **Create dedicated IAM user for runctl**:
 ```bash
-aws iam create-user --user-name trainctl-user
+aws iam create-user --user-name runctl-user
 
-# Attach trainctl-specific policy
+# Attach runctl-specific policy
 aws iam attach-user-policy \
-  --user-name trainctl-user \
-  --policy-arn arn:aws:iam::512827140002:policy/trainctl-policy
+  --user-name runctl-user \
+  --policy-arn arn:aws:iam::512827140002:policy/runctl-policy
 ```
 
-3. **Use new user for trainctl operations**:
+3. **Use new user for runctl operations**:
 ```bash
-aws configure --profile trainctl
-# Enter trainctl-user credentials
-export AWS_PROFILE=trainctl
+aws configure --profile runctl
+# Enter runctl-user credentials
+export AWS_PROFILE=runctl
 
 # Or update default profile
 aws configure
-# Enter trainctl-user credentials
+# Enter runctl-user credentials
 ```
 
 4. **Keep admin user for admin tasks only**:
    - Use admin user only when you need full admin access
-   - Use trainctl-user for daily trainctl operations
+   - Use runctl-user for daily runctl operations
    - This limits blast radius if credentials are compromised
 
 **Priority**: Critical (do this week)
@@ -129,7 +129,7 @@ aws configure
 
 **Why**: Temporary credentials are more secure than long-term access keys.
 
-**Current Setup**: You already have `trainctl-test-role` configured.
+**Current Setup**: You already have `runctl-test-role` configured.
 
 **Action**:
 ```bash
@@ -138,7 +138,7 @@ source scripts/assume-test-role.sh
 
 # Verify you're using role
 aws sts get-caller-identity
-# Should show: arn:aws:sts::512827140002:assumed-role/trainctl-test-role/...
+# Should show: arn:aws:sts::512827140002:assumed-role/runctl-test-role/...
 ```
 
 **For Production**: Create a production role with appropriate permissions:
@@ -182,15 +182,15 @@ aws cloudtrail describe-trails
 **Enable if not enabled**:
 ```bash
 # Create S3 bucket for logs
-aws s3 mb s3://trainctl-cloudtrail-logs-$(date +%s)
+aws s3 mb s3://runctl-cloudtrail-logs-$(date +%s)
 
 # Create trail
 aws cloudtrail create-trail \
-  --name trainctl-audit-trail \
-  --s3-bucket-name trainctl-cloudtrail-logs-*
+  --name runctl-audit-trail \
+  --s3-bucket-name runctl-cloudtrail-logs-*
 
 # Start logging
-aws cloudtrail start-logging --name trainctl-audit-trail
+aws cloudtrail start-logging --name runctl-audit-trail
 ```
 
 **Priority**: High
@@ -223,7 +223,7 @@ aws cloudtrail start-logging --name trainctl-audit-trail
 
 **Why**: Prevents privilege escalation even if policies are misconfigured.
 
-**Action**: Already implemented in `trainctl-test-role`. Apply to production role as well.
+**Action**: Already implemented in `runctl-test-role`. Apply to production role as well.
 
 **Priority**: Medium
 
@@ -251,7 +251,7 @@ aws guardduty create-detector --enable
 3. ✅ Delete unused access keys
 
 ### Phase 2: This Week
-4. ✅ Create trainctl-specific IAM user
+4. ✅ Create runctl-specific IAM user
 5. ✅ Migrate to using IAM roles for development
 6. ✅ Enable CloudTrail
 
@@ -270,8 +270,8 @@ aws guardduty create-detector --enable
 - [ ] Verify CloudTrail is enabled
 
 ### Short-term (This Week)
-- [ ] Create trainctl-specific IAM user
-- [ ] Create trainctl-specific policy (least privilege)
+- [ ] Create runctl-specific IAM user
+- [ ] Create runctl-specific policy (least privilege)
 - [ ] Migrate to IAM roles for development
 - [ ] Test with temporary credentials
 
@@ -300,7 +300,7 @@ aws cloudtrail describe-trails
 ### Security Improvements
 ```bash
 # Enable MFA (see section 1 above)
-# Create trainctl user (see section 2 above)
+# Create runctl user (see section 2 above)
 # Use temporary credentials
 source scripts/assume-test-role.sh
 ```
@@ -319,7 +319,7 @@ Before making changes, answer:
 
 1. **Does admin user need full admin access?**
    - If yes: Keep but enable MFA and use roles for daily work
-   - If no: Create limited-permission user for trainctl
+   - If no: Create limited-permission user for runctl
 
 2. **Are both access keys in use?**
    - Check AWS CLI config: `cat ~/.aws/credentials`

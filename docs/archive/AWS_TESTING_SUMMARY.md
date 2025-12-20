@@ -17,7 +17,7 @@ All issues have been identified and fixed. The testing setup is now robust, tran
 1. **`verify-setup.sh`** - Verifies all components are configured correctly
 2. **`test-auth.sh`** - Basic authentication and permissions (fixed S3 test)
 3. **`test-security-boundaries.sh`** - Security boundary verification
-4. **`test-trainctl-integration.sh`** - trainctl CLI integration tests
+4. **`test-runctl-integration.sh`** - runctl CLI integration tests
 5. **`run-all-tests.sh`** - Runs all tests in sequence
 
 ## What We Test
@@ -48,7 +48,7 @@ All issues have been identified and fixed. The testing setup is now robust, tran
 - Temporary credentials
 - Region restrictions
 
-### ✅ trainctl Integration
+### ✅ runctl Integration
 - Resource listing works
 - AWS commands available
 - Credentials used correctly
@@ -60,7 +60,7 @@ All tests pass:
 - ✅ Setup verification: PASS
 - ✅ Authentication: PASS (S3 ListAllMyBuckets correctly denied)
 - ✅ Security boundaries: PASS
-- ✅ trainctl integration: PASS
+- ✅ runctl integration: PASS
 
 ## Usage
 
@@ -78,7 +78,7 @@ All tests pass:
 source scripts/assume-test-role.sh
 ./scripts/test-auth.sh
 ./scripts/test-security-boundaries.sh
-./scripts/test-trainctl-integration.sh
+./scripts/test-runctl-integration.sh
 ```
 
 ## Security Features Verified

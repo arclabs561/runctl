@@ -12,12 +12,12 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-ROLE_NAME="trainctl-test-role"
-POLICY_NAME="trainctl-test-policy"
-BOUNDARY_NAME="trainctl-test-boundary"
+ROLE_NAME="runctl-test-role"
+POLICY_NAME="runctl-test-policy"
+BOUNDARY_NAME="runctl-test-boundary"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 
-echo -e "${GREEN}Verifying trainctl test role setup...${NC}"
+echo -e "${GREEN}Verifying runctl test role setup...${NC}"
 echo ""
 
 ERRORS=0
@@ -42,7 +42,7 @@ else
   echo -e "${RED}✗ Trust policy may not allow account root${NC}"
   ERRORS=$((ERRORS + 1))
 fi
-if echo "$TRUST_POLICY" | jq -e '.Statement[0].Condition.StringEquals."sts:ExternalId" | contains("trainctl-test-env")' &>/dev/null; then
+if echo "$TRUST_POLICY" | jq -e '.Statement[0].Condition.StringEquals."sts:ExternalId" | contains("runctl-test-env")' &>/dev/null; then
   echo -e "${GREEN}✓ ExternalId condition present${NC}"
 else
   echo -e "${YELLOW}⚠ ExternalId condition missing (less secure)${NC}"
@@ -97,7 +97,7 @@ echo -e "${YELLOW}[5/8] Testing role assumption...${NC}"
 if aws sts assume-role \
   --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}" \
   --role-session-name "verify-test-$(date +%s)" \
-  --external-id "trainctl-test-env" \
+  --external-id "runctl-test-env" \
   --duration-seconds 900 \
   --query 'Credentials.AccessKeyId' \
   --output text &>/dev/null; then
@@ -110,7 +110,7 @@ echo ""
 
 # Check 6: Test S3 bucket exists
 echo -e "${YELLOW}[6/8] Checking for test S3 buckets...${NC}"
-TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `trainctl-test-`)].Name' --output text 2>/dev/null || echo "")
+TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `runctl-test-`)].Name' --output text 2>/dev/null || echo "")
 if [ -n "$TEST_BUCKETS" ]; then
   BUCKET_COUNT=$(echo "$TEST_BUCKETS" | wc -w | tr -d ' ')
   echo -e "${GREEN}✓ Found $BUCKET_COUNT test bucket(s)${NC}"
@@ -124,7 +124,7 @@ echo -e "${YELLOW}[7/8] Testing permissions with assumed role...${NC}"
 TEMP_CREDS=$(aws sts assume-role \
   --role-arn "arn:aws:iam::${ACCOUNT_ID}:role/${ROLE_NAME}" \
   --role-session-name "verify-perms-$(date +%s)" \
-  --external-id "trainctl-test-env" \
+  --external-id "runctl-test-env" \
   --duration-seconds 900 \
   --output json 2>/dev/null)
 

@@ -9,8 +9,8 @@
 set -euo pipefail
 
 # Configuration
-BUCKET_NAME="${1:-trainctl-cloudtrail-logs-$(date +%s)}"
-TRAIL_NAME="trainctl-audit-trail"
+BUCKET_NAME="${1:-runctl-cloudtrail-logs-$(date +%s)}"
+TRAIL_NAME="runctl-audit-trail"
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
 # Colors

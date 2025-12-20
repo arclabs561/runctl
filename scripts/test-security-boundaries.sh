@@ -1,5 +1,5 @@
 #!/bin/bash
-# Comprehensive security boundary tests for trainctl test role
+# Comprehensive security boundary tests for runctl test role
 #
 # This script tests that:
 # 1. Production resources cannot be modified
@@ -35,7 +35,7 @@ FAILURES=0
 # Test 1: Verify we're using the test role
 echo -e "${YELLOW}[1/7] Verifying test role identity...${NC}"
 IDENTITY_ARN=$(aws sts get-caller-identity --query Arn --output text)
-if [[ "$IDENTITY_ARN" == *"trainctl-test-role"* ]]; then
+if [[ "$IDENTITY_ARN" == *"runctl-test-role"* ]]; then
   echo -e "${GREEN}✓ Using test role: $IDENTITY_ARN${NC}"
 else
   echo -e "${RED}✗ Not using test role: $IDENTITY_ARN${NC}"
@@ -81,7 +81,7 @@ else
 fi
 
 # Test access to test bucket
-TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `trainctl-test-`)].Name' --output text 2>/dev/null || echo "")
+TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `runctl-test-`)].Name' --output text 2>/dev/null || echo "")
 if [ -n "$TEST_BUCKETS" ]; then
   FIRST_BUCKET=$(echo "$TEST_BUCKETS" | awk '{print $1}')
   if aws s3 ls "s3://$FIRST_BUCKET" &>/dev/null; then

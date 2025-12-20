@@ -1,6 +1,6 @@
 # Implementation Gaps Analysis
 
-## What Reference Repos Do vs What trainctl Has
+## What Reference Repos Do vs What runctl Has
 
 ### ✅ Already Implemented
 
@@ -24,7 +24,7 @@ aws s3 cp ./output/ {s3_output} --recursive
 """
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - S3 operations exist but not integrated into training flow
 - User must manually run S3 commands
 
@@ -55,16 +55,16 @@ tags = [
 ]
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - No tagging implemented
 
 **Needed:**
 ```rust
 // In src/aws.rs::create_instance
 let tags = vec![
-    ("Name", "trainctl-training"),
-    ("Project", "trainctl"),
-    ("CreatedBy", "trainctl"),
+    ("Name", "runctl-training"),
+    ("Project", "runctl"),
+    ("CreatedBy", "runctl"),
     ("SessionId", &session_id),
 ];
 ```
@@ -80,7 +80,7 @@ def save_checkpoint(..., rank):
     upload_to_s3(path, s3_path)
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - No DDP awareness
 - All processes might save
 
@@ -109,7 +109,7 @@ if latest:
     resume_from_checkpoint(latest)
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - Manual `--resume` flag required
 - No auto-detection
 
@@ -139,7 +139,7 @@ signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - No signal handling
 - No graceful shutdown
 
@@ -167,7 +167,7 @@ save_checkpoint(...)
 upload_to_s3(checkpoint_path, s3_path)
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - Manual S3 upload required
 
 **Needed:**
@@ -189,7 +189,7 @@ if instance_cost > budget:
     alert("Cost exceeded budget")
 ```
 
-**trainctl Current:**
+**runctl Current:**
 - Basic cost estimation
 - No real-time tracking
 - No alerts
@@ -302,15 +302,15 @@ async fn train_on_instance(
 let tags = vec![
     aws_sdk_ec2::types::Tag::builder()
         .key("Name")
-        .value("trainctl-training")
+        .value("runctl-training")
         .build()?,
     aws_sdk_ec2::types::Tag::builder()
         .key("Project")
-        .value("trainctl")
+        .value("runctl")
         .build()?,
     aws_sdk_ec2::types::Tag::builder()
         .key("CreatedBy")
-        .value("trainctl")
+        .value("runctl")
         .build()?,
     aws_sdk_ec2::types::Tag::builder()
         .key("SessionId")

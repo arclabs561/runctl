@@ -43,13 +43,13 @@
 - ✅ Optimized PyTorch DataLoader script generation
 
 ### CLI Commands (100% Complete)
-- ✅ `trainctl aws ebs create --persistent --pre-warm s3://bucket/data`
-- ✅ `trainctl aws ebs pre-warm vol-xxx s3://bucket/data`
-- ✅ `trainctl aws ebs list` - List volumes with 🔒 marker
-- ✅ `trainctl aws ebs delete` - Protected deletion (requires --force for persistent)
-- ✅ `trainctl resources cleanup` - Enhanced cleanup (skips persistent, respects time-based protection)
-- ✅ `trainctl resources summary` - Cost warnings
-- ✅ `trainctl transfer` - Full data transfer pipeline
+- ✅ `runctl aws ebs create --persistent --pre-warm s3://bucket/data`
+- ✅ `runctl aws ebs pre-warm vol-xxx s3://bucket/data`
+- ✅ `runctl aws ebs list` - List volumes with 🔒 marker
+- ✅ `runctl aws ebs delete` - Protected deletion (requires --force for persistent)
+- ✅ `runctl resources cleanup` - Enhanced cleanup (skips persistent, respects time-based protection)
+- ✅ `runctl resources summary` - Cost warnings
+- ✅ `runctl transfer` - Full data transfer pipeline
 
 ### E2E Tests (100% Complete)
 - ✅ Persistent storage tests (4 tests)
@@ -88,13 +88,13 @@ The pre-warming feature is now fully functional:
 **Usage:**
 ```bash
 # Pre-warm during creation
-trainctl aws ebs create --size 500 --pre-warm s3://bucket/datasets/
+runctl aws ebs create --size 500 --pre-warm s3://bucket/datasets/
 
 # Pre-warm existing volume
-trainctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/ --mount-point /mnt/data
+runctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/ --mount-point /mnt/data
 
 # Use existing instance for pre-warming
-trainctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/ --instance-id i-xxxxx
+runctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/ --instance-id i-xxxxx
 ```
 
 ### SSM Integration

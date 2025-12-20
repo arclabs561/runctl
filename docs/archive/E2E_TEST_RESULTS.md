@@ -8,7 +8,7 @@ Environment: AWS Account (512827140002)
 
 ### ✅ AWS Resource Management
 - **Instance Creation**: Successfully created t3.micro instance
-- **Instance Tagging**: Tags applied correctly (trainctl:created, trainctl:project)
+- **Instance Tagging**: Tags applied correctly (runctl:created, runctl:project)
 - **Instance Listing**: Resources list command works
 - **Instance Stopping**: Stop command works (preserves data)
 - **Instance Termination**: Terminate command works
@@ -59,32 +59,32 @@ Environment: AWS Account (512827140002)
 
 ### Instance Creation Test
 ```bash
-$ trainctl aws create t3.micro --project-name e2e-test
+$ runctl aws create t3.micro --project-name e2e-test
 Created on-demand instance: i-0a0a16fb67cbdb012
 ```
 **Result**: ✅ Success
 
 ### Training Execution Test
 ```bash
-$ trainctl aws train i-0a0a16fb67cbdb012 test_training_script.py --sync-code
+$ runctl aws train i-0a0a16fb67cbdb012 test_training_script.py --sync-code
 ```
 **Result**: ✅ Training started successfully
 
 ### Resource Listing Test
 ```bash
-$ trainctl resources list
+$ runctl resources list
 ```
 **Result**: ✅ Lists all resources correctly
 
 ### JSON Output Test
 ```bash
-$ trainctl --output json resources list
+$ runctl --output json resources list
 ```
 **Result**: ✅ Valid JSON output
 
 ### Error Handling Test
 ```bash
-$ trainctl aws train invalid-id train.py
+$ runctl aws train invalid-id train.py
 ```
 **Result**: ✅ Clear validation error
 

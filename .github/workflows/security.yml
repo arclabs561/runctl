@@ -61,8 +61,8 @@ jobs:
 
       - name: Verify config file not tracked
         run: |
-          if git ls-files | grep -q "\.trainctl\.toml"; then
-            echo "::error::.trainctl.toml should not be tracked in git"
+          if git ls-files | grep -q "\.runctl\.toml"; then
+            echo "::error::.runctl.toml should not be tracked in git"
             exit 1
           fi
 

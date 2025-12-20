@@ -8,20 +8,20 @@
    - Added `--format table` option
    - Uses `comfy-table` crate for aligned columns
    - Supports both detailed and compact views
-   - Example: `trainctl resources list --format table`
+   - Example: `runctl resources list --format table`
 
 2. **Filtering** ✅
    - Added `--filter` option (running, stopped, terminated, all)
    - Default: `running` (hides terminated by default)
-   - Example: `trainctl resources list --filter running`
+   - Example: `runctl resources list --filter running`
 
 3. **Sorting** ✅
    - Added `--sort` option (cost, age, type, state, accumulated)
-   - Example: `trainctl resources list --sort cost`
+   - Example: `runctl resources list --sort cost`
 
 4. **Limit Results** ✅
    - Added `--limit` option to limit number of results
-   - Example: `trainctl resources list --limit 10`
+   - Example: `runctl resources list --limit 10`
 
 5. **Hide Terminated by Default** ✅
    - Terminated instances hidden unless `--show-terminated` is used
@@ -33,14 +33,14 @@
    - Added `--watch` / `-w` option
    - Auto-refreshes every N seconds (default: 5s, configurable with `--interval`)
    - Clears screen and shows timestamp
-   - Example: `trainctl resources list --watch --interval 10`
+   - Example: `runctl resources list --watch --interval 10`
 
 7. **Export Formats** ✅
    - Added `--export` option (csv, html)
    - Added `--export-file` to specify output file
    - CSV export with all instance details
    - HTML export with styled table
-   - Example: `trainctl resources list --export csv --export-file resources.csv`
+   - Example: `runctl resources list --export csv --export-file resources.csv`
 
 ### Phase 3: Interactive TUI (In Progress)
 
@@ -53,7 +53,7 @@
 ## New Command Options
 
 ```bash
-trainctl resources list [OPTIONS]
+runctl resources list [OPTIONS]
 
 Options:
   -d, --detailed              Show detailed information
@@ -75,46 +75,46 @@ Options:
 ### Table Format
 ```bash
 # Compact table view
-trainctl resources list --format table
+runctl resources list --format table
 
 # Detailed table view
-trainctl resources list --format table --detailed
+runctl resources list --format table --detailed
 ```
 
 ### Filtering and Sorting
 ```bash
 # Show only running instances, sorted by cost
-trainctl resources list --filter running --sort cost
+runctl resources list --filter running --sort cost
 
 # Show top 5 most expensive instances
-trainctl resources list --sort cost --limit 5
+runctl resources list --sort cost --limit 5
 
 # Show all instances including terminated
-trainctl resources list --show-terminated --filter all
+runctl resources list --show-terminated --filter all
 ```
 
 ### Watch Mode
 ```bash
 # Auto-refresh every 5 seconds
-trainctl resources list --watch
+runctl resources list --watch
 
 # Auto-refresh every 10 seconds
-trainctl resources list --watch --interval 10
+runctl resources list --watch --interval 10
 
 # Watch with table format
-trainctl resources list --watch --format table
+runctl resources list --watch --format table
 ```
 
 ### Export
 ```bash
 # Export to CSV
-trainctl resources list --export csv --export-file resources.csv
+runctl resources list --export csv --export-file resources.csv
 
 # Export to HTML
-trainctl resources list --export html --export-file report.html
+runctl resources list --export html --export-file report.html
 
 # Export to stdout
-trainctl resources list --export csv
+runctl resources list --export csv
 ```
 
 ## Implementation Details
@@ -142,9 +142,9 @@ trainctl resources list --export csv
    - Multi-select operations
 
 2. **Quick Actions** - Add commands for common actions:
-   - `trainctl resources terminate <instance-id>`
-   - `trainctl resources ssh <instance-id>`
-   - `trainctl resources monitor <instance-id>`
+   - `runctl resources terminate <instance-id>`
+   - `runctl resources ssh <instance-id>`
+   - `runctl resources monitor <instance-id>`
 
 3. **Enhanced Table Format** - Add:
    - Column resizing

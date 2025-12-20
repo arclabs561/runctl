@@ -11,7 +11,7 @@ set -euo pipefail
 
 # Configuration
 GITHUB_ORG="${1:-arclabs561}"
-GITHUB_REPO="${2:-trainctl}"
+GITHUB_REPO="${2:-runctl}"
 OIDC_PROVIDER_NAME="token.actions.githubusercontent.com"
 ROLE_NAME="github-actions-role"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -96,20 +96,20 @@ else
   echo -e "${GREEN}✓ Trust policy updated${NC}"
 fi
 
-# Step 4: Attach permissions (use existing trainctl-test-policy or create new)
+# Step 4: Attach permissions (use existing runctl-test-policy or create new)
 echo -e "${YELLOW}[4/4] Attaching permissions...${NC}"
-# Check if trainctl-test-policy exists
-TEST_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/trainctl-test-policy"
+# Check if runctl-test-policy exists
+TEST_POLICY_ARN="arn:aws:iam::${ACCOUNT_ID}:policy/runctl-test-policy"
 EXISTING_POLICY=$(aws iam get-policy --policy-arn "$TEST_POLICY_ARN" 2>/dev/null || echo "")
 
 if [[ -n "$EXISTING_POLICY" ]]; then
-  echo -e "${YELLOW}Using existing trainctl-test-policy${NC}"
+  echo -e "${YELLOW}Using existing runctl-test-policy${NC}"
   aws iam attach-role-policy \
     --role-name "$ROLE_NAME" \
     --policy-arn "$TEST_POLICY_ARN"
   echo -e "${GREEN}✓ Policy attached${NC}"
 else
-  echo -e "${YELLOW}trainctl-test-policy not found${NC}"
+  echo -e "${YELLOW}runctl-test-policy not found${NC}"
   echo "You can:"
   echo "  1. Run scripts/setup-test-role.sh first to create the policy"
   echo "  2. Or manually attach appropriate policies to $ROLE_NAME"

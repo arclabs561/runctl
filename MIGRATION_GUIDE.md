@@ -1,22 +1,22 @@
-# Migration Guide: train-ops → trainctl
+# Migration Guide: train-ops → runctl
 
 ## Overview
 
-The tool has been renamed from `train-ops` to `trainctl` for better CLI naming conventions. This guide helps you migrate your setup.
+The tool has been renamed from `train-ops` to `runctl` for better CLI naming conventions. This guide helps you migrate your setup.
 
 ## What Changed
 
 ### Tool Name
 - **Old**: `train-ops`
-- **New**: `trainctl`
+- **New**: `runctl`
 
 ### Configuration Files
 - **Old**: `.train-ops.toml`
-- **New**: `.trainctl.toml`
+- **New**: `.runctl.toml`
 
 ### Configuration Directory
 - **Old**: `~/.config/train-ops/`
-- **New**: `~/.config/trainctl/`
+- **New**: `~/.config/runctl/`
 
 ### Environment Variables
 - **Old**: `TRAIN_OPS_*`
@@ -24,14 +24,14 @@ The tool has been renamed from `train-ops` to `trainctl` for better CLI naming c
 
 ### AWS Tags
 - **Old**: Tags containing `train-ops`
-- **New**: Tags containing `trainctl`
+- **New**: Tags containing `runctl`
 
 ## Migration Steps
 
 ### 1. Rebuild the Tool
 
 ```bash
-cd /path/to/trainctl  # (formerly infra-utils)
+cd /path/to/runctl  # (formerly infra-utils)
 cargo build --release
 ```
 
@@ -39,10 +39,10 @@ cargo build --release
 
 ```bash
 # If you have a local config
-mv .train-ops.toml .trainctl.toml
+mv .train-ops.toml .runctl.toml
 
 # If you have a global config
-mv ~/.config/train-ops/config.toml ~/.config/trainctl/config.toml
+mv ~/.config/train-ops/config.toml ~/.config/runctl/config.toml
 ```
 
 ### 3. Update Scripts and Aliases
@@ -54,7 +54,7 @@ Update any scripts, aliases, or automation that references `train-ops`:
 train-ops local train.py
 
 # New
-trainctl local train.py
+runctl local train.py
 ```
 
 ### 4. Update Environment Variables
@@ -80,7 +80,7 @@ aws ec2 describe-instances --filters "Name=tag:train-ops,Values=*"
 # Update tags (example)
 aws ec2 create-tags \
   --resources i-1234567890abcdef0 \
-  --tags Key=trainctl,Value=true
+  --tags Key=runctl,Value=true
 ```
 
 ### 6. Rename Directory (Optional)
@@ -89,8 +89,8 @@ If you want to rename the project directory:
 
 ```bash
 cd /Users/arc/Documents/dev
-mv infra-utils trainctl
-cd trainctl
+mv infra-utils runctl
+cd runctl
 ```
 
 **Note**: After renaming, you may need to:
@@ -101,7 +101,7 @@ cd trainctl
 ## Backward Compatibility
 
 The old name is **not** supported. You must:
-- Use `trainctl` for all commands
+- Use `runctl` for all commands
 - Update configuration file names
 - Update any automation/scripts
 
@@ -111,18 +111,18 @@ After migration, verify everything works:
 
 ```bash
 # Check version
-trainctl --version
+runctl --version
 
 # Check config loads
-trainctl init
+runctl init
 
 # Test a command
-trainctl resources list
+runctl resources list
 ```
 
 ## Common Issues
 
-### Issue: "command not found: trainctl"
+### Issue: "command not found: runctl"
 
 **Solution**: Rebuild and install:
 ```bash
@@ -134,7 +134,7 @@ cargo install --path .
 
 **Solution**: Rename your config file:
 ```bash
-mv .train-ops.toml .trainctl.toml
+mv .train-ops.toml .runctl.toml
 ```
 
 ### Issue: Environment variables not working

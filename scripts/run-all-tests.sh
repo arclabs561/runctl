@@ -5,7 +5,7 @@
 # 1. Setup verification
 # 2. Authentication tests
 # 3. Security boundary tests
-# 4. trainctl integration tests
+# 4. runctl integration tests
 #
 # Usage:
 #   ./scripts/run-all-tests.sh
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}  trainctl AWS Testing Suite${NC}"
+echo -e "${BLUE}  runctl AWS Testing Suite${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -70,15 +70,15 @@ else
 fi
 echo ""
 
-# Test 4: trainctl integration
-echo -e "${YELLOW}[Test 4/4] Testing trainctl integration...${NC}"
+# Test 4: runctl integration
+echo -e "${YELLOW}[Test 4/4] Testing runctl integration...${NC}"
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 # Re-assume role
-if source scripts/assume-test-role.sh > /dev/null 2>&1 && ./scripts/test-trainctl-integration.sh; then
-  echo -e "${GREEN}✓ trainctl integration tests passed${NC}"
+if source scripts/assume-test-role.sh > /dev/null 2>&1 && ./scripts/test-runctl-integration.sh; then
+  echo -e "${GREEN}✓ runctl integration tests passed${NC}"
   PASSED_TESTS=$((PASSED_TESTS + 1))
 else
-  echo -e "${RED}✗ trainctl integration tests failed${NC}"
+  echo -e "${RED}✗ runctl integration tests failed${NC}"
   FAILED_TESTS=$((FAILED_TESTS + 1))
 fi
 echo ""
@@ -104,7 +104,7 @@ if [ $FAILED_TESTS -eq 0 ]; then
   echo "  ✓ IAM role configured properly"
   echo "  ✓ Authentication working"
   echo "  ✓ Security boundaries enforced"
-  echo "  ✓ trainctl integration verified"
+  echo "  ✓ runctl integration verified"
   exit 0
 else
   echo -e "${RED}✗ Some tests failed${NC}"

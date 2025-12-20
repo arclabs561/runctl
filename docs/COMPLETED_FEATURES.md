@@ -6,22 +6,22 @@
 
 ### Commands Available
 
-1. **`trainctl resources list`** - See all running resources
+1. **`runctl resources list`** - See all running resources
    - `--detailed` - Show detailed information
    - `--platform <aws|runpod|local|all>` - Filter by platform
 
-2. **`trainctl resources summary`** - Quick cost overview
+2. **`runctl resources summary`** - Quick cost overview
    - Shows running instances/pods
    - Estimated hourly costs
    - Resource breakdown
 
-3. **`trainctl resources insights`** - Get recommendations
+3. **`runctl resources insights`** - Get recommendations
    - Current state analysis
    - Cost warnings
    - Cleanup recommendations
    - Action suggestions
 
-4. **`trainctl resources cleanup`** - Remove zombies
+4. **`runctl resources cleanup`** - Remove zombies
    - `--dry-run` - Preview what would be deleted
    - `--force` - Skip confirmation
 
@@ -29,7 +29,7 @@
 
 - **AWS EC2 Instances**: All states (running, stopped, etc.)
 - **RunPod Pods**: All pods via runpodctl
-- **Local Processes**: Training scripts and trainctl processes
+- **Local Processes**: Training scripts and runctl processes
 
 ### Safety Features
 
@@ -44,13 +44,13 @@
 
 ### Planned Commands
 
-- `trainctl s3 upload` - Fast uploads with s5cmd
-- `trainctl s3 download` - High-speed downloads
-- `trainctl s3 sync` - Bidirectional sync
-- `trainctl s3 list` - Efficient listing
-- `trainctl s3 cleanup` - Cleanup old checkpoints
-- `trainctl s3 watch` - Monitor for new files
-- `trainctl s3 review` - Audit training artifacts
+- `runctl s3 upload` - Fast uploads with s5cmd
+- `runctl s3 download` - High-speed downloads
+- `runctl s3 sync` - Bidirectional sync
+- `runctl s3 list` - Efficient listing
+- `runctl s3 cleanup` - Cleanup old checkpoints
+- `runctl s3 watch` - Monitor for new files
+- `runctl s3 review` - Audit training artifacts
 
 ## ✅ Checkpoint Cleanup
 
@@ -58,7 +58,7 @@
 
 ### Commands Available
 
-- `trainctl checkpoint cleanup` - Remove old checkpoints
+- `runctl checkpoint cleanup` - Remove old checkpoints
   - `--keep-last-n <N>` - Keep last N checkpoints
   - `--dry-run` - Preview deletions
 
@@ -68,37 +68,37 @@
 
 ```bash
 # Quick overview
-trainctl resources summary
+runctl resources summary
 
 # Detailed view
-trainctl resources list --detailed
+runctl resources list --detailed
 
 # Get recommendations
-trainctl resources insights
+runctl resources insights
 ```
 
 ### Find and Cleanup Zombies
 
 ```bash
 # Preview cleanup
-trainctl resources cleanup --dry-run
+runctl resources cleanup --dry-run
 
 # Actually cleanup
-trainctl resources cleanup
+runctl resources cleanup
 
 # Force cleanup (no confirmation)
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ### Checkpoint Management
 
 ```bash
 # List checkpoints
-trainctl checkpoint list checkpoints/
+runctl checkpoint list checkpoints/
 
 # Cleanup old checkpoints
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 10 --dry-run
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 10
+runctl checkpoint cleanup checkpoints/ --keep-last-n 10 --dry-run
+runctl checkpoint cleanup checkpoints/ --keep-last-n 10
 ```
 
 ## Next Steps

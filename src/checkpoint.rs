@@ -43,8 +43,8 @@ pub enum CheckpointCommands {
     /// Lists all checkpoint files in the specified directory, sorted by modification time.
     ///
     /// Examples:
-    ///   trainctl checkpoint list ./checkpoints/
-    ///   trainctl checkpoint list ./checkpoints/ --output json
+    ///   runctl checkpoint list ./checkpoints/
+    ///   runctl checkpoint list ./checkpoints/ --output json
     List {
         /// Checkpoint directory path
         #[arg(value_name = "DIRECTORY")]
@@ -56,8 +56,8 @@ pub enum CheckpointCommands {
     /// size, modification time, and any embedded metadata.
     ///
     /// Examples:
-    ///   trainctl checkpoint info ./checkpoints/epoch_10.pt
-    ///   trainctl checkpoint info ./checkpoints/best.pt --output json
+    ///   runctl checkpoint info ./checkpoints/epoch_10.pt
+    ///   runctl checkpoint info ./checkpoints/best.pt --output json
     Info {
         /// Checkpoint file path
         #[arg(value_name = "PATH")]
@@ -69,8 +69,8 @@ pub enum CheckpointCommands {
     /// the checkpoint path as an argument.
     ///
     /// Examples:
-    ///   trainctl checkpoint resume ./checkpoints/epoch_10.pt training/train.py
-    ///   trainctl checkpoint resume ./checkpoints/best.pt training/train.py -- --epochs 100
+    ///   runctl checkpoint resume ./checkpoints/epoch_10.pt training/train.py
+    ///   runctl checkpoint resume ./checkpoints/best.pt training/train.py -- --epochs 100
     Resume {
         /// Checkpoint file path
         #[arg(value_name = "CHECKPOINT")]

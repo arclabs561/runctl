@@ -56,7 +56,7 @@
   1. Uses provided value if given
   2. Falls back to config value if available
   3. Derives from current directory name (sanitized)
-  4. Final fallback: "trainctl-project"
+  4. Final fallback: "runctl-project"
 - Updated both `aws create` and `aws train` to use the helper
 
 **Files Modified**:

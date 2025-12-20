@@ -67,7 +67,7 @@ system.refresh_all();
 
 **Problem**: Commands like `aws create` don't describe what arguments mean
 ```bash
-$ trainctl aws create --help
+$ runctl aws create --help
 Arguments:
   <INSTANCE_TYPE>    # No description!
 ```
@@ -100,8 +100,8 @@ ERROR: Too many instances running (50)
 ERROR: Too many instances running (50). Creation blocked.
 
 To resolve:
-  1. List instances: trainctl resources list
-  2. Terminate instances: trainctl aws terminate <instance-id>
+  1. List instances: runctl resources list
+  2. Terminate instances: runctl aws terminate <instance-id>
   3. Or use a different AWS account
 ```
 
@@ -145,10 +145,10 @@ To resolve:
 
 **Problem**: No way to view/edit config via CLI
 
-**Fix Needed**: Add `trainctl config` subcommands:
-- `trainctl config show` - Display current config
-- `trainctl config set <key> <value>` - Set config value
-- `trainctl config validate` - Validate config file
+**Fix Needed**: Add `runctl config` subcommands:
+- `runctl config show` - Display current config
+- `runctl config set <key> <value>` - Set config value
+- `runctl config validate` - Validate config file
 
 **Impact**: Low - Nice to have
 
@@ -165,11 +165,11 @@ To resolve:
 
 ### 8. Status Command (Low Priority)
 
-**Problem**: `trainctl status` doesn't exist or is not truly quick
+**Problem**: `runctl status` doesn't exist or is not truly quick
 
 **Fix Needed**: Create quick status command (1-2 lines):
 ```bash
-$ trainctl status
+$ runctl status
 3 instances running, $0.45/hr, 2 training jobs active
 ```
 

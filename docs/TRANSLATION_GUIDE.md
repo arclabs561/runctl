@@ -1,4 +1,4 @@
-# Translation Guide: Reference Repos → trainctl
+# Translation Guide: Reference Repos → runctl
 
 ## Quick Reference: Common Patterns
 
@@ -26,16 +26,16 @@ while True:
     time.sleep(30)
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
 # Single command handles everything
-trainctl aws train <instance-id> train.py \
+runctl aws train <instance-id> train.py \
     --data-s3 s3://bucket/data/ \
     --output-s3 s3://bucket/output/ \
     --epochs 50
 
 # Monitor in another terminal
-trainctl aws monitor <instance-id> --follow
+runctl aws monitor <instance-id> --follow
 ```
 
 ### Pattern 2: Ephemeral Training with Auto-Resume
@@ -58,13 +58,13 @@ for epoch in range(epochs):
         save_checkpoint(epoch, model, optimizer)
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
 # Auto-detects and resumes from latest checkpoint
-trainctl local train_ephemeral.py --epochs 50
+runctl local train_ephemeral.py --epochs 50
 
 # Or explicitly
-trainctl local train_ephemeral.py --resume checkpoints/latest.pt
+runctl local train_ephemeral.py --resume checkpoints/latest.pt
 ```
 
 ### Pattern 3: Multi-GPU DDP Training
@@ -81,13 +81,13 @@ if rank == 0:
     upload_to_s3(checkpoint_path, s3_path)
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
-# trainctl detects DDP and handles rank 0 automatically
+# runctl detects DDP and handles rank 0 automatically
 torchrun --nproc_per_node=4 train_multi_gpu.py
 
-# Or with trainctl wrapper (when implemented)
-trainctl local train_multi_gpu.py --ddp --gpus 4
+# Or with runctl wrapper (when implemented)
+runctl local train_multi_gpu.py --ddp --gpus 4
 ```
 
 ### Pattern 4: RunPod Workflow
@@ -110,19 +110,19 @@ runpodctl.tail_logs(pod_id, "/workspace/train.log")
 runpodctl.download(pod_id, "/workspace/checkpoints/", "./local/")
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
 # Create pod
-POD_ID=$(trainctl runpod create --gpu "RTX 4080")
+POD_ID=$(runctl runpod create --gpu "RTX 4080")
 
 # Train (handles upload automatically)
-trainctl runpod train $POD_ID train.py
+runctl runpod train $POD_ID train.py
 
 # Monitor
-trainctl runpod monitor $POD_ID --follow
+runctl runpod monitor $POD_ID --follow
 
 # Download
-trainctl runpod download $POD_ID /workspace/checkpoints/ ./local/
+runctl runpod download $POD_ID /workspace/checkpoints/ ./local/
 ```
 
 ### Pattern 5: Checkpoint Management
@@ -150,22 +150,22 @@ model.load_state_dict(checkpoint['model'])
 optimizer.load_state_dict(checkpoint['optimizer'])
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
 # List checkpoints
-trainctl checkpoint list checkpoints/
+runctl checkpoint list checkpoints/
 
 # Show checkpoint info
-trainctl checkpoint info checkpoints/checkpoint_epoch_10.pt
+runctl checkpoint info checkpoints/checkpoint_epoch_10.pt
 
 # Resume training
-trainctl checkpoint resume checkpoints/checkpoint_epoch_10.pt train.py
+runctl checkpoint resume checkpoints/checkpoint_epoch_10.pt train.py
 
 # Upload to S3
-trainctl s3 upload checkpoints/ s3://bucket/checkpoints/ --recursive
+runctl s3 upload checkpoints/ s3://bucket/checkpoints/ --recursive
 
 # Download from S3
-trainctl s3 download s3://bucket/checkpoints/ checkpoints/ --recursive
+runctl s3 download s3://bucket/checkpoints/ checkpoints/ --recursive
 ```
 
 ### Pattern 6: Resource Management
@@ -181,32 +181,32 @@ for instance in instances:
 zombies = [i for i in instances 
            if i.state == 'running' 
            and (now - i.launch_time).hours > 24
-           and 'trainctl' not in i.tags]
+           and 'runctl' not in i.tags]
 
 # Cleanup
 for zombie in zombies:
     ec2.terminate_instances(InstanceIds=[zombie.id])
 ```
 
-**trainctl equivalent:**
+**runctl equivalent:**
 ```bash
 # List all resources
-trainctl resources list
+runctl resources list
 
 # Get summary
-trainctl resources summary
+runctl resources summary
 
 # Find zombies
-trainctl resources insights
+runctl resources insights
 
 # Cleanup zombies
-trainctl resources cleanup --dry-run  # Preview
-trainctl resources cleanup --force    # Actually cleanup
+runctl resources cleanup --dry-run  # Preview
+runctl resources cleanup --force    # Actually cleanup
 ```
 
 ## Feature Comparison Matrix
 
-| Feature | decksage | idf-est | matryoshka-box | trainctl |
+| Feature | decksage | idf-est | matryoshka-box | runctl |
 |---------|----------|---------|----------------|-----------|
 | AWS EC2 Creation | ✅ | ❌ | ❌ | 🚧 |
 | Spot Instances | ✅ | ❌ | ❌ | 🚧 |
@@ -235,13 +235,13 @@ python train_on_aws_instance.py \
     --output-s3 s3://bucket/output/
 ```
 
-**After (trainctl):**
+**After (runctl):**
 ```bash
 # Create instance
-INSTANCE_ID=$(trainctl aws create --spot --instance-type t3.medium)
+INSTANCE_ID=$(runctl aws create --spot --instance-type t3.medium)
 
 # Train with automatic S3 staging
-trainctl aws train $INSTANCE_ID train.py \
+runctl aws train $INSTANCE_ID train.py \
     --data-s3 s3://bucket/data/ \
     --output-s3 s3://bucket/output/
 ```
@@ -256,16 +256,16 @@ python train_runpod.py \
     --background
 ```
 
-**After (trainctl):**
+**After (runctl):**
 ```bash
 # Create pod
-POD_ID=$(trainctl runpod create --gpu "RTX 4080")
+POD_ID=$(runctl runpod create --gpu "RTX 4080")
 
 # Train
-trainctl runpod train $POD_ID train.py --background
+runctl runpod train $POD_ID train.py --background
 
 # Monitor
-trainctl runpod monitor $POD_ID --follow
+runctl runpod monitor $POD_ID --follow
 ```
 
 ### Migrating from matryoshka-box Script
@@ -277,10 +277,10 @@ torchrun --nproc_per_node=4 train_cloud_multi_gpu.py \
     --batch-size 1024
 ```
 
-**After (trainctl):**
+**After (runctl):**
 ```bash
-# trainctl handles DDP automatically
-trainctl local train_cloud_multi_gpu.py -- --epochs 50 --batch-size 1024
+# runctl handles DDP automatically
+runctl local train_cloud_multi_gpu.py -- --epochs 50 --batch-size 1024
 
 # Or with explicit DDP
 torchrun --nproc_per_node=4 train_cloud_multi_gpu.py --epochs 50 --batch-size 1024
@@ -296,16 +296,16 @@ torchrun --nproc_per_node=4 train_cloud_multi_gpu.py --epochs 50 --batch-size 10
 - Keep last N locally
 - Cleanup old checkpoints
 
-**trainctl:**
+**runctl:**
 ```bash
-# Configure in .trainctl.toml
+# Configure in .runctl.toml
 [checkpoint]
 save_interval = 5
 keep_last_n = 10
 auto_upload_s3 = "s3://bucket/checkpoints/"
 
 # Use in training
-trainctl local train.py  # Auto-handles checkpointing
+runctl local train.py  # Auto-handles checkpointing
 ```
 
 ### 2. Error Handling
@@ -315,10 +315,10 @@ trainctl local train.py  # Auto-handles checkpointing
 - Save checkpoint on error
 - Upload to S3 before exit
 
-**trainctl (when implemented):**
+**runctl (when implemented):**
 ```bash
 # Automatic error handling
-trainctl local train.py  # Auto-saves on error
+runctl local train.py  # Auto-saves on error
 ```
 
 ### 3. Cost Optimization
@@ -328,16 +328,16 @@ trainctl local train.py  # Auto-saves on error
 - Monitor costs
 - Cleanup promptly
 
-**trainctl:**
+**runctl:**
 ```bash
 # Use spot instances
-trainctl aws create --spot
+runctl aws create --spot
 
 # Monitor costs
-trainctl resources summary
+runctl resources summary
 
 # Cleanup
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ## Implementation Roadmap

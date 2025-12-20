@@ -277,7 +277,7 @@ pub async fn wait_for_volume_attachment(
         operation: "attach".to_string(),
         resource_id: Some(volume_id.to_string()),
         message: format!(
-            "Volume {} did not attach to instance {} within {} seconds. Suggestions: Verify instance and volume are in the same availability zone, check instance is running: trainctl aws instances list, verify volume exists: trainctl aws ebs list",
+            "Volume {} did not attach to instance {} within {} seconds. Suggestions: Verify instance and volume are in the same availability zone, check instance is running: runctl aws instances list, verify volume exists: runctl aws ebs list",
             volume_id,
             instance_id,
             MAX_ATTEMPTS * 2
@@ -336,7 +336,7 @@ pub async fn wait_for_volume_detached(client: &Ec2Client, volume_id: &str) -> Re
         operation: "detach".to_string(),
         resource_id: Some(volume_id.to_string()),
         message: format!(
-            "Volume {} did not detach within {} seconds. Suggestions: Check if instance is still using the volume, try force detach: aws ec2 detach-volume --volume-id {} --force, verify instance state: trainctl aws instances list",
+            "Volume {} did not detach within {} seconds. Suggestions: Check if instance is still using the volume, try force detach: aws ec2 detach-volume --volume-id {} --force, verify instance state: runctl aws instances list",
             volume_id,
             MAX_ATTEMPTS * 2,
             volume_id

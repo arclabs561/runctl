@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cleanup script for trainctl test IAM role and resources
+# Cleanup script for runctl test IAM role and resources
 #
 # Usage:
 #   ./scripts/cleanup-test-role.sh [--force]
@@ -8,9 +8,9 @@ set -euo pipefail
 
 FORCE="${1:-}"
 
-ROLE_NAME="trainctl-test-role"
-POLICY_NAME="trainctl-test-policy"
-BOUNDARY_NAME="trainctl-test-boundary"
+ROLE_NAME="runctl-test-role"
+POLICY_NAME="runctl-test-policy"
+BOUNDARY_NAME="runctl-test-boundary"
 
 # Colors
 GREEN='\033[0;32m'
@@ -23,7 +23,7 @@ if [ "$FORCE" != "--force" ]; then
   echo "  - IAM Role: $ROLE_NAME"
   echo "  - Permissions Policy: $POLICY_NAME"
   echo "  - Permission Boundary: $BOUNDARY_NAME"
-  echo "  - All test S3 buckets (trainctl-test-*)"
+  echo "  - All test S3 buckets (runctl-test-*)"
   echo ""
   read -p "Are you sure? (type 'yes' to confirm): " confirm
   if [ "$confirm" != "yes" ]; then
@@ -69,7 +69,7 @@ fi
 echo "Finding test S3 buckets..."
 # Need to use credentials that can list buckets
 if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then
-  TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `trainctl-test-`)].Name' --output text 2>/dev/null || echo "")
+  TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `runctl-test-`)].Name' --output text 2>/dev/null || echo "")
   if [ -n "$TEST_BUCKETS" ]; then
     for bucket in $TEST_BUCKETS; do
       if [ -n "$bucket" ]; then

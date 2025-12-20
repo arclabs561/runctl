@@ -1,20 +1,20 @@
 [package]
-name = "trainctl"
+name = "runctl"
 version = "0.1.0"
 edition = "2021"
 authors = ["Your Name <you@example.com>"]
-description = "Modern training orchestration CLI for ML workloads"
+description = "Cloud compute orchestration CLI for long-running jobs"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/arclabs561/trainctl"
-homepage = "https://github.com/arclabs561/trainctl"
+repository = "https://github.com/arclabs561/runctl"
+homepage = "https://github.com/arclabs561/runctl"
 # publish = false  # Uncomment to prevent accidental publishing
 
 [[bin]]
-name = "trainctl"
+name = "runctl"
 path = "src/main.rs"
 
 [lib]
-name = "trainctl"
+name = "runctl"
 path = "src/lib.rs"
 
 [dependencies]

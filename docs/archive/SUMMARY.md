@@ -1,8 +1,8 @@
-# trainctl: Summary
+# runctl: Summary
 
 ## What We Built
 
-A modern Rust CLI tool (`trainctl`) for orchestrating ML training across multiple platforms (local, RunPod, AWS EC2) with unified checkpoint management and monitoring.
+A modern Rust CLI tool (`runctl`) for orchestrating ML training across multiple platforms (local, RunPod, AWS EC2) with unified checkpoint management and monitoring.
 
 ## Key Features Implemented
 
@@ -27,7 +27,7 @@ A modern Rust CLI tool (`trainctl`) for orchestrating ML training across multipl
 ## Project Structure
 
 ```
-trainctl/
+runctl/
 ├── src/
 │   ├── main.rs          # CLI entry point
 │   ├── config.rs        # Configuration management
@@ -48,7 +48,7 @@ trainctl/
 ## Compilation Status
 
 ✅ **Compiles successfully** (with warnings)
-- Binary: `target/debug/trainctl` (~15MB debug, ~5MB release)
+- Binary: `target/debug/runctl` (~15MB debug, ~5MB release)
 - All core commands functional
 - Help system working
 - Config initialization working
@@ -76,21 +76,21 @@ trainctl/
 
 ```bash
 # Initialize
-trainctl init
+runctl init
 
 # Local training
-trainctl local training/train.py --epochs 50
+runctl local training/train.py --epochs 50
 
 # RunPod
-trainctl runpod create --gpu "RTX 4080 SUPER"
-trainctl runpod train <pod-id> training/train.py
+runctl runpod create --gpu "RTX 4080 SUPER"
+runctl runpod train <pod-id> training/train.py
 
 # Monitor
-trainctl monitor --log training.log --follow
+runctl monitor --log training.log --follow
 
 # Checkpoints
-trainctl checkpoint list checkpoints/
-trainctl checkpoint resume checkpoints/best.pt training/train.py
+runctl checkpoint list checkpoints/
+runctl checkpoint resume checkpoints/best.pt training/train.py
 ```
 
 ## Architecture Highlights

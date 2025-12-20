@@ -16,9 +16,9 @@ pub enum S3Commands {
     /// by default (10 concurrent transfers). Use --use-s5cmd to use external s5cmd tool.
     ///
     /// Examples:
-    ///   trainctl s3 upload checkpoints/ s3://bucket/checkpoints/
-    ///   trainctl s3 upload model.pt s3://bucket/models/model.pt --recursive
-    ///   trainctl s3 upload data/ s3://bucket/data/ --use-s5cmd
+    ///   runctl s3 upload checkpoints/ s3://bucket/checkpoints/
+    ///   runctl s3 upload model.pt s3://bucket/models/model.pt --recursive
+    ///   runctl s3 upload data/ s3://bucket/data/ --use-s5cmd
     Upload {
         /// Local path to upload (file or directory)
         #[arg(value_name = "SOURCE")]
@@ -39,8 +39,8 @@ pub enum S3Commands {
     /// parallel transfers by default. Use --use-s5cmd to use external s5cmd tool.
     ///
     /// Examples:
-    ///   trainctl s3 download s3://bucket/checkpoints/ ./checkpoints/
-    ///   trainctl s3 download s3://bucket/data/ ./data/ --recursive
+    ///   runctl s3 download s3://bucket/checkpoints/ ./checkpoints/
+    ///   runctl s3 download s3://bucket/data/ ./data/ --recursive
     Download {
         /// S3 source path (s3://bucket/path)
         #[arg(value_name = "SOURCE")]
@@ -61,8 +61,8 @@ pub enum S3Commands {
     /// 'down' (S3->local), or 'both' (bidirectional). Uses native Rust by default.
     ///
     /// Examples:
-    ///   trainctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction up
-    ///   trainctl s3 sync ./data/ s3://bucket/data/ --direction down
+    ///   runctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction up
+    ///   runctl s3 sync ./data/ s3://bucket/data/ --direction down
     Sync {
         /// Local directory path
         #[arg(value_name = "LOCAL_PATH")]
@@ -83,8 +83,8 @@ pub enum S3Commands {
     /// in subdirectories. Use --human-readable to show sizes in human-readable format.
     ///
     /// Examples:
-    ///   trainctl s3 list s3://bucket/checkpoints/
-    ///   trainctl s3 list s3://bucket/data/ --recursive --human-readable
+    ///   runctl s3 list s3://bucket/checkpoints/
+    ///   runctl s3 list s3://bucket/data/ --recursive --human-readable
     List {
         /// S3 path to list (s3://bucket/path)
         #[arg(value_name = "S3_PATH")]
@@ -102,8 +102,8 @@ pub enum S3Commands {
     /// Use --dry-run to preview what would be deleted without actually deleting.
     ///
     /// Examples:
-    ///   trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
-    ///   trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5 --dry-run
+    ///   runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+    ///   runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5 --dry-run
     Cleanup {
         /// S3 path to checkpoints (s3://bucket/checkpoints/)
         #[arg(value_name = "S3_PATH")]
@@ -121,8 +121,8 @@ pub enum S3Commands {
     /// Useful for monitoring training outputs or checkpoints being uploaded.
     ///
     /// Examples:
-    ///   trainctl s3 watch s3://bucket/checkpoints/
-    ///   trainctl s3 watch s3://bucket/outputs/ --interval 10
+    ///   runctl s3 watch s3://bucket/checkpoints/
+    ///   runctl s3 watch s3://bucket/outputs/ --interval 10
     Watch {
         /// S3 path to watch (s3://bucket/path)
         #[arg(value_name = "S3_PATH")]
@@ -137,8 +137,8 @@ pub enum S3Commands {
     /// total size, object count, and organization. Use --detailed for more information.
     ///
     /// Examples:
-    ///   trainctl s3 review s3://bucket/checkpoints/
-    ///   trainctl s3 review s3://bucket/training/ --detailed
+    ///   runctl s3 review s3://bucket/checkpoints/
+    ///   runctl s3 review s3://bucket/training/ --detailed
     Review {
         /// S3 path to review (s3://bucket/path)
         #[arg(value_name = "S3_PATH")]

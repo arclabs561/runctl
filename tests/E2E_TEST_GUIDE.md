@@ -2,7 +2,7 @@
 
 ## Overview
 
-End-to-end tests verify trainctl functionality with real AWS resources. They are opt-in and require explicit environment variable to run.
+End-to-end tests verify runctl functionality with real AWS resources. They are opt-in and require explicit environment variable to run.
 
 ## Running E2E Tests
 
@@ -86,7 +86,7 @@ Tests AWS resource management:
 ## Test Safety
 
 All E2E tests:
-1. **Tag resources** with `trainctl:test=<uuid>` for identification
+1. **Tag resources** with `runctl:test=<uuid>` for identification
 2. **Clean up** resources they create in teardown
 3. **Use small resources** (1 GB volumes, minimal instances) to minimize cost
 4. **Have timeouts** to prevent hanging
@@ -118,8 +118,8 @@ aws ce get-cost-and-usage \
     --metrics BlendedCost
 
 # List test resources (should be empty after tests)
-aws ec2 describe-volumes --filters "Name=tag:trainctl:test,Values=*"
-aws ec2 describe-snapshots --filters "Name=tag:trainctl:test,Values=*"
+aws ec2 describe-volumes --filters "Name=tag:runctl:test,Values=*"
+aws ec2 describe-snapshots --filters "Name=tag:runctl:test,Values=*"
 ```
 
 ## Test Patterns
@@ -213,7 +213,7 @@ Tests have timeouts, but if they hang:
 If tests fail mid-run, resources may be left:
 ```bash
 # List test resources
-aws ec2 describe-volumes --filters "Name=tag:trainctl:test,Values=*"
+aws ec2 describe-volumes --filters "Name=tag:runctl:test,Values=*"
 
 # Manual cleanup
 aws ec2 delete-volume --volume-id vol-xxx
@@ -249,7 +249,7 @@ Example GitHub Actions:
 
 ## Best Practices
 
-1. **Always tag test resources** with `trainctl:test=<uuid>`
+1. **Always tag test resources** with `runctl:test=<uuid>`
 2. **Clean up in teardown** even if test fails
 3. **Use small resources** to minimize cost
 4. **Add timeouts** to prevent hanging

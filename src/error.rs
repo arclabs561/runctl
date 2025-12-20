@@ -1,4 +1,4 @@
-//! Error types for trainctl
+//! Error types for runctl
 //!
 //! This module provides structured error handling with retry awareness
 //! and clear error categorization.
@@ -6,7 +6,7 @@
 use crate::provider::ResourceId;
 use thiserror::Error;
 
-/// Main error type for trainctl
+/// Main error type for runctl
 #[derive(Error, Debug)]
 pub enum TrainctlError {
     #[error("Configuration error: {0}")]

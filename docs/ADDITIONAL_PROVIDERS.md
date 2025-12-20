@@ -1,6 +1,6 @@
 # Additional Provider Recommendations
 
-Based on research and analysis, here are the most valuable additional providers to add to `trainctl`:
+Based on research and analysis, here are the most valuable additional providers to add to `runctl`:
 
 ## High Priority Additions
 
@@ -149,5 +149,5 @@ impl TrainingProvider for VastProvider {
 - Low integration complexity
 - Good documentation
 
-This would give `trainctl` coverage of the major budget-friendly GPU providers alongside AWS and RunPod.
+This would give `runctl` coverage of the major budget-friendly GPU providers alongside AWS and RunPod.
 

@@ -24,13 +24,13 @@
 - Check expiration time
 
 ### 3. **Insufficient Test Coverage** ✅ FIXED
-**Problem**: Original tests only checked basic permissions, not security boundaries or actual trainctl integration.
+**Problem**: Original tests only checked basic permissions, not security boundaries or actual runctl integration.
 
 **Fix**: Created comprehensive test suite:
 - `verify-setup.sh`: Verifies all components are configured correctly
 - `test-auth.sh`: Basic authentication and permissions
 - `test-security-boundaries.sh`: Security boundary verification
-- `test-trainctl-integration.sh`: Actual trainctl CLI testing
+- `test-runctl-integration.sh`: Actual runctl CLI testing
 - `run-all-tests.sh`: Runs all tests in sequence
 
 ### 4. **No Setup Verification** ✅ FIXED
@@ -100,8 +100,8 @@
    - ✅ Temporary credentials in use
    - ✅ Region restrictions working
 
-4. **trainctl Integration** (`test-trainctl-integration.sh`)
-   - ✅ trainctl can list resources
+4. **runctl Integration** (`test-runctl-integration.sh`)
+   - ✅ runctl can list resources
    - ✅ AWS commands available
    - ✅ Credentials used correctly by AWS SDK
    - ✅ Error handling works
@@ -175,7 +175,7 @@ source scripts/assume-test-role.sh
 # Test specific components
 ./scripts/test-auth.sh
 ./scripts/test-security-boundaries.sh
-./scripts/test-trainctl-integration.sh
+./scripts/test-runctl-integration.sh
 ```
 
 ## Known Limitations

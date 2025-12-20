@@ -1,13 +1,13 @@
-//! Integration tests for trainctl
+//! Integration tests for runctl
 
+use runctl::config::{init_config, Config};
 use std::fs;
 use tempfile::TempDir;
-use trainctl::config::{init_config, Config};
 
 #[test]
 fn test_config_initialization() {
     let temp_dir = TempDir::new().unwrap();
-    let config_path = temp_dir.path().join(".trainctl.toml");
+    let config_path = temp_dir.path().join(".runctl.toml");
 
     // Test config structure
     let config_content = r#"
@@ -87,7 +87,7 @@ fn test_s3_path_parsing_basic() {
 #[test]
 fn test_resource_cost_estimation() {
     // Test using the actual function from resources module
-    use trainctl::resources::estimate_instance_cost;
+    use runctl::resources::estimate_instance_cost;
 
     assert_eq!(estimate_instance_cost("t3.medium"), 0.0416);
     assert_eq!(estimate_instance_cost("t3.large"), 0.0416);
@@ -98,7 +98,7 @@ fn test_resource_cost_estimation() {
 
 #[tokio::test]
 async fn test_checkpoint_operations() {
-    use trainctl::checkpoint::get_checkpoint_paths;
+    use runctl::checkpoint::get_checkpoint_paths;
 
     let temp_dir = TempDir::new().unwrap();
     let checkpoint_dir = temp_dir.path().join("checkpoints");
@@ -122,7 +122,7 @@ async fn test_checkpoint_operations() {
 #[test]
 fn test_utils_functions() {
     use chrono::Utc;
-    use trainctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
+    use runctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
 
     // Test duration formatting
     assert_eq!(format_duration(0), "0s");

@@ -2,7 +2,7 @@
 
 ## Overview
 
-E2E tests verify trainctl functionality with real AWS resources and actual system interactions.
+E2E tests verify runctl functionality with real AWS resources and actual system interactions.
 
 ## Running E2E Tests
 

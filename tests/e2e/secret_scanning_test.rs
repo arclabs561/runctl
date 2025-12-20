@@ -61,16 +61,16 @@ mod tests {
 
     #[test]
     fn test_config_file_not_tracked() {
-        // .trainctl.toml should not be in git
+        // .runctl.toml should not be in git
         let output = Command::new("git")
-            .args(&["ls-files", ".trainctl.toml"])
+            .args(&["ls-files", ".runctl.toml"])
             .output()
             .expect("Failed to run git ls-files");
         
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             stdout.trim().is_empty(),
-            ".trainctl.toml should not be tracked in git"
+            ".runctl.toml should not be tracked in git"
         );
     }
 
@@ -118,7 +118,7 @@ mod tests {
             .expect("Failed to read .gitignore");
         
         let required_patterns = [
-            ".trainctl.toml",
+            ".runctl.toml",
             ".env",
             "*.pem",
             "*.key",

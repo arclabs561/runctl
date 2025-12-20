@@ -3,7 +3,7 @@
 //! Tests that verify error types and error handling properties.
 
 use proptest::prelude::*;
-use trainctl::error::{ConfigError, IsRetryable, TrainctlError};
+use runctl::error::{ConfigError, IsRetryable, TrainctlError};
 
 proptest! {
     #[test]
@@ -97,10 +97,10 @@ proptest! {
         provider in r"[a-zA-Z0-9]+"
     ) {
         let config_err = ConfigError::InvalidProvider(provider.clone());
-        let trainctl_err: TrainctlError = config_err.into();
+        let runctl_err: TrainctlError = config_err.into();
 
         // Property: Should convert to TrainctlError::Config
-        match trainctl_err {
+        match runctl_err {
             TrainctlError::Config(_) => {
                 // Correct conversion
             }

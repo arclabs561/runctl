@@ -11,18 +11,18 @@ Following the analysis in `PYTHON_BINDINGS_ANALYSIS.md`, we've implemented Pytho
 
 ### ✅ 1. Python Wrapper Script
 
-**File**: `scripts/trainctl_wrapper.py`
+**File**: `scripts/runctl_wrapper.py`
 
 A comprehensive Python wrapper that:
-- Provides a clean Python API for trainctl
-- Auto-detects trainctl binary (PATH, target/release, target/debug)
+- Provides a clean Python API for runctl
+- Auto-detects runctl binary (PATH, target/release, target/debug)
 - Handles JSON output parsing
 - Provides structured error handling
 - Supports all major commands (AWS, resources, checkpoints)
 
 **Usage**:
 ```python
-from trainctl_wrapper import Trainctl
+from runctl_wrapper import Trainctl
 
 tc = Trainctl()
 instance = tc.aws.create_instance("g4dn.xlarge", spot=True)
@@ -122,20 +122,20 @@ Documented current state and improvements needed:
 ### Manual Testing
 ```bash
 # Test wrapper
-python3 scripts/trainctl_wrapper.py version
+python3 scripts/runctl_wrapper.py version
 
 # Test example
 python3 examples/python_usage.py
 
 # Test in Python REPL
 python3
->>> from trainctl_wrapper import Trainctl
+>>> from runctl_wrapper import Trainctl
 >>> tc = Trainctl()
 >>> tc.version()
 ```
 
 ### Integration Testing
-The wrapper can be tested with actual trainctl commands once JSON output is more consistent.
+The wrapper can be tested with actual runctl commands once JSON output is more consistent.
 
 ## Architecture Decision
 
@@ -155,7 +155,7 @@ The wrapper can be tested with actual trainctl commands once JSON output is more
 
 ## Files Created
 
-1. `scripts/trainctl_wrapper.py` - Main wrapper (300+ lines)
+1. `scripts/runctl_wrapper.py` - Main wrapper (300+ lines)
 2. `examples/python_usage.py` - Usage examples
 3. `docs/PYTHON_USAGE.md` - Complete documentation
 4. `docs/JSON_OUTPUT_IMPROVEMENTS.md` - JSON roadmap

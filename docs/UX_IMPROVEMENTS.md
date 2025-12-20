@@ -14,7 +14,7 @@
 #### 1. **Missing Help Text for Positional Arguments**
 **Problem:** Commands show positional args without descriptions
 ```bash
-$ trainctl aws create --help
+$ runctl aws create --help
 Arguments:
   <INSTANCE_TYPE>    # No description!
   [SPOT]             # No description!
@@ -36,8 +36,8 @@ instance_type: String,
 ```rust
 #[command(
     about = "Create EC2 instance for training",
-    example = "trainctl aws create t3.medium",
-    example = "trainctl aws create g4dn.xlarge --spot --data-volume-size 100"
+    example = "runctl aws create t3.medium",
+    example = "runctl aws create g4dn.xlarge --spot --data-volume-size 100"
 )]
 ```
 
@@ -58,8 +58,8 @@ ERROR: Too many instances running (50)
 ERROR: Too many instances running (50). Creation blocked to prevent accidental mass creation.
 
 Please terminate existing instances or use a different account.
-Use 'trainctl resources list' to see running instances.
-Use 'trainctl aws terminate <instance-id>' to terminate instances.
+Use 'runctl resources list' to see running instances.
+Use 'runctl aws terminate <instance-id>' to terminate instances.
 ```
 
 #### 5. **Missing Input Validation Messages**
@@ -84,8 +84,8 @@ fn validate_instance_type(s: &str) -> Result<String, String> {
 #### 6. **No Command Aliases**
 **Problem:** Long commands are tedious
 ```bash
-trainctl resources list
-trainctl aws terminate
+runctl resources list
+runctl aws terminate
 ```
 
 **Fix:** Add common aliases
@@ -100,7 +100,7 @@ List { ... }
 **Fix:** Add `after_help` with examples and links
 ```rust
 #[command(
-    after_help = "\nEXAMPLES:\n  trainctl aws create t3.medium\n  trainctl aws create g4dn.xlarge --spot\n\nSee 'trainctl aws <command> --help' for more information."
+    after_help = "\nEXAMPLES:\n  runctl aws create t3.medium\n  runctl aws create g4dn.xlarge --spot\n\nSee 'runctl aws <command> --help' for more information."
 )]
 ```
 
@@ -156,8 +156,8 @@ List { ... }
 pub enum AwsCommands {
     #[command(
         about = "Create EC2 instance for training",
-        example = "trainctl aws create t3.medium",
-        example = "trainctl aws create g4dn.xlarge --spot --data-volume-size 100"
+        example = "runctl aws create t3.medium",
+        example = "runctl aws create g4dn.xlarge --spot --data-volume-size 100"
     )]
     Create {
         #[arg(
@@ -191,8 +191,8 @@ anyhow::bail!("Too many instances running");
 anyhow::bail!(
     "Too many instances running ({}). Creation blocked.\n\n\
     To resolve:\n\
-    1. List instances: trainctl resources list\n\
-    2. Terminate instances: trainctl aws terminate <instance-id>\n\
+    1. List instances: runctl resources list\n\
+    2. Terminate instances: runctl aws terminate <instance-id>\n\
     3. Or use a different AWS account",
     count
 );

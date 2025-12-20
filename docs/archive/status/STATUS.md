@@ -1,4 +1,4 @@
-# trainctl Status
+# runctl Status
 
 ## ✅ Completed
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-trainctl now includes comprehensive resource management to help you:
+runctl now includes comprehensive resource management to help you:
 - **See what's running** across AWS, RunPod, and local
 - **Identify zombies** (orphaned resources)
 - **Get cost insights** and recommendations
@@ -14,22 +14,22 @@ trainctl now includes comprehensive resource management to help you:
 
 ```bash
 # List all resources (AWS, RunPod, local)
-trainctl resources list
+runctl resources list
 
 # Detailed view
-trainctl resources list --detailed
+runctl resources list --detailed
 
 # Filter by platform
-trainctl resources list --platform aws
-trainctl resources list --platform runpod
-trainctl resources list --platform local
+runctl resources list --platform aws
+runctl resources list --platform runpod
+runctl resources list --platform local
 ```
 
 ### Resource Summary
 
 ```bash
 # Quick summary with cost estimate
-trainctl resources summary
+runctl resources summary
 ```
 
 Shows:
@@ -41,7 +41,7 @@ Shows:
 
 ```bash
 # Get insights and recommendations
-trainctl resources insights
+runctl resources insights
 ```
 
 Provides:
@@ -54,19 +54,19 @@ Provides:
 
 ```bash
 # Preview what would be cleaned up (dry run)
-trainctl resources cleanup --dry-run
+runctl resources cleanup --dry-run
 
 # Actually cleanup (with confirmation)
-trainctl resources cleanup
+runctl resources cleanup
 
 # Force cleanup (skip confirmation)
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ## What Are "Zombies"?
 
 Zombie resources are:
-- **Orphaned instances**: Running > 24 hours without trainctl tags
+- **Orphaned instances**: Running > 24 hours without runctl tags
 - **Stopped instances**: Consuming storage costs
 - **Old training processes**: No longer needed
 
@@ -76,31 +76,31 @@ Zombie resources are:
 
 ```bash
 # Quick check of what's running
-trainctl resources summary
+runctl resources summary
 
 # Get recommendations
-trainctl resources insights
+runctl resources insights
 ```
 
 ### Before Training
 
 ```bash
 # See what's already running
-trainctl resources list
+runctl resources list
 
 # Cleanup old resources
-trainctl resources cleanup --dry-run  # Preview
-trainctl resources cleanup --force    # Cleanup
+runctl resources cleanup --dry-run  # Preview
+runctl resources cleanup --force    # Cleanup
 ```
 
 ### Cost Monitoring
 
 ```bash
 # Check current costs
-trainctl resources summary
+runctl resources summary
 
 # Get cost insights
-trainctl resources insights
+runctl resources insights
 ```
 
 ## Resource Types Tracked
@@ -119,7 +119,7 @@ trainctl resources insights
 
 ### Local Processes
 - Training scripts
-- trainctl processes
+- runctl processes
 - GPU-using processes
 
 ## Cost Estimation
@@ -144,12 +144,12 @@ For accurate costs, use AWS Cost Explorer or RunPod billing.
 
 ```bash
 # Before training
-trainctl resources list
-trainctl resources cleanup --dry-run
+runctl resources list
+runctl resources cleanup --dry-run
 
 # After training
-trainctl resources summary
-trainctl resources insights
+runctl resources summary
+runctl resources insights
 ```
 
 ### Automated Cleanup
@@ -157,13 +157,13 @@ trainctl resources insights
 Add to your workflow:
 ```bash
 # Weekly cleanup script
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ## Best Practices
 
 1. **Regular checks**: Run `resources insights` daily
-2. **Tag resources**: Use trainctl tags for tracking
+2. **Tag resources**: Use runctl tags for tracking
 3. **Monitor costs**: Check `resources summary` regularly
 4. **Cleanup promptly**: Remove unused resources
 5. **Use dry-run**: Always preview before cleanup

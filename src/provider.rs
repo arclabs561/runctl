@@ -1,7 +1,7 @@
 //! Provider-agnostic trait definitions for cloud training platforms
 //!
 //! This module defines traits that all cloud providers (AWS, RunPod, Lyceum AI, etc.)
-//! must implement, allowing trainctl to work with any provider through a unified interface.
+//! must implement, allowing runctl to work with any provider through a unified interface.
 
 use crate::error::Result;
 use async_trait::async_trait;

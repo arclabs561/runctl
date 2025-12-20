@@ -264,7 +264,7 @@ subprocess.run([
     #[allow(dead_code)]
     async fn download_to_temp(&self) -> Result<PathBuf> {
         // Would use data_transfer module here
-        let temp_dir = std::env::temp_dir().join("trainctl-data");
+        let temp_dir = std::env::temp_dir().join("runctl-data");
         std::fs::create_dir_all(&temp_dir)?;
         Ok(temp_dir)
     }

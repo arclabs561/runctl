@@ -5,7 +5,7 @@
 //! 2. Error conversion at CLI boundary works correctly
 //! 3. Error messages are preserved and structured
 
-use trainctl::error::{ConfigError, Result, TrainctlError};
+use runctl::error::{ConfigError, Result, TrainctlError};
 
 #[test]
 fn test_error_conversion_to_anyhow() {
@@ -23,10 +23,10 @@ fn test_error_conversion_to_anyhow() {
 #[test]
 fn test_config_error_conversion() {
     let config_error = ConfigError::NotFound("/path/to/config".to_string());
-    let trainctl_error: TrainctlError = config_error.into();
+    let runctl_error: TrainctlError = config_error.into();
 
-    assert!(matches!(trainctl_error, TrainctlError::Config(_)));
-    assert!(trainctl_error.to_string().contains("Config file not found"));
+    assert!(matches!(runctl_error, TrainctlError::Config(_)));
+    assert!(runctl_error.to_string().contains("Config file not found"));
 }
 
 #[test]
@@ -34,10 +34,10 @@ fn test_io_error_conversion() {
     use std::io;
 
     let io_error = io::Error::new(io::ErrorKind::NotFound, "File not found");
-    let trainctl_error: TrainctlError = io_error.into();
+    let runctl_error: TrainctlError = io_error.into();
 
-    assert!(matches!(trainctl_error, TrainctlError::Io(_)));
-    assert!(trainctl_error.to_string().contains("I/O error"));
+    assert!(matches!(runctl_error, TrainctlError::Io(_)));
+    assert!(runctl_error.to_string().contains("I/O error"));
 }
 
 #[test]
@@ -45,10 +45,10 @@ fn test_error_chain_preservation() {
     // Test that error chains are preserved when converting
     let inner_error =
         std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Permission denied");
-    let trainctl_error = TrainctlError::Io(inner_error);
+    let runctl_error = TrainctlError::Io(inner_error);
 
     // Convert to anyhow and back - should preserve message
-    let anyhow_error = anyhow::anyhow!("{}", trainctl_error);
+    let anyhow_error = anyhow::anyhow!("{}", runctl_error);
     assert!(anyhow_error.to_string().contains("I/O error"));
     assert!(anyhow_error.to_string().contains("Permission denied"));
 }
@@ -91,7 +91,7 @@ fn test_error_display_format() {
 
 #[test]
 fn test_retryable_trait() {
-    use trainctl::error::IsRetryable;
+    use runctl::error::IsRetryable;
 
     let retryable_error = TrainctlError::Retryable {
         attempt: 1,

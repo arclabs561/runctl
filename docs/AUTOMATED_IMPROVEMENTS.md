@@ -8,15 +8,15 @@
 ### ✅ Completed Automatically
 
 1. **CloudTrail Enabled**
-   - Trail created: `trainctl-audit-trail`
-   - S3 bucket: `trainctl-cloudtrail-logs-*`
+   - Trail created: `runctl-audit-trail`
+   - S3 bucket: `runctl-cloudtrail-logs-*`
    - Status: **Logging all API calls**
    - Multi-region: Enabled
    - Log file validation: Enabled
 
 2. **Security Scripts Created**
    - `scripts/setup-cloudtrail.sh` - CloudTrail setup
-   - `scripts/setup-trainctl-user.sh` - Create limited-permission user
+   - `scripts/setup-runctl-user.sh` - Create limited-permission user
    - `scripts/setup-github-oidc.sh` - OIDC setup for CI/CD
    - `scripts/improve-security.sh` - Comprehensive improvements
    - `scripts/check-aws-credentials.sh` - Security check (enhanced)
@@ -31,7 +31,7 @@
 
 1. **MFA Enabled** - Hardware device (1Password)
 2. **Access Keys** - Reduced to 1 (unused key deleted)
-3. **Test Role** - `trainctl-test-role` available for temporary credentials
+3. **Test Role** - `runctl-test-role` available for temporary credentials
 
 ## Current Security Status
 
@@ -64,12 +64,12 @@ source scripts/assume-test-role.sh
 
 ### View CloudTrail Logs
 ```bash
-aws s3 ls s3://trainctl-cloudtrail-logs-*/
+aws s3 ls s3://runctl-cloudtrail-logs-*/
 ```
 
 ### Check CloudTrail Status
 ```bash
-aws cloudtrail get-trail-status --name trainctl-audit-trail
+aws cloudtrail get-trail-status --name runctl-audit-trail
 ```
 
 ## Optional Next Steps
@@ -85,13 +85,13 @@ Then update `.github/workflows/*.yml` to use OIDC instead of secrets.
 ### 2. Create Limited-Permission User (Optional)
 
 ```bash
-./scripts/setup-trainctl-user.sh
+./scripts/setup-runctl-user.sh
 ```
 
 Then configure AWS CLI with new user:
 ```bash
-aws configure --profile trainctl
-export AWS_PROFILE=trainctl
+aws configure --profile runctl
+export AWS_PROFILE=runctl
 ```
 
 ### 3. Use Test Role for Development

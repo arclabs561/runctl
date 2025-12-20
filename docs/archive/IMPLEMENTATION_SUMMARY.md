@@ -23,7 +23,7 @@
 
 ### 4. Safe Cleanup (`src/safe_cleanup.rs`)
 - ✅ Protection mechanism for important resources
-- ✅ Tag-based protection (`trainctl:protected`, `trainctl:important`)
+- ✅ Tag-based protection (`runctl:protected`, `runctl:important`)
 - ✅ Dry-run mode for safe testing
 - ✅ Force flag for emergency cleanup
 - ✅ Detailed cleanup results (deleted, skipped, errors)
@@ -119,7 +119,7 @@
 
 ### Track resources and costs
 ```rust
-use trainctl::resource_tracking::ResourceTracker;
+use runctl::resource_tracking::ResourceTracker;
 
 let tracker = ResourceTracker::new();
 tracker.register(resource_status).await?;
@@ -129,7 +129,7 @@ let total_cost = tracker.get_total_cost().await;
 
 ### Safe cleanup
 ```rust
-use trainctl::safe_cleanup::{CleanupSafety, safe_cleanup};
+use runctl::safe_cleanup::{CleanupSafety, safe_cleanup};
 
 let safety = CleanupSafety::new();
 let safe_to_delete = safety.get_safe_to_delete(&tracker, None).await?;
@@ -138,7 +138,7 @@ let result = safe_cleanup(safe_to_delete, &tracker, &safety, false, false).await
 
 ### Data transfer
 ```rust
-use trainctl::data_transfer::{DataTransfer, DataLocation, TransferOptions};
+use runctl::data_transfer::{DataTransfer, DataLocation, TransferOptions};
 
 let transfer = DataTransfer::new(config, Some(&aws_config));
 transfer.transfer(
@@ -150,7 +150,7 @@ transfer.transfer(
 
 ### Fast data loading
 ```rust
-use trainctl::fast_data_loading::{FastDataLoader, DataLoadingConfig, DataLoadingStrategy};
+use runctl::fast_data_loading::{FastDataLoader, DataLoadingConfig, DataLoadingStrategy};
 
 let config = DataLoadingConfig {
     strategy: DataLoadingStrategy::PreWarmedEBS {

@@ -2,7 +2,7 @@
 
 ## Overview
 
-trainctl now uses **native Rust AWS SDK** for all local S3 operations by default, with parallel transfers matching `s5cmd` performance. External tools like `s5cmd` are now optional.
+runctl now uses **native Rust AWS SDK** for all local S3 operations by default, with parallel transfers matching `s5cmd` performance. External tools like `s5cmd` are now optional.
 
 ## Why Native Rust?
 
@@ -61,14 +61,14 @@ Native Rust implementation matches `s5cmd` performance:
 
 ### Default (Native Rust)
 ```bash
-trainctl s3 upload ./data s3://bucket/data --recursive
-trainctl s3 download s3://bucket/data ./local --recursive
-trainctl s3 sync ./local s3://bucket/data --direction up
+runctl s3 upload ./data s3://bucket/data --recursive
+runctl s3 download s3://bucket/data ./local --recursive
+runctl s3 sync ./local s3://bucket/data --direction up
 ```
 
 ### Optional: Use s5cmd
 ```bash
-trainctl s3 upload ./data s3://bucket/data --recursive --use-s5cmd
+runctl s3 upload ./data s3://bucket/data --recursive --use-s5cmd
 ```
 
 ## Benefits

@@ -1,11 +1,11 @@
 # UX and Functionality Review
 
 **Date**: 2025-01-XX  
-**Scope**: Complete review of trainctl command UX, functionality, and command combinations
+**Scope**: Complete review of runctl command UX, functionality, and command combinations
 
 ## Executive Summary
 
-trainctl provides a comprehensive CLI for ML training orchestration. The tool is functional but has several UX inconsistencies and opportunities for improvement in command combinations, output formats, and error handling.
+runctl provides a comprehensive CLI for ML training orchestration. The tool is functional but has several UX inconsistencies and opportunities for improvement in command combinations, output formats, and error handling.
 
 ## Command Structure Analysis
 
@@ -58,7 +58,7 @@ trainctl provides a comprehensive CLI for ML training orchestration. The tool is
 
 #### 3. Status Command Ambiguity
 
-**Problem**: `trainctl status` purpose unclear:
+**Problem**: `runctl status` purpose unclear:
 - What does it show vs `resources list`?
 - What does it show vs `resources summary`?
 - Is it a quick summary or detailed?
@@ -192,8 +192,8 @@ trainctl provides a comprehensive CLI for ML training orchestration. The tool is
 
 **Current**:
 ```bash
-INSTANCE_ID=$(trainctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
-trainctl aws train $INSTANCE_ID training/train.py --sync-code
+INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
+runctl aws train $INSTANCE_ID training/train.py --sync-code
 ```
 
 **Issues**:
@@ -204,7 +204,7 @@ trainctl aws train $INSTANCE_ID training/train.py --sync-code
 **Recommendation**:
 - Add `--auto-train` flag to `aws create`:
   ```bash
-  trainctl aws create --spot --instance-type g4dn.xlarge \
+  runctl aws create --spot --instance-type g4dn.xlarge \
     --auto-train training/train.py \
     --sync-code
   ```
@@ -214,8 +214,8 @@ trainctl aws train $INSTANCE_ID training/train.py --sync-code
 
 **Current**:
 ```bash
-trainctl aws train $INSTANCE_ID training/train.py
-trainctl aws monitor $INSTANCE_ID --follow
+runctl aws train $INSTANCE_ID training/train.py
+runctl aws monitor $INSTANCE_ID --follow
 ```
 
 **Issues**:
@@ -231,9 +231,9 @@ trainctl aws monitor $INSTANCE_ID --follow
 
 **Current**:
 ```bash
-trainctl checkpoint list checkpoints/
-trainctl checkpoint upload i-123 checkpoints/latest.pt
-trainctl checkpoint download checkpoint-id
+runctl checkpoint list checkpoints/
+runctl checkpoint upload i-123 checkpoints/latest.pt
+runctl checkpoint download checkpoint-id
 ```
 
 **Issues**:
@@ -250,9 +250,9 @@ trainctl checkpoint download checkpoint-id
 
 **Current**:
 ```bash
-trainctl resources list
-trainctl resources stop-all
-trainctl resources cleanup
+runctl resources list
+runctl resources stop-all
+runctl resources cleanup
 ```
 
 **Issues**:
@@ -270,10 +270,10 @@ trainctl resources cleanup
 **Current**:
 ```bash
 # Option 1: s3 command
-trainctl s3 upload local/ s3://bucket/data/
+runctl s3 upload local/ s3://bucket/data/
 
 # Option 2: transfer command
-trainctl transfer local/ s3://bucket/data/
+runctl transfer local/ s3://bucket/data/
 ```
 
 **Issues**:
@@ -290,7 +290,7 @@ trainctl transfer local/ s3://bucket/data/
 
 1. **Quick Start Command**
    - Single command: create + train + monitor
-   - `trainctl aws quick-start --instance-type g4dn.xlarge --script train.py`
+   - `runctl aws quick-start --instance-type g4dn.xlarge --script train.py`
 
 2. **Batch Operations**
    - Stop all instances in a project
@@ -367,8 +367,8 @@ trainctl transfer local/ s3://bucket/data/
 1. **Add Examples to All Commands**
    ```rust
    /// Examples:
-   ///   trainctl aws create g4dn.xlarge --spot
-   ///   trainctl aws create p3.2xlarge --data-volume-size 500
+   ///   runctl aws create g4dn.xlarge --spot
+   ///   runctl aws create p3.2xlarge --data-volume-size 500
    ```
 
 2. **Add "See Also" Sections**
@@ -385,33 +385,33 @@ trainctl transfer local/ s3://bucket/data/
 ### Current State
 
 **Commands**:
-- `trainctl init` - Creates `.trainctl.toml`
+- `runctl init` - Creates `.runctl.toml`
 
 **Issues**:
 1. **No Config Viewing**
-   - No `trainctl config show`
+   - No `runctl config show`
    - No way to see effective config
    - No config validation
 
 2. **Config File Location Unclear**
-   - Current dir vs `~/.config/trainctl/config.toml`
+   - Current dir vs `~/.config/runctl/config.toml`
    - Precedence not documented
 
 3. **No Config Editing**
    - Must edit file manually
-   - No `trainctl config set <key> <value>`
+   - No `runctl config set <key> <value>`
 
 ### Recommendations
 
 1. **Add Config Commands**
    ```bash
-   trainctl config show          # Show effective config
-   trainctl config set aws.region us-west-2
-   trainctl config validate      # Check config is valid
+   runctl config show          # Show effective config
+   runctl config set aws.region us-west-2
+   runctl config validate      # Check config is valid
    ```
 
 2. **Document Config Precedence**
-   - Command-line flags > `.trainctl.toml` > `~/.config/trainctl/config.toml` > defaults
+   - Command-line flags > `.runctl.toml` > `~/.config/runctl/config.toml` > defaults
 
 3. **Add Config Validation**
    - Validate on load
@@ -548,9 +548,9 @@ trainctl transfer local/ s3://bucket/data/
 
 ### Suggested New Commands
 
-1. **`trainctl aws quick-start`**
+1. **`runctl aws quick-start`**
    ```bash
-   trainctl aws quick-start \
+   runctl aws quick-start \
      --instance-type g4dn.xlarge \
      --script training/train.py \
      --data-s3 s3://bucket/data/ \
@@ -558,30 +558,30 @@ trainctl transfer local/ s3://bucket/data/
    ```
    - Create instance + train + monitor in one command
 
-2. **`trainctl resources cost`**
+2. **`runctl resources cost`**
    ```bash
-   trainctl resources cost
-   trainctl resources cost --project my-project
-   trainctl resources cost --by-user
+   runctl resources cost
+   runctl resources cost --project my-project
+   runctl resources cost --by-user
    ```
    - Show cost breakdown
    - Projected costs
    - Cost by project/user
 
-3. **`trainctl checkpoint auto`**
+3. **`runctl checkpoint auto`**
    ```bash
-   trainctl checkpoint auto --enable
-   trainctl checkpoint auto --interval 300  # Upload every 5 min
+   runctl checkpoint auto --enable
+   runctl checkpoint auto --interval 300  # Upload every 5 min
    ```
    - Enable auto-upload
    - Configure intervals
    - Monitor and upload
 
-4. **`trainctl config`**
+4. **`runctl config`**
    ```bash
-   trainctl config show
-   trainctl config set aws.region us-west-2
-   trainctl config validate
+   runctl config show
+   runctl config set aws.region us-west-2
+   runctl config validate
    ```
    - View/edit configuration
    - Show effective config
@@ -591,20 +591,20 @@ trainctl transfer local/ s3://bucket/data/
 
 1. **Batch Operations**
    ```bash
-   trainctl resources stop-all --project myproject
-   trainctl resources cleanup --older-than 24h
-   trainctl resources cost --project myproject
+   runctl resources stop-all --project myproject
+   runctl resources cleanup --older-than 24h
+   runctl resources cost --project myproject
    ```
 
 2. **Checkpoint Workflow**
    ```bash
-   trainctl checkpoint sync <instance-id>  # Auto-detect and upload
-   trainctl checkpoint resume <checkpoint-id> --instance <new-instance>
+   runctl checkpoint sync <instance-id>  # Auto-detect and upload
+   runctl checkpoint resume <checkpoint-id> --instance <new-instance>
    ```
 
 3. **Auto-Monitor**
    ```bash
-   trainctl aws train <instance-id> <script> --monitor
+   runctl aws train <instance-id> <script> --monitor
    ```
 
 ## Consistency Issues
@@ -727,9 +727,9 @@ trainctl transfer local/ s3://bucket/data/
 ### Medium Priority (Short-term)
 
 1. **Add Config Commands**
-   - `trainctl config show`
-   - `trainctl config set`
-   - `trainctl config validate`
+   - `runctl config show`
+   - `runctl config set`
+   - `runctl config validate`
 
 2. **Improve Help Text**
    - Add examples to all commands
@@ -749,9 +749,9 @@ trainctl transfer local/ s3://bucket/data/
 ### Low Priority (Long-term)
 
 1. **New Commands**
-   - `trainctl aws quick-start`
-   - `trainctl resources cost`
-   - `trainctl checkpoint auto`
+   - `runctl aws quick-start`
+   - `runctl resources cost`
+   - `runctl checkpoint auto`
 
 2. **Advanced Features**
    - Batch operations
@@ -765,7 +765,7 @@ trainctl transfer local/ s3://bucket/data/
 
 ## Conclusion
 
-trainctl is a functional and powerful tool, but has several UX inconsistencies that could be improved. The highest priority items are:
+runctl is a functional and powerful tool, but has several UX inconsistencies that could be improved. The highest priority items are:
 
 1. **JSON output consistency** - Critical for programmatic use
 2. **Error message quality** - Critical for user experience

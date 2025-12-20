@@ -1,4 +1,4 @@
-# trainctl Features
+# runctl Features
 
 ## Core Features
 
@@ -78,35 +78,35 @@ just monitor        # Monitor training
 ### Development Workflow
 ```bash
 # Quick local test
-trainctl local training/train.py --epochs 1
+runctl local training/train.py --epochs 1
 
 # Full training
-trainctl local training/train.py --epochs 50 --batch-size 128
+runctl local training/train.py --epochs 50 --batch-size 128
 ```
 
 ### Cloud Training Workflow
 ```bash
 # RunPod
-trainctl runpod create
-trainctl runpod train <pod-id> training/train.py --background
-trainctl runpod monitor <pod-id> --follow
+runctl runpod create
+runctl runpod train <pod-id> training/train.py --background
+runctl runpod monitor <pod-id> --follow
 
 # AWS
-trainctl aws create --spot
-trainctl aws train <instance-id> training/train.py
-trainctl aws monitor <instance-id> --follow
+runctl aws create --spot
+runctl aws train <instance-id> training/train.py
+runctl aws monitor <instance-id> --follow
 ```
 
 ### Monitoring Workflow
 ```bash
 # Watch training progress
-trainctl monitor --log training.log --follow
+runctl monitor --log training.log --follow
 
 # Check checkpoint status
-trainctl monitor --checkpoint checkpoints/ --follow
+runctl monitor --checkpoint checkpoints/ --follow
 
 # One-time status
-trainctl checkpoint list checkpoints/
+runctl checkpoint list checkpoints/
 ```
 
 ## Extensibility

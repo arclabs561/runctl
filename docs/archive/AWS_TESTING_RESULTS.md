@@ -6,18 +6,18 @@ December 4, 2025
 ## Test Environment
 - **Account ID**: 512827140002
 - **Region**: us-east-1
-- **Role ARN**: `arn:aws:iam::512827140002:role/trainctl-test-role`
+- **Role ARN**: `arn:aws:iam::512827140002:role/runctl-test-role`
 
 ## Setup Verification
 
 ### ✅ IAM Role Created
-- Role name: `trainctl-test-role`
+- Role name: `runctl-test-role`
 - Role ID: `AROAXOZXBE6RO33VMMXED`
 - Trust policy: Allows account root with ExternalId condition
 - Tags: `Purpose=testing`, `Environment=test`
 
 ### ✅ Permissions Policy
-- Policy name: `trainctl-test-policy`
+- Policy name: `runctl-test-policy`
 - Permissions:
   - ✅ EC2: Describe, Create, Start, Stop, Terminate (with test tag requirement for modifications)
   - ✅ EBS: Describe, Create, Attach, Detach, Delete, Snapshot operations
@@ -25,12 +25,12 @@ December 4, 2025
   - ✅ SSM: SendCommand, GetCommandInvocation, DescribeInstanceInformation
 
 ### ✅ Permission Boundary
-- Policy name: `trainctl-test-boundary`
+- Policy name: `runctl-test-boundary`
 - Allows: EC2, S3, SSM, Logs operations in us-east-1 and us-west-2
 - Denies: IAM, Organizations, Account management operations
 
 ### ✅ Test S3 Bucket
-- Bucket name: `trainctl-test-1764868873`
+- Bucket name: `runctl-test-1764868873`
 - Tags: `Environment=test`, `Purpose=testing`
 
 ## Authentication Tests
@@ -39,7 +39,7 @@ December 4, 2025
 ```bash
 $ source scripts/assume-test-role.sh
 ✓ Credentials obtained
-Identity: arn:aws:sts::512827140002:assumed-role/trainctl-test-role/trainctl-test-*
+Identity: arn:aws:sts::512827140002:assumed-role/runctl-test-role/runctl-test-*
 Session expires: 1 hour from assumption
 ```
 
@@ -51,11 +51,11 @@ Session expires: 1 hour from assumption
 - ✅ **SSM**: Permissions configured (no managed instances to test)
 - ✅ **Permission Boundary**: IAM access correctly denied
 
-## trainctl CLI Tests
+## runctl CLI Tests
 
 ### ✅ Resource Listing
 ```bash
-$ trainctl resources list
+$ runctl resources list
 ✓ Successfully listed 2 EC2 instances
 ✓ Successfully listed RunPod pods
 ✓ No errors with temporary credentials
@@ -95,7 +95,7 @@ $ trainctl resources list
 | EBS Permissions | ✅ PASS | Can describe and manage volumes |
 | S3 Permissions | ✅ PASS | Can access test buckets only |
 | SSM Permissions | ✅ PASS | Permissions configured correctly |
-| trainctl CLI | ✅ PASS | Works with temporary credentials |
+| runctl CLI | ✅ PASS | Works with temporary credentials |
 | Security | ✅ PASS | All security measures functioning |
 
 ## Next Steps
@@ -121,7 +121,7 @@ The AWS testing setup is working correctly with:
 - Least-privilege permissions
 - Permission boundaries for additional security
 - Resource isolation via tagging
-- Full trainctl CLI compatibility
+- Full runctl CLI compatibility
 
 The setup follows AWS security best practices and is ready for use in testing environments.
 

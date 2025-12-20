@@ -34,14 +34,14 @@ echo ""
 
 # 2. Setup CloudTrail (if not exists)
 echo -e "${YELLOW}[2/6] Setting up CloudTrail...${NC}"
-if aws cloudtrail get-trail --name trainctl-audit-trail >/dev/null 2>&1; then
-  IS_LOGGING=$(aws cloudtrail get-trail-status --name trainctl-audit-trail --query 'IsLogging' --output text 2>/dev/null || echo "false")
+if aws cloudtrail get-trail --name runctl-audit-trail >/dev/null 2>&1; then
+  IS_LOGGING=$(aws cloudtrail get-trail-status --name runctl-audit-trail --query 'IsLogging' --output text 2>/dev/null || echo "false")
   if [[ "$IS_LOGGING" == "true" ]]; then
     echo -e "${GREEN}✓ CloudTrail already configured and logging${NC}"
     SKIPPED=$((SKIPPED + 1))
   else
     echo -e "${YELLOW}CloudTrail exists but not logging. Starting...${NC}"
-    aws cloudtrail start-logging --name trainctl-audit-trail && echo -e "${GREEN}✓ CloudTrail logging started${NC}" && IMPROVEMENTS=$((IMPROVEMENTS + 1))
+    aws cloudtrail start-logging --name runctl-audit-trail && echo -e "${GREEN}✓ CloudTrail logging started${NC}" && IMPROVEMENTS=$((IMPROVEMENTS + 1))
   fi
 else
   echo -e "${YELLOW}Creating CloudTrail...${NC}"
@@ -55,13 +55,13 @@ fi
 echo ""
 
 # 3. Verify test role works
-echo -e "${YELLOW}[3/6] Verifying trainctl-test-role...${NC}"
-if aws iam get-role --role-name trainctl-test-role >/dev/null 2>&1; then
-  echo -e "${GREEN}✓ trainctl-test-role exists${NC}"
+echo -e "${YELLOW}[3/6] Verifying runctl-test-role...${NC}"
+if aws iam get-role --role-name runctl-test-role >/dev/null 2>&1; then
+  echo -e "${GREEN}✓ runctl-test-role exists${NC}"
   echo "  You can use it with: source scripts/assume-test-role.sh"
   SKIPPED=$((SKIPPED + 1))
 else
-  echo -e "${YELLOW}trainctl-test-role not found${NC}"
+  echo -e "${YELLOW}runctl-test-role not found${NC}"
   echo "  Run: ./scripts/setup-test-role.sh to create it"
 fi
 echo ""

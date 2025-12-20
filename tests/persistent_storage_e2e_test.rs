@@ -32,7 +32,7 @@ macro_rules! require_e2e {
 /// Helper to tag resources for cleanup
 fn test_tag() -> String {
     format!(
-        "trainctl-test-{}",
+        "runctl-test-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
     )
 }
@@ -70,19 +70,19 @@ async fn test_persistent_volume_creation_and_tagging() {
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:protected")
+                        .key("runctl:protected")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -110,16 +110,16 @@ async fn test_persistent_volume_creation_and_tagging() {
     let tags = volume.tags();
 
     let has_persistent = tags.iter().any(|t| {
-        t.key().map(|k| k == "trainctl:persistent").unwrap_or(false)
+        t.key().map(|k| k == "runctl:persistent").unwrap_or(false)
             && t.value().map(|v| v == "true").unwrap_or(false)
     });
     let has_protected = tags.iter().any(|t| {
-        t.key().map(|k| k == "trainctl:protected").unwrap_or(false)
+        t.key().map(|k| k == "runctl:protected").unwrap_or(false)
             && t.value().map(|v| v == "true").unwrap_or(false)
     });
 
-    assert!(has_persistent, "Volume should have trainctl:persistent tag");
-    assert!(has_protected, "Volume should have trainctl:protected tag");
+    assert!(has_persistent, "Volume should have runctl:persistent tag");
+    assert!(has_protected, "Volume should have runctl:protected tag");
 
     // Cleanup
     client
@@ -155,13 +155,13 @@ async fn test_persistent_volume_protection_from_deletion() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -191,11 +191,11 @@ async fn test_persistent_volume_protection_from_deletion() {
         .unwrap_or_default();
     assert_eq!(state, "available", "Volume should be available");
 
-    // Verify it has persistent tag (simulating trainctl's check)
+    // Verify it has persistent tag (simulating runctl's check)
     let tags = volume.tags();
     let is_persistent = tags.iter().any(|t| {
         t.key()
-            .map(|k| k == "trainctl:persistent" || k == "trainctl:protected")
+            .map(|k| k == "runctl:persistent" || k == "runctl:protected")
             .unwrap_or(false)
             && t.value().map(|v| v == "true").unwrap_or(false)
     });
@@ -235,13 +235,13 @@ async fn test_persistent_volume_survives_instance_termination() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -312,13 +312,13 @@ async fn test_cleanup_skips_persistent_volumes() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -345,7 +345,7 @@ async fn test_cleanup_skips_persistent_volumes() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )

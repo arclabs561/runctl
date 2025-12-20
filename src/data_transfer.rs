@@ -253,7 +253,7 @@ impl DataTransfer {
             })?;
 
         let temp_s3_path = format!(
-            "s3://{}/trainctl-temp/{}/{}",
+            "s3://{}/runctl-temp/{}/{}",
             s3_bucket,
             instance_id,
             source

@@ -88,7 +88,7 @@ jobs:
       - name: Check if already published
         run: |
           VERSION=$(grep "^version" Cargo.toml | cut -d'"' -f2)
-          if cargo search trainctl 2>/dev/null | grep -q "trainctl = \"$VERSION\""; then
+          if cargo search runctl 2>/dev/null | grep -q "runctl = \"$VERSION\""; then
             echo "::error::Version $VERSION already published to crates.io"
             exit 1
           else

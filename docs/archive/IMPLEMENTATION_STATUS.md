@@ -1,8 +1,8 @@
-# trainctl Implementation Status
+# runctl Implementation Status
 
 ## ✅ Completed
 
-- [x] Project structure and naming (`trainctl`)
+- [x] Project structure and naming (`runctl`)
 - [x] CLI framework with clap
 - [x] Configuration management (TOML-based)
 - [x] Local training execution

@@ -33,7 +33,7 @@ Based on your suggestions, I've provided critique and implemented key improvemen
 
 **Implementation**:
 - ✅ **Pre-install common ML libraries**: numpy, pandas in user-data script
-- ✅ **Create cache directory**: `/opt/trainctl-cache` for future dependency caching
+- ✅ **Create cache directory**: `/opt/runctl-cache` for future dependency caching
 - ✅ **Better dependency management**: Uses `uv` when available, falls back to pip
 
 **What's Auto-Created**:
@@ -85,7 +85,7 @@ if code_exists {
 uv pip install --system numpy pandas
 
 # 2. Create cache directory
-mkdir -p /opt/trainctl-cache
+mkdir -p /opt/runctl-cache
 ```
 
 ### Documentation Improvements
@@ -103,7 +103,7 @@ mkdir -p /opt/trainctl-cache
 
 ### Medium Priority
 4. **GPU support**: Auto-detect GPU instances, install CUDA if needed
-5. **Better dependency caching**: Use `/opt/trainctl-cache` for pip packages
+5. **Better dependency caching**: Use `/opt/runctl-cache` for pip packages
 6. **Sync hash checking**: Skip sync if project hash matches
 
 ### Low Priority
@@ -115,14 +115,14 @@ mkdir -p /opt/trainctl-cache
 ### Test Incremental Sync
 ```bash
 # 1. Create instance and sync code
-trainctl aws create --instance-type t3.micro
-trainctl aws train $INSTANCE_ID training/train.py --sync-code
+runctl aws create --instance-type t3.micro
+runctl aws train $INSTANCE_ID training/train.py --sync-code
 
 # 2. Modify a file locally
 echo "# Test" >> training/train.py
 
 # 3. Sync again (should use rsync, faster)
-trainctl aws train $INSTANCE_ID training/train.py --sync-code
+runctl aws train $INSTANCE_ID training/train.py --sync-code
 # Should see: "Code exists, using incremental sync (rsync)..."
 ```
 

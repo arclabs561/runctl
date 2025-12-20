@@ -1,6 +1,6 @@
-//! trainctl library
+//! runctl library
 //!
-//! This library provides the core functionality for trainctl CLI.
+//! This library provides the core functionality for runctl CLI.
 
 pub mod aws_utils;
 pub mod checkpoint;

@@ -31,13 +31,13 @@ The AWS testing setup has been thoroughly reviewed, tested, and improved. All cr
 
 ### 3. **Insufficient Test Coverage** ✅ FIXED
 **Severity**: High  
-**Problem**: Original tests only checked basic permissions, not security boundaries or actual trainctl integration.
+**Problem**: Original tests only checked basic permissions, not security boundaries or actual runctl integration.
 
 **Fix**: Created comprehensive test suite:
 - `verify-setup.sh`: Verifies all components are configured correctly
 - `test-auth.sh`: Basic authentication and permissions
 - `test-security-boundaries.sh`: Security boundary verification
-- `test-trainctl-integration.sh`: Actual trainctl CLI testing
+- `test-runctl-integration.sh`: Actual runctl CLI testing
 - `run-all-tests.sh`: Runs all tests in sequence
 
 ### 4. **No Setup Verification** ✅ FIXED
@@ -69,7 +69,7 @@ The AWS testing setup has been thoroughly reviewed, tested, and improved. All cr
 3. **`verify-setup.sh`** - Comprehensive setup verification
 4. **`test-auth.sh`** - Authentication and basic permissions
 5. **`test-security-boundaries.sh`** - Security boundary verification
-6. **`test-trainctl-integration.sh`** - trainctl CLI integration tests
+6. **`test-runctl-integration.sh`** - runctl CLI integration tests
 7. **`run-all-tests.sh`** - Runs all tests in sequence with summary
 8. **`cleanup-test-role.sh`** - Cleanup all test resources
 
@@ -101,8 +101,8 @@ The AWS testing setup has been thoroughly reviewed, tested, and improved. All cr
 - ✅ Temporary credentials in use
 - ✅ Region restrictions working
 
-### trainctl Integration (`test-trainctl-integration.sh`)
-- ✅ trainctl can list resources
+### runctl Integration (`test-runctl-integration.sh`)
+- ✅ runctl can list resources
 - ✅ AWS commands available
 - ✅ Credentials used correctly by AWS SDK
 - ✅ Error handling works
@@ -160,7 +160,7 @@ All tests pass:
 - ✅ Setup verification: **PASS** (8/8 checks)
 - ✅ Authentication: **PASS** (6/6 tests)
 - ✅ Security boundaries: **PASS** (7/7 tests)
-- ✅ trainctl integration: **PASS** (4/4 tests)
+- ✅ runctl integration: **PASS** (4/4 tests)
 
 ## Usage Examples
 
@@ -199,7 +199,7 @@ source scripts/assume-test-role.sh
 # Test specific components
 ./scripts/test-auth.sh
 ./scripts/test-security-boundaries.sh
-./scripts/test-trainctl-integration.sh
+./scripts/test-runctl-integration.sh
 ```
 
 ## Known Limitations (By Design)
@@ -243,7 +243,7 @@ All critical issues have been fixed and the setup is ready for use in developmen
 ### New Scripts
 - `scripts/verify-setup.sh`
 - `scripts/test-security-boundaries.sh`
-- `scripts/test-trainctl-integration.sh`
+- `scripts/test-runctl-integration.sh`
 - `scripts/run-all-tests.sh`
 
 ### Updated Scripts

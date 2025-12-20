@@ -1,19 +1,19 @@
 # GitHub Repository Status
 
 **Date**: 2025-12-06  
-**Repository**: `arclabs561/trainctl`  
+**Repository**: `arclabs561/runctl`  
 **Last Check**: Via GitHub CLI
 
 ---
 
 ## 📊 Repository Information
 
-- **Name**: `trainctl`
+- **Name**: `runctl`
 - **Visibility**: ✅ **Private**
 - **Default Branch**: `main`
 - **Last Push**: 2025-12-06T03:21:44Z
 - **Last Update**: 2025-12-06T03:21:51Z
-- **URL**: `https://github.com/arclabs561/trainctl.git`
+- **URL**: `https://github.com/arclabs561/runctl.git`
 
 ---
 
@@ -47,7 +47,7 @@ All 4 workflows are **active**:
 ### Previous Run
 
 - **Tests** - `completed` (failure) - 2025-12-03
-  - Commit: "Initial commit: trainctl - ML training orchestration CLI"
+  - Commit: "Initial commit: runctl - ML training orchestration CLI"
   - Duration: 7m18s
   - Status: ❌ Failed (likely due to missing setup)
 
@@ -68,7 +68,7 @@ All 4 workflows are **active**:
 **How to Enable**:
 ```bash
 # Via GitHub CLI (requires admin access)
-gh api repos/arclabs561/trainctl/branches/main/protection \
+gh api repos/arclabs561/runctl/branches/main/protection \
   --method PUT \
   --field required_status_checks='{"strict":true,"contexts":["secret-scanning","lint-and-test","build"]}' \
   --field enforce_admins=true \

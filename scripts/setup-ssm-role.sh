@@ -3,8 +3,8 @@ set -euo pipefail
 
 echo "=== Setting up IAM Role for SSM ==="
 
-ROLE_NAME="trainctl-ssm-role"
-PROFILE_NAME="trainctl-ssm-profile"
+ROLE_NAME="runctl-ssm-role"
+PROFILE_NAME="runctl-ssm-profile"
 POLICY_ARN="arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 
 # Create trust policy
@@ -53,7 +53,7 @@ echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "Usage:"
-echo "  trainctl aws create t3.micro --iam-instance-profile $PROFILE_NAME"
+echo "  runctl aws create t3.micro --iam-instance-profile $PROFILE_NAME"
 echo ""
 echo "Verify:"
 echo "  aws iam get-instance-profile --instance-profile-name $PROFILE_NAME"

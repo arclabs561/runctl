@@ -1,17 +1,17 @@
 #!/bin/bash
-# Create a limited-permission IAM user for trainctl operations
+# Create a limited-permission IAM user for runctl operations
 #
-# This creates a dedicated user with only the permissions trainctl needs,
+# This creates a dedicated user with only the permissions runctl needs,
 # following the principle of least privilege.
 #
 # Usage:
-#   ./scripts/setup-trainctl-user.sh [user-name]
+#   ./scripts/setup-runctl-user.sh [user-name]
 
 set -euo pipefail
 
 # Configuration
-USER_NAME="${1:-trainctl-user}"
-POLICY_NAME="trainctl-user-policy"
+USER_NAME="${1:-runctl-user}"
+POLICY_NAME="runctl-user-policy"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 REGION="${AWS_DEFAULT_REGION:-us-east-1}"
 
@@ -21,7 +21,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${GREEN}Creating trainctl-specific IAM user...${NC}"
+echo -e "${GREEN}Creating runctl-specific IAM user...${NC}"
 echo "User name: $USER_NAME"
 echo "Account: $ACCOUNT_ID"
 echo ""
@@ -41,15 +41,15 @@ echo -e "${YELLOW}[1/5] Creating IAM user...${NC}"
 if [[ -z "$EXISTING" ]]; then
   aws iam create-user \
     --user-name "$USER_NAME" \
-    --tags Key=Purpose,Value=trainctl Key=CreatedBy,Value=setup-script
+    --tags Key=Purpose,Value=runctl Key=CreatedBy,Value=setup-script
   echo -e "${GREEN}✓ User created${NC}"
 else
   echo -e "${YELLOW}User already exists, skipping creation${NC}"
 fi
 
-# Step 2: Create policy with trainctl permissions
+# Step 2: Create policy with runctl permissions
 echo -e "${YELLOW}[2/5] Creating permissions policy...${NC}"
-cat > /tmp/trainctl-user-policy.json <<EOF
+cat > /tmp/runctl-user-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -121,7 +121,7 @@ cat > /tmp/trainctl-user-policy.json <<EOF
       "Sid": "STSAssumeRole",
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/trainctl-*"
+      "Resource": "arn:aws:iam::${ACCOUNT_ID}:role/runctl-*"
     }
   ]
 }
@@ -133,8 +133,8 @@ EXISTING_POLICY=$(aws iam get-policy --policy-arn "$POLICY_ARN" 2>/dev/null || e
 if [[ -z "$EXISTING_POLICY" ]]; then
   aws iam create-policy \
     --policy-name "$POLICY_NAME" \
-    --policy-document file:///tmp/trainctl-user-policy.json \
-    --description "Least-privilege policy for trainctl operations"
+    --policy-document file:///tmp/runctl-user-policy.json \
+    --description "Least-privilege policy for runctl operations"
   echo -e "${GREEN}✓ Policy created${NC}"
 else
   echo -e "${YELLOW}Policy already exists, updating...${NC}"
@@ -143,7 +143,7 @@ else
   # Create new version
   aws iam create-policy-version \
     --policy-arn "$POLICY_ARN" \
-    --policy-document file:///tmp/trainctl-user-policy.json \
+    --policy-document file:///tmp/runctl-user-policy.json \
     --set-as-default
   # Delete old version if not default
   echo -e "${GREEN}✓ Policy updated${NC}"
@@ -178,13 +178,13 @@ echo "  1. Enable MFA on this user:"
 echo "     aws iam create-virtual-mfa-device --virtual-mfa-device-name ${USER_NAME}-mfa"
 echo ""
 echo "  2. Configure AWS CLI with new credentials:"
-echo "     aws configure --profile trainctl"
+echo "     aws configure --profile runctl"
 echo "     # Enter Access Key ID and Secret Access Key above"
 echo ""
 echo "  3. Use the new profile:"
-echo "     export AWS_PROFILE=trainctl"
-echo "     # Or: aws --profile trainctl <command>"
+echo "     export AWS_PROFILE=runctl"
+echo "     # Or: aws --profile runctl <command>"
 echo ""
 echo "  4. Test the new user:"
-echo "     aws --profile trainctl sts get-caller-identity"
+echo "     aws --profile runctl sts get-caller-identity"
 

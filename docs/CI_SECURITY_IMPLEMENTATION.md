@@ -101,7 +101,7 @@ Security checks are now **fully integrated** into CI/CD workflows, not just docu
    - Checks if tracked in git
    - **Blocks** if found
 
-4. **Config Files**: `.trainctl.toml`
+4. **Config Files**: `.runctl.toml`
    - Checks if tracked in git
    - **Blocks** if found
 

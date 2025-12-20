@@ -2,7 +2,7 @@
 
 ## Overview
 
-trainctl now includes automatic EBS volume optimization based on use case, volume size, and performance requirements. This ensures optimal IOPS and throughput settings for ML training workloads.
+runctl now includes automatic EBS volume optimization based on use case, volume size, and performance requirements. This ensures optimal IOPS and throughput settings for ML training workloads.
 
 ## Use Cases
 
@@ -17,7 +17,7 @@ Optimized for high-throughput sequential reads of large datasets.
 - **Example**: 500 GB volume → 253,000 IOPS (capped at 80,000) → 2,000 MiB/s throughput
 
 ```bash
-trainctl ebs create --size 500 --use-case data-loading --availability-zone us-east-1a
+runctl ebs create --size 500 --use-case data-loading --availability-zone us-east-1a
 ```
 
 ### Checkpoints (`--use-case checkpoints`)
@@ -31,7 +31,7 @@ Optimized for high IOPS for frequent small writes.
 - **Example**: 100 GB volume → 33,000 IOPS → 1,000 MiB/s throughput
 
 ```bash
-trainctl ebs create --size 100 --use-case checkpoints --availability-zone us-east-1a
+runctl ebs create --size 100 --use-case checkpoints --availability-zone us-east-1a
 ```
 
 ### General Purpose (`--use-case general`)
@@ -45,7 +45,7 @@ Balanced performance for mixed workloads.
 - **Example**: 200 GB volume → 23,000 IOPS → 750 MiB/s throughput
 
 ```bash
-trainctl ebs create --size 200 --use-case general --availability-zone us-east-1a
+runctl ebs create --size 200 --use-case general --availability-zone us-east-1a
 ```
 
 ### Archive (`--use-case archive`)
@@ -59,7 +59,7 @@ Cost-optimized for infrequent access.
 - **Cost**: Lowest cost option
 
 ```bash
-trainctl ebs create --size 1000 --use-case archive --availability-zone us-east-1a
+runctl ebs create --size 1000 --use-case archive --availability-zone us-east-1a
 ```
 
 ## Volume Type Selection
@@ -126,7 +126,7 @@ trainctl ebs create --size 1000 --use-case archive --availability-zone us-east-1
 
 ```bash
 # Create 500 GB volume optimized for data loading
-trainctl ebs create \
+runctl ebs create \
   --size 500 \
   --use-case data-loading \
   --availability-zone us-east-1a \
@@ -141,7 +141,7 @@ trainctl ebs create \
 
 ```bash
 # Create 100 GB volume optimized for checkpoints
-trainctl ebs create \
+runctl ebs create \
   --size 100 \
   --use-case checkpoints \
   --volume-type gp3 \
@@ -157,7 +157,7 @@ trainctl ebs create \
 
 ```bash
 # Override auto-optimization with manual settings
-trainctl ebs create \
+runctl ebs create \
   --size 500 \
   --volume-type gp3 \
   --iops 16000 \
@@ -167,7 +167,7 @@ trainctl ebs create \
 
 ## EBS-Optimized Instances
 
-All instances created by trainctl are automatically configured with EBS optimization enabled. This provides:
+All instances created by runctl are automatically configured with EBS optimization enabled. This provides:
 
 - **Dedicated bandwidth** for EBS volumes
 - **Consistent performance** without contention

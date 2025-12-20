@@ -55,21 +55,21 @@ Create a dedicated IAM user with minimal permissions:
 ```bash
 # Create IAM user
 aws iam create-user \
-  --user-name trainctl-admin \
-  --tags Key=Purpose,Value=trainctl-cli
+  --user-name runctl-admin \
+  --tags Key=Purpose,Value=runctl-cli
 
 # Create access key for the user
-aws iam create-access-key --user-name trainctl-admin
+aws iam create-access-key --user-name runctl-admin
 ```
 
 **Save the access key ID and secret** - you'll need them to configure AWS CLI.
 
 ### Step 2: Attach Minimal Permissions Policy
 
-Create a policy with only the permissions trainctl needs:
+Create a policy with only the permissions runctl needs:
 
 ```bash
-cat > /tmp/trainctl-user-policy.json <<'EOF'
+cat > /tmp/runctl-user-policy.json <<'EOF'
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -130,7 +130,7 @@ cat > /tmp/trainctl-user-policy.json <<'EOF'
       "Sid": "STSAssumeRole",
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::*:role/trainctl-*"
+      "Resource": "arn:aws:iam::*:role/runctl-*"
     }
   ]
 }
@@ -138,13 +138,13 @@ EOF
 
 # Create the policy
 aws iam create-policy \
-  --policy-name trainctl-user-policy \
-  --policy-document file:///tmp/trainctl-user-policy.json
+  --policy-name runctl-user-policy \
+  --policy-document file:///tmp/runctl-user-policy.json
 
 # Attach to user
 aws iam attach-user-policy \
-  --user-name trainctl-admin \
-  --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/trainctl-user-policy
+  --user-name runctl-admin \
+  --policy-arn arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):policy/runctl-user-policy
 ```
 
 ### Step 3: Configure AWS CLI with IAM User Credentials
@@ -161,7 +161,7 @@ aws configure
 
 # Verify it works
 aws sts get-caller-identity
-# Should show: arn:aws:iam::ACCOUNT:user/trainctl-admin
+# Should show: arn:aws:iam::ACCOUNT:user/runctl-admin
 ```
 
 ### Step 4: Enable MFA on IAM User
@@ -169,14 +169,14 @@ aws sts get-caller-identity
 ```bash
 # Create virtual MFA device
 aws iam create-virtual-mfa-device \
-  --virtual-mfa-device-name trainctl-admin-mfa \
+  --virtual-mfa-device-name runctl-admin-mfa \
   --outfile QRCode.png \
   --bootstrap-method QRCodePNG
 
 # Enable MFA (requires MFA codes from your device)
 aws iam enable-mfa-device \
-  --user-name trainctl-admin \
-  --serial-number arn:aws:iam::ACCOUNT:mfa/trainctl-admin-mfa \
+  --user-name runctl-admin \
+  --serial-number arn:aws:iam::ACCOUNT:mfa/runctl-admin-mfa \
   --authentication-code-1 <CODE1> \
   --authentication-code-2 <CODE2>
 ```
@@ -201,7 +201,7 @@ source scripts/assume-test-role.sh
 
 # Verify
 aws sts get-caller-identity
-# Should show: arn:aws:sts::ACCOUNT:assumed-role/trainctl-test-role/...
+# Should show: arn:aws:sts::ACCOUNT:assumed-role/runctl-test-role/...
 ```
 
 ### Step 6: Verify Migration

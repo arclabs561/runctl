@@ -25,7 +25,7 @@
 ## 📁 Current Structure
 
 ```
-trainctl/
+runctl/
 ├── src/                    # Source code
 │   ├── lib.rs             # Library entry point
 │   ├── main.rs            # CLI entry point

@@ -1,11 +1,11 @@
-# Contributing to trainctl
+# Contributing to runctl
 
 ## Development Setup
 
 ```bash
 # Clone and build
 git clone <repo>
-cd trainctl
+cd runctl
 cargo build
 
 # Run tests
@@ -53,7 +53,7 @@ TRAIN_OPS_E2E=1 cargo test --test aws_resources_test --features e2e
 
 When testing with AWS:
 - Use **dry-run mode** when possible
-- **Tag resources** with `trainctl-test` for identification
+- **Tag resources** with `runctl-test` for identification
 - **Clean up** all resources after tests
 - Use **test accounts** when available
 - Respect **rate limits** and quotas

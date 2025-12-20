@@ -1,4 +1,4 @@
-# trainctl Flow Critique
+# runctl Flow Critique
 
 ## Testing Results
 
@@ -17,7 +17,7 @@
 
 **Current behavior:**
 ```bash
-$ trainctl checkpoint resume checkpoints/checkpoint_epoch_2.pt test_training.py
+$ runctl checkpoint resume checkpoints/checkpoint_epoch_2.pt test_training.py
 Resuming training from checkpoint: checkpoints/checkpoint_epoch_2.pt
 Script: test_training.py
 
@@ -65,8 +65,8 @@ To resume, run:
 **Problem**: Can't see what training runs are active or completed.
 
 **Expected**: 
-- `trainctl sessions list` - show all sessions
-- `trainctl sessions show <id>` - show session details
+- `runctl sessions list` - show all sessions
+- `runctl sessions show <id>` - show session details
 - Automatic session creation on training start
 
 **Fix needed**: Implement session tracking (structure exists in `training.rs` but not used).
@@ -119,7 +119,7 @@ To resume, run:
 **Problem**: Old checkpoints accumulate indefinitely.
 
 **Expected**: 
-- `trainctl checkpoint cleanup --keep-last-n 10`
+- `runctl checkpoint cleanup --keep-last-n 10`
 - Automatic cleanup based on config
 - Size-based cleanup
 
@@ -152,14 +152,14 @@ To resume, run:
 
 **Current:**
 ```
-trainctl local script.py
+runctl local script.py
   → Executes script
   → Done
 ```
 
 **Better:**
 ```
-trainctl local script.py
+runctl local script.py
   → Validates script and environment
   → Creates training session
   → Executes script with progress tracking
@@ -172,14 +172,14 @@ trainctl local script.py
 
 **Current:**
 ```
-trainctl checkpoint resume checkpoint.pt script.py
+runctl checkpoint resume checkpoint.pt script.py
   → Prints instructions
   → Done
 ```
 
 **Better:**
 ```
-trainctl checkpoint resume checkpoint.pt script.py
+runctl checkpoint resume checkpoint.pt script.py
   → Parses checkpoint metadata
   → Validates script compatibility
   → Executes script with --resume flag
@@ -191,13 +191,13 @@ trainctl checkpoint resume checkpoint.pt script.py
 
 **Current:**
 ```
-trainctl monitor --log training.log
+runctl monitor --log training.log
   → Shows last 20 lines or follows
 ```
 
 **Better:**
 ```
-trainctl monitor --log training.log --checkpoint checkpoints/
+runctl monitor --log training.log --checkpoint checkpoints/
   → Extracts metrics from log
   → Shows checkpoint progress
   → Displays loss curves
@@ -240,7 +240,7 @@ trainctl monitor --log training.log --checkpoint checkpoints/
 
 **Issue**: Scripts don't know about `TRAIN_OPS_*` variables.
 
-**Fix**: Document in README and show in `trainctl local --help`.
+**Fix**: Document in README and show in `runctl local --help`.
 
 ## Recommendations
 

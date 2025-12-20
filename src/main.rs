@@ -28,10 +28,10 @@ mod validation;
 use crate::config::Config;
 
 #[derive(Parser)]
-#[command(name = "trainctl")]
+#[command(name = "runctl")]
 #[command(
-    about = "Modern training orchestration CLI for ML workloads",
-    long_about = "trainctl is a unified CLI for managing ML training across multiple platforms.\n\nSupports:\n  - Local training (CPU/GPU)\n  - AWS EC2 (spot and on-demand instances)\n  - RunPod (GPU pods)\n\nFeatures:\n  - Checkpoint management and resumption\n  - Cost tracking and optimization\n  - Real-time monitoring\n  - Multi-platform resource management"
+    about = "Cloud compute orchestration CLI for long-running jobs",
+    long_about = "runctl is a unified CLI for managing compute jobs across multiple cloud platforms.\n\nSupports:\n  - Local execution (CPU/GPU)\n  - AWS EC2 (spot and on-demand instances)\n  - RunPod (GPU pods)\n\nFeatures:\n  - Checkpoint management and resumption\n  - Cost tracking and optimization\n  - Real-time monitoring\n  - Multi-platform resource management"
 )]
 #[command(version)]
 struct Cli {
@@ -59,17 +59,17 @@ enum Commands {
     /// Python scripts and uses `uv` if available, otherwise falls back to `python3`.
     ///
     /// Examples:
-    ///   trainctl local train.py
-    ///   trainctl local train.py -- --epochs 50 --batch-size 32
-    ///   trainctl local scripts/train_model.py -- --lr 0.001
+    ///   runctl local train.py
+    ///   runctl local train.py -- --epochs 50 --batch-size 32
+    ///   runctl local scripts/train_model.py -- --lr 0.001
     Local {
         /// Training script path (Python script or executable)
         #[arg(value_name = "SCRIPT")]
         script: PathBuf,
         /// Additional arguments to pass to script
         ///
-        /// Use '--' to separate trainctl args from script args:
-        ///   trainctl local train.py -- --epochs 50
+        /// Use '--' to separate runctl args from script args:
+        ///   runctl local train.py -- --epochs 50
         #[arg(last = true, value_name = "ARGS")]
         args: Vec<String>,
     },
@@ -89,9 +89,9 @@ enum Commands {
     /// updates (like tail -f). Can monitor both logs and checkpoints simultaneously.
     ///
     /// Examples:
-    ///   trainctl monitor --log training.log
-    ///   trainctl monitor --checkpoint ./checkpoints/ --follow
-    ///   trainctl monitor --log training.log --checkpoint ./checkpoints/ --follow
+    ///   runctl monitor --log training.log
+    ///   runctl monitor --checkpoint ./checkpoints/ --follow
+    ///   runctl monitor --log training.log --checkpoint ./checkpoints/ --follow
     Monitor {
         /// Training log file path to monitor
         #[arg(long, value_name = "LOG_PATH")]
@@ -125,9 +125,9 @@ enum Commands {
     /// View, set, and validate configuration settings. Use 'init' to create a new config file.
     ///
     /// Examples:
-    ///   trainctl config show
-    ///   trainctl config set aws.region us-west-2
-    ///   trainctl config validate
+    ///   runctl config show
+    ///   runctl config set aws.region us-west-2
+    ///   runctl config validate
     Config {
         #[command(subcommand)]
         subcommand: config::ConfigCommands,
@@ -135,14 +135,14 @@ enum Commands {
     /// Initialize training configuration
     ///
     /// Creates a new configuration file with default values. The config file can be
-    /// placed in the current directory (.trainctl.toml) or in the user config directory.
+    /// placed in the current directory (.runctl.toml) or in the user config directory.
     ///
     /// Examples:
-    ///   trainctl init
-    ///   trainctl init --output ~/.config/trainctl/config.toml
+    ///   runctl init
+    ///   runctl init --output ~/.config/runctl/config.toml
     Init {
         /// Output path for config file
-        #[arg(short, long, default_value = ".trainctl.toml")]
+        #[arg(short, long, default_value = ".runctl.toml")]
         output: PathBuf,
     },
     /// Quick status overview (resources summary + recent checkpoints)
@@ -157,8 +157,8 @@ enum Commands {
     /// but for cloud training resources. Press 'q' to quit.
     ///
     /// Examples:
-    ///   trainctl top
-    ///   trainctl top --interval 2
+    ///   runctl top
+    ///   runctl top --interval 2
     Top {
         /// Update interval in seconds
         #[arg(short, long, default_value_t = 5)]
@@ -169,13 +169,13 @@ enum Commands {
     /// Transfers data between local storage, S3, and training instances.
     /// Supports parallel transfers, compression, and resumable operations.
     ///
-    /// Note: For S3 operations, consider using 'trainctl s3' commands for more
+    /// Note: For S3 operations, consider using 'runctl s3' commands for more
     /// features and better performance.
     ///
     /// Examples:
-    ///   trainctl transfer ./data/ s3://bucket/data/
-    ///   trainctl transfer s3://bucket/checkpoints/ ./checkpoints/ --parallel 10
-    ///   trainctl transfer instance:i-123:/mnt/data ./local_data/
+    ///   runctl transfer ./data/ s3://bucket/data/
+    ///   runctl transfer s3://bucket/checkpoints/ ./checkpoints/ --parallel 10
+    ///   runctl transfer instance:i-123:/mnt/data ./local_data/
     Transfer {
         /// Source location (local path, s3://bucket/key, or instance:path)
         #[arg(value_name = "SOURCE")]
@@ -198,22 +198,22 @@ enum Commands {
     },
     /// Execute a training script or command (generic executor)
     ///
-    /// Executes a command with trainctl environment setup. Useful for running
-    /// training scripts that expect trainctl environment variables.
+    /// Executes a command with runctl environment setup. Useful for running
+    /// training scripts that expect runctl environment variables.
     ///
-    /// Note: For local Python training, consider using 'trainctl local' instead.
+    /// Note: For local Python training, consider using 'runctl local' instead.
     ///
     /// Examples:
-    ///   trainctl exec train --multi-dataset
-    ///   trainctl exec evaluate --model-path ./models/
+    ///   runctl exec train --multi-dataset
+    ///   runctl exec evaluate --model-path ./models/
     Exec {
         /// Command to execute (script name or command)
         #[arg(value_name = "COMMAND")]
         command: String,
         /// Additional arguments to pass to the command
         ///
-        /// Use '--' to separate trainctl args from command args:
-        ///   trainctl exec train -- --epochs 50
+        /// Use '--' to separate runctl args from command args:
+        ///   runctl exec train -- --epochs 50
         #[arg(last = true, value_name = "ARGS")]
         args: Vec<String>,
     },
@@ -303,7 +303,7 @@ async fn main() -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("{}", e)),
         Commands::Exec { command, args } => {
-            // Exec command - run arbitrary command with trainctl environment
+            // Exec command - run arbitrary command with runctl environment
             // For now, treat as local training with the command as script
             let script = PathBuf::from(&command);
             local::train(script, args, &config)

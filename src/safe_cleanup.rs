@@ -26,8 +26,8 @@ impl CleanupSafety {
         Self {
             protected_resources: HashSet::new(),
             protected_tags: vec![
-                ("trainctl:protected".to_string(), "true".to_string()),
-                ("trainctl:important".to_string(), "true".to_string()),
+                ("runctl:protected".to_string(), "true".to_string()),
+                ("runctl:important".to_string(), "true".to_string()),
             ],
             min_age_minutes: 5, // Default: 5 minutes protection
         }
@@ -60,7 +60,7 @@ impl CleanupSafety {
         }
 
         // Check protected tags
-        let resources = tracker.get_by_tag("trainctl:protected", "true").await;
+        let resources = tracker.get_by_tag("runctl:protected", "true").await;
         if resources.iter().any(|r| r.status.id == *resource_id) {
             return Ok(false);
         }

@@ -1,7 +1,7 @@
 # Branch Status
 
 **Date**: 2025-01-03  
-**Repository**: `https://github.com/arclabs561/trainctl.git`
+**Repository**: `https://github.com/arclabs561/runctl.git`
 
 ---
 
@@ -15,7 +15,7 @@
 ### Remote Branches
 - ✅ `origin/main`
   - **Status**: Behind local `main` by 22 commits
-  - **Remote**: `https://github.com/arclabs561/trainctl.git`
+  - **Remote**: `https://github.com/arclabs561/runctl.git`
 
 ### Other Branches
 - ❌ No other branches exist (local or remote)

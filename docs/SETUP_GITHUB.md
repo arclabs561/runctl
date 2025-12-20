@@ -2,7 +2,7 @@
 
 ## Repository Created
 
-The repository should be created at: `https://github.com/arclabs561/trainctl`
+The repository should be created at: `https://github.com/arclabs561/runctl`
 
 ## Initial Setup
 
@@ -14,11 +14,11 @@ Since the GitHub API had permission issues, you can create the repo manually or 
 cd /Users/arc/Documents/dev/infra-utils
 
 # Create the repository
-gh repo create trainctl --private --description "Modern training orchestration CLI for ML workloads" --source=. --remote=origin
+gh repo create runctl --private --description "Modern training orchestration CLI for ML workloads" --source=. --remote=origin
 
 # Push the code
 git add .
-git commit -m "Initial commit: trainctl - ML training orchestration CLI"
+git commit -m "Initial commit: runctl - ML training orchestration CLI"
 git branch -M main
 git push -u origin main
 ```
@@ -26,7 +26,7 @@ git push -u origin main
 ### Option 2: Manual Creation
 
 1. Go to https://github.com/new
-2. Repository name: `trainctl`
+2. Repository name: `runctl`
 3. Description: "Modern training orchestration CLI for ML workloads. Supports local, RunPod, and AWS EC2 training with unified checkpoint management and monitoring."
 4. Set to **Private**
 5. **Don't** initialize with README, .gitignore, or license (we already have these)
@@ -38,14 +38,14 @@ Then connect it:
 cd /Users/arc/Documents/dev/infra-utils
 
 # Add remote
-git remote add origin https://github.com/arclabs561/trainctl.git
+git remote add origin https://github.com/arclabs561/runctl.git
 
 # Or if using SSH:
-# git remote add origin git@github.com:arclabs561/trainctl.git
+# git remote add origin git@github.com:arclabs561/runctl.git
 
 # Initial commit and push
 git add .
-git commit -m "Initial commit: trainctl - ML training orchestration CLI"
+git commit -m "Initial commit: runctl - ML training orchestration CLI"
 git branch -M main
 git push -u origin main
 ```

@@ -12,7 +12,7 @@
 ```rust
 // Before terminating instance:
 // 1. List attached volumes
-// 2. Check if persistent (trainctl:persistent=true)
+// 2. Check if persistent (runctl:persistent=true)
 // 3. If persistent: detach only
 // 4. If ephemeral: warn or delete based on config
 ```

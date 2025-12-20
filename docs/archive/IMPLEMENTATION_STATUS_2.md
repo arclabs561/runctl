@@ -27,12 +27,12 @@
 - ✅ Resource tagging for identification
 
 ### CLI Commands
-- ✅ `trainctl aws ebs create --persistent` - Create persistent volumes
-- ✅ `trainctl aws ebs list` - List volumes with 🔒 marker
-- ✅ `trainctl aws ebs delete` - Protected deletion (requires --force for persistent)
-- ✅ `trainctl resources cleanup` - Enhanced cleanup (skips persistent)
-- ✅ `trainctl resources summary` - Cost warnings
-- ✅ `trainctl transfer` - Data transfer command
+- ✅ `runctl aws ebs create --persistent` - Create persistent volumes
+- ✅ `runctl aws ebs list` - List volumes with 🔒 marker
+- ✅ `runctl aws ebs delete` - Protected deletion (requires --force for persistent)
+- ✅ `runctl resources cleanup` - Enhanced cleanup (skips persistent)
+- ✅ `runctl resources summary` - Cost warnings
+- ✅ `runctl transfer` - Data transfer command
 
 ### E2E Tests
 - ✅ Persistent storage tests (4 tests)

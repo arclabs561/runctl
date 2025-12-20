@@ -311,7 +311,7 @@ fn render_dashboard(f: &mut Frame, state: &DashboardState) {
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("trainctl Dashboard"),
+                .title("runctl Dashboard"),
         )
         .select(state.selected_tab)
         .style(Style::default().fg(Color::White))

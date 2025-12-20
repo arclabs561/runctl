@@ -1,4 +1,4 @@
-//! Comprehensive tests for trainctl commands
+//! Comprehensive tests for runctl commands
 //!
 //! Tests cover:
 //! - JSON output consistency
@@ -76,7 +76,7 @@ fn test_project_name_derivation() {
     let dir_name = current_dir
         .file_name()
         .and_then(|n| n.to_str())
-        .unwrap_or("trainctl-project");
+        .unwrap_or("runctl-project");
 
     // Sanitize directory name
     let sanitized: String = dir_name
@@ -99,7 +99,7 @@ fn test_project_name_derivation() {
 
 #[test]
 fn test_input_validation() {
-    use trainctl::validation::*;
+    use runctl::validation::*;
 
     // Instance ID validation
     assert!(validate_instance_id("i-1234567890abcdef0").is_ok());

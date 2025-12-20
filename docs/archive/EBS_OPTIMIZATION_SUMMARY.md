@@ -15,16 +15,16 @@
 
 ```bash
 # 1. Create and pre-warm EBS volume (one-time)
-trainctl aws ebs create --size 500 --type gp3 --name datasets
-trainctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/
+runctl aws ebs create --size 500 --type gp3 --name datasets
+runctl aws ebs pre-warm vol-xxxxx s3://bucket/datasets/
 
 # 2. Launch spot instance with pre-warmed volume
-trainctl aws create --spot \
+runctl aws create --spot \
     --ebs-volume vol-xxxxx \
     --mount-point /mnt/data
 
 # 3. Training starts immediately (no download needed)
-trainctl aws train $INSTANCE_ID train.py
+runctl aws train $INSTANCE_ID train.py
 ```
 
 ## Cost Analysis

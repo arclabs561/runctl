@@ -367,7 +367,7 @@ pub async fn train(
 **Create:** `tests/error_test.rs`
 
 ```rust
-use trainctl::error::*;
+use runctl::error::*;
 
 #[test]
 fn test_retryable_error() {
@@ -382,16 +382,16 @@ fn test_retryable_error() {
 #[test]
 fn test_config_error() {
     let err = ConfigError::MissingField("aws".to_string());
-    let trainctl_err: TrainctlError = err.into();
-    assert!(!trainctl_err.is_retryable());
+    let runctl_err: TrainctlError = err.into();
+    assert!(!runctl_err.is_retryable());
 }
 ```
 
 **Create:** `tests/retry_test.rs`
 
 ```rust
-use trainctl::retry::ExponentialBackoffPolicy;
-use trainctl::error::*;
+use runctl::retry::ExponentialBackoffPolicy;
+use runctl::error::*;
 
 #[tokio::test]
 async fn test_retry_succeeds_on_second_attempt() {

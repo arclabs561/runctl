@@ -162,12 +162,10 @@ async fn test_zombie_detection() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
             let tags = instance.tags();
 
-            // Check if instance has trainctl tags
-            let has_trainctl_tag = tags.iter().any(|tag| {
-                tag.key()
-                    .map(|k| k.starts_with("trainctl:"))
-                    .unwrap_or(false)
-            });
+            // Check if instance has runctl tags
+            let has_runctl_tag = tags
+                .iter()
+                .any(|tag| tag.key().map(|k| k.starts_with("runctl:")).unwrap_or(false));
 
             // Check if instance is old (>24 hours)
             let is_old = instance
@@ -179,8 +177,8 @@ async fn test_zombie_detection() {
                 })
                 .unwrap_or(false);
 
-            // Zombie: old instance without trainctl tags
-            if is_old && !has_trainctl_tag {
+            // Zombie: old instance without runctl tags
+            if is_old && !has_runctl_tag {
                 zombies.push(instance_id.to_string());
                 info!("Found potential zombie: {} (old and untagged)", instance_id);
             }
@@ -234,7 +232,7 @@ async fn test_cleanup_dry_run() {
             // Check if protected
             let is_protected = tags.iter().any(|tag| {
                 tag.key()
-                    .map(|k| k == "trainctl:protected" || k == "trainctl:important")
+                    .map(|k| k == "runctl:protected" || k == "runctl:important")
                     .unwrap_or(false)
                     && tag.value().map(|v| v == "true").unwrap_or(false)
             });

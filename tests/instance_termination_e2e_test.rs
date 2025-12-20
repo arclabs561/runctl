@@ -29,7 +29,7 @@ macro_rules! require_e2e {
 
 fn test_tag() -> String {
     format!(
-        "trainctl-test-{}",
+        "runctl-test-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
     )
 }
@@ -57,13 +57,13 @@ async fn test_termination_with_attached_persistent_volume() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )

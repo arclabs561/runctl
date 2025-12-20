@@ -47,7 +47,7 @@ pre-commit run --all-files
 
 ### ✅ Safe Practices
 
-1. **Config Files**: `.trainctl.toml` is in `.gitignore`
+1. **Config Files**: `.runctl.toml` is in `.gitignore`
    - API keys stored in config file (not in code)
    - Config file never committed
 
@@ -63,7 +63,7 @@ pre-commit run --all-files
 
 ### ❌ What NOT to Do
 
-- ❌ Never commit `.trainctl.toml` (contains API keys)
+- ❌ Never commit `.runctl.toml` (contains API keys)
 - ❌ Never hardcode credentials in source code
 - ❌ Never commit `.env` files
 - ❌ Never commit private keys (`.pem`, `.key` files)
@@ -72,7 +72,7 @@ pre-commit run --all-files
 ## GitHub Repository Status
 
 ### Current Status
-- **Remote**: `https://github.com/arclabs561/trainctl.git`
+- **Remote**: `https://github.com/arclabs561/runctl.git`
 - **Visibility**: **PRIVATE** (404 when accessed)
 - **Status**: Repository exists but is not publicly accessible
 
@@ -87,7 +87,7 @@ pre-commit run --all-files
 ## Cargo Publish Status
 
 ### Current Status
-- **Package Name**: `trainctl`
+- **Package Name**: `runctl`
 - **Version**: `0.1.0`
 - **Published**: **NO** (not found on crates.io)
 - **Publish Ready**: **NO** (missing repository field)
@@ -96,8 +96,8 @@ pre-commit run --all-files
 
 1. **Cargo.toml** needs:
    ```toml
-   repository = "https://github.com/arclabs561/trainctl"
-   homepage = "https://github.com/arclabs561/trainctl"
+   repository = "https://github.com/arclabs561/runctl"
+   homepage = "https://github.com/arclabs561/runctl"
    license = "MIT OR Apache-2.0"  # ✅ Already present
    ```
 

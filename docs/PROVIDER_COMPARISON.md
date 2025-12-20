@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document compares cloud providers and platforms that would be valuable to support in `trainctl` for ML training workloads.
+This document compares cloud providers and platforms that would be valuable to support in `runctl` for ML training workloads.
 
 ## GPU Cloud Providers
 
@@ -268,5 +268,5 @@ The provider-agnostic architecture we've built makes it straightforward to add n
 2. **Lambda Labs** - Popular with researchers
 3. **Paperspace** - Startup-friendly
 
-These three would give `trainctl` coverage of the major GPU cloud providers beyond AWS and RunPod, with minimal implementation complexity.
+These three would give `runctl` coverage of the major GPU cloud providers beyond AWS and RunPod, with minimal implementation complexity.
 

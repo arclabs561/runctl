@@ -23,8 +23,8 @@ This document tracks progress on AWS security improvements.
   - Priority: HIGH
 
 - [ ] **Limited-Permission User Created**
-  - Status: Check with `aws iam list-users --query 'Users[?contains(UserName, `trainctl`)].UserName'`
-  - Target: Dedicated user for trainctl with minimal permissions
+  - Status: Check with `aws iam list-users --query 'Users[?contains(UserName, `runctl`)].UserName'`
+  - Target: Dedicated user for runctl with minimal permissions
   - Priority: HIGH
 
 ### High Priority Items
@@ -63,11 +63,11 @@ aws iam list-mfa-devices --user-name admin
 # Check access keys
 aws iam list-access-keys --user-name admin
 
-# Check for trainctl user
-aws iam list-users --query 'Users[?contains(UserName, `trainctl`)].UserName'
+# Check for runctl user
+aws iam list-users --query 'Users[?contains(UserName, `runctl`)].UserName'
 
 # Check roles
-aws iam list-roles --query 'Roles[?contains(RoleName, `trainctl`)].RoleName'
+aws iam list-roles --query 'Roles[?contains(RoleName, `runctl`)].RoleName'
 
 # Check CloudTrail
 aws cloudtrail describe-trails
@@ -79,7 +79,7 @@ Based on current status, prioritize:
 
 1. **If MFA not enabled**: Enable immediately
 2. **If 2 access keys**: Delete unused key
-3. **If no trainctl user**: Create limited-permission user
+3. **If no runctl user**: Create limited-permission user
 4. **If not using roles**: Start using `scripts/assume-test-role.sh`
 5. **If CloudTrail not enabled**: Enable for audit logging
 

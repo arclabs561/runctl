@@ -1,4 +1,4 @@
-# trainctl
+# runctl
 
 Modern training orchestration CLI for ML workloads. Supports local, RunPod, and AWS EC2 training with unified checkpoint management and monitoring.
 
@@ -29,22 +29,22 @@ cargo build --release
 
 ```bash
 # Initialize config
-trainctl init
+runctl init
 
 # Create spot instance
-INSTANCE_ID=$(trainctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
+INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
 
 # Train with automatic code sync
-trainctl aws train $INSTANCE_ID training/train.py --sync-code
+runctl aws train $INSTANCE_ID training/train.py --sync-code
 
 # Monitor training
-trainctl aws monitor $INSTANCE_ID --follow
+runctl aws monitor $INSTANCE_ID --follow
 
 # Check resource usage
-trainctl aws processes $INSTANCE_ID --watch
+runctl aws processes $INSTANCE_ID --watch
 
 # Stop when done (preserves data)
-trainctl aws stop $INSTANCE_ID
+runctl aws stop $INSTANCE_ID
 ```
 
 ## Testing with Temporary Credentials
@@ -65,14 +65,14 @@ For secure testing, use IAM roles with temporary credentials instead of long-ter
 source scripts/assume-test-role.sh
 ./scripts/test-auth.sh                    # Basic authentication
 ./scripts/test-security-boundaries.sh      # Security verification
-./scripts/test-trainctl-integration.sh     # trainctl integration
+./scripts/test-runctl-integration.sh     # runctl integration
 ```
 
 See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed setup instructions and [docs/AWS_TESTING_REVIEW.md](docs/AWS_TESTING_REVIEW.md) for review of security and robustness.
 
 ## Configuration
 
-Create `.trainctl.toml` or use `trainctl init`:
+Create `.runctl.toml` or use `runctl init`:
 
 ```toml
 [runpod]
@@ -101,7 +101,7 @@ update_interval_secs = 10
 ### Local Training
 
 ```bash
-trainctl local <script> [args...]
+runctl local <script> [args...]
 ```
 
 Runs training script locally. Automatically uses `uv` for Python scripts if available.
@@ -110,55 +110,55 @@ Runs training script locally. Automatically uses `uv` for Python scripts if avai
 
 ```bash
 # Create pod
-trainctl runpod create [--name NAME] [--gpu GPU_TYPE] [--disk GB]
+runctl runpod create [--name NAME] [--gpu GPU_TYPE] [--disk GB]
 
 # Train on pod
-trainctl runpod train <pod-id> <script> [--background]
+runctl runpod train <pod-id> <script> [--background]
 
 # Monitor pod
-trainctl runpod monitor <pod-id> [--follow]
+runctl runpod monitor <pod-id> [--follow]
 
 # Download results
-trainctl runpod download <pod-id> <remote> <local>
+runctl runpod download <pod-id> <remote> <local>
 ```
 
 ### AWS EC2
 
 ```bash
 # Create instance
-trainctl aws create [--instance-type TYPE] [--spot] [--spot-max-price PRICE]
+runctl aws create [--instance-type TYPE] [--spot] [--spot-max-price PRICE]
 
 # Train on instance
-trainctl aws train <instance-id> <script> [--data-s3 S3_PATH] [--output-s3 S3_PATH]
+runctl aws train <instance-id> <script> [--data-s3 S3_PATH] [--output-s3 S3_PATH]
 
 # Monitor instance
-trainctl aws monitor <instance-id> [--follow]
+runctl aws monitor <instance-id> [--follow]
 
 # Terminate instance
-trainctl aws terminate <instance-id>
+runctl aws terminate <instance-id>
 ```
 
 ### Monitoring
 
 ```bash
 # Monitor log file
-trainctl monitor --log training.log [--follow]
+runctl monitor --log training.log [--follow]
 
 # Monitor checkpoints
-trainctl monitor --checkpoint checkpoints/ [--follow]
+runctl monitor --checkpoint checkpoints/ [--follow]
 ```
 
 ### Checkpoints
 
 ```bash
 # List checkpoints
-trainctl checkpoint list <dir>
+runctl checkpoint list <dir>
 
 # Show checkpoint info
-trainctl checkpoint info <path>
+runctl checkpoint info <path>
 
 # Resume from checkpoint
-trainctl checkpoint resume <path> <script>
+runctl checkpoint resume <path> <script>
 ```
 
 ## Modern Scripting Helpers
@@ -186,7 +186,7 @@ The CLI automatically uses `uv` for Python scripts:
 
 ```bash
 # This automatically uses `uv run` if uv is available
-trainctl local training/train.py
+runctl local training/train.py
 ```
 
 ## Examples
@@ -195,26 +195,26 @@ trainctl local training/train.py
 
 ```bash
 # 1. Create spot instance with data volume
-INSTANCE_ID=$(trainctl aws create \
+INSTANCE_ID=$(runctl aws create \
     --spot \
     --instance-type g4dn.xlarge \
     --data-volume-size 100 \
     | grep -o 'i-[a-z0-9]*')
 
 # 2. Train with code sync and S3 data
-trainctl aws train $INSTANCE_ID training/train.py \
+runctl aws train $INSTANCE_ID training/train.py \
     --sync-code \
     --data-s3 s3://bucket/datasets/ \
     --output-s3 s3://bucket/checkpoints/
 
 # 3. Monitor in real-time
-trainctl aws monitor $INSTANCE_ID --follow
+runctl aws monitor $INSTANCE_ID --follow
 
 # 4. Check resource usage
-trainctl aws processes $INSTANCE_ID --watch
+runctl aws processes $INSTANCE_ID --watch
 
 # 5. Stop (preserves data) or terminate
-trainctl aws stop $INSTANCE_ID
+runctl aws stop $INSTANCE_ID
 ```
 
 ## Architecture

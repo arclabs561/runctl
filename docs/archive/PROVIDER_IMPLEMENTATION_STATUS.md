@@ -63,7 +63,7 @@
 
 6. **Cost Comparison**
    - Implement cost comparison across providers
-   - Add `trainctl providers compare` command
+   - Add `runctl providers compare` command
 
 ## Architecture Benefits
 

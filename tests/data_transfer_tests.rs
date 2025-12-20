@@ -2,8 +2,8 @@
 //!
 //! Tests verify path parsing, location detection, and transfer logic.
 
+use runctl::data_transfer::{DataLocation, TransferOptions};
 use std::path::PathBuf;
-use trainctl::data_transfer::{DataLocation, TransferOptions};
 
 #[test]
 fn test_data_location_s3() {

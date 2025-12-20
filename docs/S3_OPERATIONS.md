@@ -2,7 +2,7 @@
 
 ## Overview
 
-trainctl now includes comprehensive S3 operations with s5cmd integration for high-performance data management, plus cleanup and monitoring capabilities.
+runctl now includes comprehensive S3 operations with s5cmd integration for high-performance data management, plus cleanup and monitoring capabilities.
 
 ## Features
 
@@ -26,76 +26,76 @@ trainctl now includes comprehensive S3 operations with s5cmd integration for hig
 
 ```bash
 # Upload single file (uses s5cmd if available)
-trainctl s3 upload ./checkpoints/best.pt s3://bucket/checkpoints/best.pt
+runctl s3 upload ./checkpoints/best.pt s3://bucket/checkpoints/best.pt
 
 # Upload directory recursively
-trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
 
 # Force AWS SDK (if s5cmd not available)
-trainctl s3 upload ./file.pt s3://bucket/file.pt --no-use-s5cmd
+runctl s3 upload ./file.pt s3://bucket/file.pt --no-use-s5cmd
 ```
 
 ### Download
 
 ```bash
 # Download single file
-trainctl s3 download s3://bucket/checkpoints/best.pt ./best.pt
+runctl s3 download s3://bucket/checkpoints/best.pt ./best.pt
 
 # Download directory recursively
-trainctl s3 download s3://bucket/checkpoints/ ./checkpoints/ --recursive
+runctl s3 download s3://bucket/checkpoints/ ./checkpoints/ --recursive
 ```
 
 ### Sync
 
 ```bash
 # Sync local -> S3 (upload changes)
-trainctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction up
+runctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction up
 
 # Sync S3 -> local (download changes)
-trainctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction down
+runctl s3 sync ./checkpoints/ s3://bucket/checkpoints/ --direction down
 ```
 
 ### List
 
 ```bash
 # List S3 objects
-trainctl s3 list s3://bucket/checkpoints/
+runctl s3 list s3://bucket/checkpoints/
 
 # Recursive listing
-trainctl s3 list s3://bucket/checkpoints/ --recursive
+runctl s3 list s3://bucket/checkpoints/ --recursive
 
 # Human-readable sizes
-trainctl s3 list s3://bucket/checkpoints/ --human-readable
+runctl s3 list s3://bucket/checkpoints/ --human-readable
 ```
 
 ### Cleanup
 
 ```bash
 # Cleanup old checkpoints in S3 (keep last 10)
-trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
 
 # Dry run (preview what will be deleted)
-trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5 --dry-run
+runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5 --dry-run
 ```
 
 ### Watch
 
 ```bash
 # Watch S3 bucket for new files (check every 30s)
-trainctl s3 watch s3://bucket/checkpoints/
+runctl s3 watch s3://bucket/checkpoints/
 
 # Custom poll interval
-trainctl s3 watch s3://bucket/checkpoints/ --interval 10
+runctl s3 watch s3://bucket/checkpoints/ --interval 10
 ```
 
 ### Review
 
 ```bash
 # Review training artifacts in S3
-trainctl s3 review s3://bucket/training/
+runctl s3 review s3://bucket/training/
 
 # Detailed review with file listing
-trainctl s3 review s3://bucket/training/ --detailed
+runctl s3 review s3://bucket/training/ --detailed
 ```
 
 ## Local Cleanup
@@ -104,10 +104,10 @@ trainctl s3 review s3://bucket/training/ --detailed
 
 ```bash
 # Cleanup local checkpoints (keep last 10)
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 10
+runctl checkpoint cleanup checkpoints/ --keep-last-n 10
 
 # Dry run
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 5 --dry-run
+runctl checkpoint cleanup checkpoints/ --keep-last-n 5 --dry-run
 ```
 
 ## Why s5cmd?
@@ -138,45 +138,45 @@ brew install s5cmd
 
 1. **Upload after training**:
    ```bash
-   trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+   runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
    ```
 
 2. **Cleanup old checkpoints**:
    ```bash
    # Local cleanup
-   trainctl checkpoint cleanup checkpoints/ --keep-last-n 10
+   runctl checkpoint cleanup checkpoints/ --keep-last-n 10
    
    # S3 cleanup
-   trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+   runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
    ```
 
 3. **Monitor for new checkpoints**:
    ```bash
-   trainctl s3 watch s3://bucket/checkpoints/ --interval 30
+   runctl s3 watch s3://bucket/checkpoints/ --interval 30
    ```
 
 ### Data Staging
 
 1. **Download datasets before training**:
    ```bash
-   trainctl s3 download s3://bucket/datasets/ ./data/ --recursive
+   runctl s3 download s3://bucket/datasets/ ./data/ --recursive
    ```
 
 2. **Sync training data**:
    ```bash
-   trainctl s3 sync ./data/ s3://bucket/datasets/ --direction up
+   runctl s3 sync ./data/ s3://bucket/datasets/ --direction up
    ```
 
 ### Cost Optimization
 
 1. **Review storage usage**:
    ```bash
-   trainctl s3 review s3://bucket/training/ --detailed
+   runctl s3 review s3://bucket/training/ --detailed
    ```
 
 2. **Cleanup old artifacts**:
    ```bash
-   trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5
+   runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 5
    ```
 
 ## Integration with Training
@@ -188,7 +188,7 @@ Add to your training script:
 # After saving checkpoint
 import subprocess
 subprocess.run([
-    "trainctl", "s3", "upload",
+    "runctl", "s3", "upload",
     checkpoint_path,
     f"s3://bucket/checkpoints/{checkpoint_name}"
 ])
@@ -198,9 +198,9 @@ subprocess.run([
 
 ```bash
 # After training completes
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 10
-trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
-trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+runctl checkpoint cleanup checkpoints/ --keep-last-n 10
+runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
 ```
 
 ## Examples
@@ -209,29 +209,29 @@ trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
 
 ```bash
 # 1. Train locally
-trainctl local training/train.py -- --epochs 50
+runctl local training/train.py -- --epochs 50
 
 # 2. Upload checkpoints to S3
-trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
 
 # 3. Review what was uploaded
-trainctl s3 review s3://bucket/checkpoints/ --detailed
+runctl s3 review s3://bucket/checkpoints/ --detailed
 
 # 4. Cleanup local checkpoints (keep last 5)
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 5
+runctl checkpoint cleanup checkpoints/ --keep-last-n 5
 
 # 5. Cleanup S3 checkpoints (keep last 10)
-trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
 ```
 
 ### Monitoring Training on Cloud
 
 ```bash
 # Watch for new checkpoints in S3
-trainctl s3 watch s3://bucket/checkpoints/ --interval 30
+runctl s3 watch s3://bucket/checkpoints/ --interval 30
 
 # In another terminal, review periodically
-trainctl s3 review s3://bucket/checkpoints/
+runctl s3 review s3://bucket/checkpoints/
 ```
 
 ## Performance Comparison

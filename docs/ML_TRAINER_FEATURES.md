@@ -39,31 +39,31 @@ Based on research and analysis of actual ML training workflows, here are the mos
 ### Pattern 1: Local Training → Cloud Storage
 ```bash
 # Train locally
-trainctl local training/train.py -- --epochs 50
+runctl local training/train.py -- --epochs 50
 
 # Upload checkpoints
-trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
 
 # Cleanup local
-trainctl checkpoint cleanup checkpoints/ --keep-last-n 5
+runctl checkpoint cleanup checkpoints/ --keep-last-n 5
 ```
 
 ### Pattern 2: Cloud Training Monitoring
 ```bash
 # Watch for new checkpoints
-trainctl s3 watch s3://bucket/checkpoints/ --interval 30
+runctl s3 watch s3://bucket/checkpoints/ --interval 30
 
 # Review periodically
-trainctl s3 review s3://bucket/checkpoints/ --detailed
+runctl s3 review s3://bucket/checkpoints/ --detailed
 ```
 
 ### Pattern 3: Data Staging
 ```bash
 # Download dataset before training
-trainctl s3 download s3://bucket/datasets/ ./data/ --recursive
+runctl s3 download s3://bucket/datasets/ ./data/ --recursive
 
 # Sync after preprocessing
-trainctl s3 sync ./data/processed/ s3://bucket/datasets/processed/ --direction up
+runctl s3 sync ./data/processed/ s3://bucket/datasets/processed/ --direction up
 ```
 
 ## What Real ML Trainers Need
@@ -95,7 +95,7 @@ trainctl s3 sync ./data/processed/ s3://bucket/datasets/processed/ --direction u
 
 ## Comparison with Other Tools
 
-| Feature | trainctl | AWS CLI | s5cmd | MLflow |
+| Feature | runctl | AWS CLI | s5cmd | MLflow |
 |---------|-----------|---------|-------|--------|
 | Fast S3 ops | ✅ (s5cmd) | ❌ | ✅ | ❌ |
 | Checkpoint cleanup | ✅ | ❌ | ❌ | ⚠️ |
@@ -113,18 +113,18 @@ trainctl s3 sync ./data/processed/ s3://bucket/datasets/processed/ --direction u
 2. **Use cleanup regularly** to manage costs:
    ```bash
    # After each training run
-   trainctl checkpoint cleanup checkpoints/ --keep-last-n 10
-   trainctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
+   runctl checkpoint cleanup checkpoints/ --keep-last-n 10
+   runctl s3 cleanup s3://bucket/checkpoints/ --keep-last-n 10
    ```
 
 3. **Watch S3 during cloud training**:
    ```bash
-   trainctl s3 watch s3://bucket/checkpoints/ --interval 30
+   runctl s3 watch s3://bucket/checkpoints/ --interval 30
    ```
 
 4. **Review storage periodically**:
    ```bash
-   trainctl s3 review s3://bucket/training/ --detailed
+   runctl s3 review s3://bucket/training/ --detailed
    ```
 
 ## Future Enhancements (Based on Research)

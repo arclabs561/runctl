@@ -1,4 +1,4 @@
-# trainctl Project Status
+# runctl Project Status
 
 ## Current State
 

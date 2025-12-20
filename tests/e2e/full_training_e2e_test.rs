@@ -195,9 +195,9 @@ async fn test_full_training_workflow() {
         panic!("Instance did not start: {}", e);
     }
 
-    // Step 1: Verify code sync (we'll use trainctl CLI for this)
+    // Step 1: Verify code sync (we'll use runctl CLI for this)
     info!("Step 1: Verifying code sync capability...");
-    // Note: Actual code sync would be tested via trainctl CLI, not directly here
+    // Note: Actual code sync would be tested via runctl CLI, not directly here
     // This test verifies the infrastructure is ready
 
     // Step 2: Create test training script on instance
@@ -350,13 +350,13 @@ async fn create_test_instance(
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:created")
+                        .key("runctl:created")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:project")
+                        .key("runctl:project")
                         .value(project_name)
                         .build(),
                 )

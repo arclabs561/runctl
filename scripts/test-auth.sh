@@ -29,7 +29,7 @@ IDENTITY=$(aws sts get-caller-identity --output json)
 echo "Identity:"
 echo "$IDENTITY" | jq '.'
 ROLE_ARN=$(echo "$IDENTITY" | jq -r '.Arn')
-if [[ "$ROLE_ARN" == *"trainctl-test-role"* ]]; then
+if [[ "$ROLE_ARN" == *"runctl-test-role"* ]]; then
   echo -e "${GREEN}✓ Using test role${NC}"
 else
   echo -e "${RED}✗ Warning: Not using test role (using: $ROLE_ARN)${NC}"
@@ -68,7 +68,7 @@ echo -e "${YELLOW}[4/6] Testing S3 permissions...${NC}"
 if aws s3api list-buckets &>/dev/null; then
   echo -e "${YELLOW}⚠ Can list all buckets (may be OK if no sensitive buckets)${NC}"
   # Try to find test buckets
-  TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `trainctl-test-`)].Name' --output text 2>/dev/null || echo "")
+  TEST_BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `runctl-test-`)].Name' --output text 2>/dev/null || echo "")
 else
   echo -e "${GREEN}✓ Cannot list all buckets (good - isolation working)${NC}"
   # We can't list buckets, so we can't find test buckets this way
@@ -111,7 +111,7 @@ echo ""
 # Summary
 echo -e "${GREEN}Authentication test complete!${NC}"
 echo ""
-echo "If all tests passed, you can now use trainctl:"
+echo "If all tests passed, you can now use runctl:"
 echo "  cargo run -- aws instances list"
 echo "  cargo run -- aws create --instance-type t3.micro"
 

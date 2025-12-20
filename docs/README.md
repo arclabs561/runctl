@@ -1,4 +1,4 @@
-# trainctl Documentation
+# runctl Documentation
 
 ## Current Documentation
 
@@ -19,7 +19,7 @@
 ### Development & Reference
 - **[REFERENCE_PATTERNS.md](REFERENCE_PATTERNS.md)** - Analysis of reference repository patterns
 - **[IMPLEMENTATION_GAPS.md](IMPLEMENTATION_GAPS.md)** - Missing features and implementation plan
-- **[TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md)** - How to translate reference repo patterns to trainctl
+- **[TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md)** - How to translate reference repo patterns to runctl
 
 ### Testing
 - **[TESTING.md](../TESTING.md)** - Testing guide

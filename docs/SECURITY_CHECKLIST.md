@@ -5,7 +5,7 @@
 Before committing code, verify:
 
 - [ ] Run `./scripts/check-secrets.sh` - No secrets found
-- [ ] Verify `.trainctl.toml` is not staged: `git status`
+- [ ] Verify `.runctl.toml` is not staged: `git status`
 - [ ] Check no `.env` files are staged
 - [ ] Verify no credential files (`.pem`, `.key`) are staged
 - [ ] Review diff for any hardcoded credentials: `git diff`
@@ -74,7 +74,7 @@ git log --all --source --pretty=format:"%H" -- . | \
   grep -v "docs/"
 
 # Verify .gitignore
-git check-ignore -v .trainctl.toml .env *.pem
+git check-ignore -v .runctl.toml .env *.pem
 
 # Check what's staged
 git status --short

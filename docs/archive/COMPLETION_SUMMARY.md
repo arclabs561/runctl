@@ -11,11 +11,11 @@
 6. ✅ **Enhanced cleanup** - Respects persistent resources, handles orphaned volumes
 
 ### CLI Commands
-1. ✅ **`trainctl transfer`** - Data transfer command (local ↔ S3 ↔ instances)
-2. ✅ **`trainctl resources cleanup`** - Enhanced cleanup with persistent protection
-3. ✅ **`trainctl resources summary`** - Cost warnings and thresholds
-4. ✅ **`trainctl aws ebs create --persistent`** - Persistent volume creation
-5. ✅ **`trainctl aws terminate`** - Enhanced with volume checks
+1. ✅ **`runctl transfer`** - Data transfer command (local ↔ S3 ↔ instances)
+2. ✅ **`runctl resources cleanup`** - Enhanced cleanup with persistent protection
+3. ✅ **`runctl resources summary`** - Cost warnings and thresholds
+4. ✅ **`runctl aws ebs create --persistent`** - Persistent volume creation
+5. ✅ **`runctl aws terminate`** - Enhanced with volume checks
 
 ### E2E Test Coverage
 - ✅ **16 E2E tests** across 6 test suites:

@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use trainctl::checkpoint;
+use runctl::checkpoint;
 
 #[tokio::test]
 async fn test_checkpoint_listing() {

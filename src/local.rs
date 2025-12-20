@@ -65,7 +65,7 @@ pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Resul
     let session = TrainingSession::new("local".to_string(), script.clone(), checkpoint_dir.clone());
 
     // Save session metadata
-    let sessions_dir = PathBuf::from(".trainctl");
+    let sessions_dir = PathBuf::from(".runctl");
     session.save(&sessions_dir).map_err(|e| {
         TrainctlError::Io(std::io::Error::other(format!(
             "Failed to save training session: {}",

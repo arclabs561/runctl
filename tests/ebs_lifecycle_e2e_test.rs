@@ -31,7 +31,7 @@ macro_rules! require_e2e {
 
 fn test_tag() -> String {
     format!(
-        "trainctl-test-{}",
+        "runctl-test-{}",
         uuid::Uuid::new_v4().to_string().split('-').next().unwrap()
     )
 }
@@ -60,7 +60,7 @@ async fn test_ebs_complete_lifecycle() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -131,7 +131,7 @@ async fn test_ebs_complete_lifecycle() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Snapshot)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -227,13 +227,13 @@ async fn test_persistent_vs_ephemeral_behavior() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:persistent")
+                        .key("runctl:persistent")
                         .value("true")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -259,7 +259,7 @@ async fn test_persistent_vs_ephemeral_behavior() {
                 .resource_type(aws_sdk_ec2::types::ResourceType::Volume)
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:test")
+                        .key("runctl:test")
                         .value(&test_tag)
                         .build(),
                 )
@@ -283,7 +283,7 @@ async fn test_persistent_vs_ephemeral_behavior() {
 
     let persistent_vol = persistent_desc.volumes().first().expect("Volume not found");
     let has_persistent_tag = persistent_vol.tags().iter().any(|t| {
-        t.key().map(|k| k == "trainctl:persistent").unwrap_or(false)
+        t.key().map(|k| k == "runctl:persistent").unwrap_or(false)
             && t.value().map(|v| v == "true").unwrap_or(false)
     });
     assert!(
@@ -302,7 +302,7 @@ async fn test_persistent_vs_ephemeral_behavior() {
     let has_persistent_tag = ephemeral_vol
         .tags()
         .iter()
-        .any(|t| t.key().map(|k| k == "trainctl:persistent").unwrap_or(false));
+        .any(|t| t.key().map(|k| k == "runctl:persistent").unwrap_or(false));
     assert!(
         !has_persistent_tag,
         "Ephemeral volume should not have persistent tag"

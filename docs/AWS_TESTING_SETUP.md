@@ -34,7 +34,7 @@ cat > /tmp/test-role-trust-policy.json <<EOF
       "Action": "sts:AssumeRole",
       "Condition": {
         "StringEquals": {
-          "sts:ExternalId": "trainctl-test-env"
+          "sts:ExternalId": "runctl-test-env"
         }
       }
     }
@@ -44,9 +44,9 @@ EOF
 
 # Create the role
 aws iam create-role \
-  --role-name trainctl-test-role \
+  --role-name runctl-test-role \
   --assume-role-policy-document file:///tmp/test-role-trust-policy.json \
-  --description "Testing role for trainctl CLI tool"
+  --description "Testing role for runctl CLI tool"
 ```
 
 ## Step 2: Create Least-Privilege Permissions Policy
@@ -112,8 +112,8 @@ cat > /tmp/test-role-policy.json <<EOF
         "s3:GetBucketLocation"
       ],
       "Resource": [
-        "arn:aws:s3:::trainctl-test-*",
-        "arn:aws:s3:::trainctl-test-*/*"
+        "arn:aws:s3:::runctl-test-*",
+        "arn:aws:s3:::runctl-test-*/*"
       ]
     },
     {
@@ -144,8 +144,8 @@ EOF
 
 # Attach the policy to the role
 aws iam put-role-policy \
-  --role-name trainctl-test-role \
-  --policy-name trainctl-test-policy \
+  --role-name runctl-test-role \
+  --policy-name runctl-test-policy \
   --policy-document file:///tmp/test-role-policy.json
 ```
 
@@ -190,14 +190,14 @@ EOF
 
 # Create the boundary policy
 aws iam create-policy \
-  --policy-name trainctl-test-boundary \
+  --policy-name runctl-test-boundary \
   --policy-document file:///tmp/test-permission-boundary.json \
-  --description "Permission boundary for trainctl test role"
+  --description "Permission boundary for runctl test role"
 
 # Attach boundary to role
 aws iam put-role-permissions-boundary \
-  --role-name trainctl-test-role \
-  --permissions-boundary arn:aws:iam::YOUR-ACCOUNT-ID:policy/trainctl-test-boundary
+  --role-name runctl-test-role \
+  --permissions-boundary arn:aws:iam::YOUR-ACCOUNT-ID:policy/runctl-test-boundary
 ```
 
 ## Step 4: Create Test S3 Bucket
@@ -206,12 +206,12 @@ Create a dedicated test bucket:
 
 ```bash
 # Create bucket with test tag
-aws s3 mb s3://trainctl-test-$(date +%s) \
+aws s3 mb s3://runctl-test-$(date +%s) \
   --region us-east-1
 
 # Tag it for isolation
 aws s3api put-bucket-tagging \
-  --bucket trainctl-test-* \
+  --bucket runctl-test-* \
   --tagging 'TagSet=[{Key=Environment,Value=test},{Key=Purpose,Value=testing}]'
 ```
 
@@ -252,7 +252,7 @@ This checks:
 - Role can be assumed
 - Permissions work correctly
 
-## Step 7: Test trainctl with Temporary Credentials
+## Step 7: Test runctl with Temporary Credentials
 
 Once credentials are exported, test the CLI:
 
@@ -263,7 +263,7 @@ Once credentials are exported, test the CLI:
 # Or run individual tests:
 ./scripts/test-auth.sh                    # Basic authentication
 ./scripts/test-security-boundaries.sh      # Security verification
-./scripts/test-trainctl-integration.sh     # trainctl integration
+./scripts/test-runctl-integration.sh     # runctl integration
 ```
 
 To test manually:
@@ -303,18 +303,18 @@ When done testing:
 cargo run -- resources terminate-all --force
 
 # Delete test S3 bucket
-aws s3 rb s3://trainctl-test-* --force
+aws s3 rb s3://runctl-test-* --force
 
 # Delete IAM role and policies
 aws iam delete-role-policy \
-  --role-name trainctl-test-role \
-  --policy-name trainctl-test-policy
+  --role-name runctl-test-role \
+  --policy-name runctl-test-policy
 
 aws iam delete-role \
-  --role-name trainctl-test-role
+  --role-name runctl-test-role
 
 aws iam delete-policy \
-  --policy-arn arn:aws:iam::YOUR-ACCOUNT-ID:policy/trainctl-test-boundary
+  --policy-arn arn:aws:iam::YOUR-ACCOUNT-ID:policy/runctl-test-boundary
 ```
 
 ## Security Best Practices

@@ -183,8 +183,8 @@ let s3_client = S3Client::new(aws_config);
 **Problem**: EBS is nested under `aws` but conceptually separate
 
 **Current State**:
-- `trainctl aws ebs create`
-- `trainctl aws ebs list`
+- `runctl aws ebs create`
+- `runctl aws ebs list`
 - etc.
 
 **Impact**:
@@ -193,7 +193,7 @@ let s3_client = S3Client::new(aws_config);
 - Harder to discover
 
 **Recommendation**:
-- Consider making `ebs` top-level: `trainctl ebs create`
+- Consider making `ebs` top-level: `runctl ebs create`
 - Or keep nested but improve discoverability
 - Document the design decision
 
@@ -262,7 +262,7 @@ let s3_client = S3Client::new(aws_config);
 **Problem**: Not all resources are tagged consistently
 
 **Current State**:
-- EC2 instances: ✅ Tagged with `trainctl:*` tags
+- EC2 instances: ✅ Tagged with `runctl:*` tags
 - EBS volumes: ❌ Not tagged
 - S3 objects: ❌ Not tagged
 - Snapshots: ❌ Not tagged
@@ -273,7 +273,7 @@ let s3_client = S3Client::new(aws_config);
 - Cost attribution unclear
 
 **Recommendation**:
-- Tag all resources with `trainctl:*` tags
+- Tag all resources with `runctl:*` tags
 - Use consistent tag keys
 - Document tagging strategy
 

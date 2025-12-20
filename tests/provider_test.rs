@@ -1,8 +1,8 @@
 //! Tests for provider trait and implementations
 
 use chrono::Utc;
+use runctl::provider::*;
 use std::path::PathBuf;
-use trainctl::provider::*;
 
 #[test]
 fn test_normalize_state() {

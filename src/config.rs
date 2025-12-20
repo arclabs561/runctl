@@ -99,16 +99,16 @@ impl Config {
         let config_path = if let Some(p) = path {
             p.to_path_buf()
         } else {
-            // Try .trainctl.toml in current dir, then ~/.config/trainctl/config.toml
-            let local = PathBuf::from(".trainctl.toml");
+            // Try .runctl.toml in current dir, then ~/.config/runctl/config.toml
+            let local = PathBuf::from(".runctl.toml");
             if local.exists() {
                 local
             } else {
                 dirs::config_dir()
-                    .map(|d| d.join("trainctl").join("config.toml"))
+                    .map(|d| d.join("runctl").join("config.toml"))
                     .unwrap_or_else(|| {
                         // Fallback to current directory if config dir not available
-                        PathBuf::from(".trainctl.toml")
+                        PathBuf::from(".runctl.toml")
                     })
             }
         };
@@ -123,7 +123,7 @@ impl Config {
             })?;
             let config: Config = toml::from_str(&content)
                 .map_err(|_e| TrainctlError::Config(ConfigError::ParseError(
-                    format!("Failed to parse config: {}\n  Common issues:\n    - Invalid TOML syntax\n    - Missing required fields\n    - Incorrect value types\n  Tip: Run 'trainctl init' to create a new config file", config_path.display())
+                    format!("Failed to parse config: {}\n  Common issues:\n    - Invalid TOML syntax\n    - Missing required fields\n    - Incorrect value types\n  Tip: Run 'runctl init' to create a new config file", config_path.display())
                 )))?;
             Ok(config)
         } else {
@@ -131,7 +131,7 @@ impl Config {
             if path.is_some() {
                 eprintln!("WARNING: Config file not found: {}", config_path.display());
                 eprintln!(
-                    "   Using default configuration. Run 'trainctl init' to create a config file."
+                    "   Using default configuration. Run 'runctl init' to create a config file."
                 );
             }
             Ok(Config::default())
@@ -164,8 +164,8 @@ pub enum ConfigCommands {
     /// Shows the config file path if one is loaded.
     ///
     /// Examples:
-    ///   trainctl config show
-    ///   trainctl config show --output json
+    ///   runctl config show
+    ///   runctl config show --output json
     Show,
     /// Set a configuration value
     ///
@@ -173,9 +173,9 @@ pub enum ConfigCommands {
     /// The value is written to the config file. Use 'show' to verify changes.
     ///
     /// Examples:
-    ///   trainctl config set aws.region us-west-2
-    ///   trainctl config set aws.default_instance_type g4dn.xlarge
-    ///   trainctl config set checkpoint.save_interval 10
+    ///   runctl config set aws.region us-west-2
+    ///   runctl config set aws.default_instance_type g4dn.xlarge
+    ///   runctl config set checkpoint.save_interval 10
     Set {
         /// Configuration key (dot notation, e.g., aws.region)
         #[arg(value_name = "KEY")]
@@ -183,7 +183,7 @@ pub enum ConfigCommands {
         /// Configuration value
         #[arg(value_name = "VALUE")]
         value: String,
-        /// Config file path (default: .trainctl.toml or ~/.config/trainctl/config.toml)
+        /// Config file path (default: .runctl.toml or ~/.config/runctl/config.toml)
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -193,10 +193,10 @@ pub enum ConfigCommands {
     /// Reports any errors or warnings.
     ///
     /// Examples:
-    ///   trainctl config validate
-    ///   trainctl config validate --config ~/.config/trainctl/config.toml
+    ///   runctl config validate
+    ///   runctl config validate --config ~/.config/runctl/config.toml
     Validate {
-        /// Config file path (default: .trainctl.toml or ~/.config/trainctl/config.toml)
+        /// Config file path (default: .runctl.toml or ~/.config/runctl/config.toml)
         #[arg(long)]
         config: Option<PathBuf>,
     },
@@ -343,7 +343,7 @@ pub async fn handle_command(
                 }));
             }
 
-            let save_path = config_path.unwrap_or_else(|| Path::new(".trainctl.toml"));
+            let save_path = config_path.unwrap_or_else(|| Path::new(".runctl.toml"));
             config.save(save_path)?;
 
             if output_format == "json" {

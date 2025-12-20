@@ -13,7 +13,7 @@ This review systematically examines:
 
 ---
 
-## 1. AWS Commands (`trainctl aws`)
+## 1. AWS Commands (`runctl aws`)
 
 ### 1.1 `aws create`
 
@@ -26,7 +26,7 @@ This review systematically examines:
 - ✅ Good: JSON output support implemented
 
 **Integration:**
-- ✅ Creates instances with tags (`trainctl:project`, `trainctl:created`, `trainctl:user`)
+- ✅ Creates instances with tags (`runctl:project`, `runctl:created`, `runctl:user`)
 - ✅ Integrates with EBS for data volumes (`--data-volume-size`)
 - ✅ Integrates with SSM via `--iam-instance-profile`
 - ⚠️ Issue: Doesn't check if EBS volumes exist before creating data volume
@@ -186,7 +186,7 @@ This review systematically examines:
 
 ---
 
-## 2. EBS Commands (`trainctl aws ebs`)
+## 2. EBS Commands (`runctl aws ebs`)
 
 ### 2.1 `ebs create`
 
@@ -351,7 +351,7 @@ This review systematically examines:
 
 ---
 
-## 3. S3 Commands (`trainctl s3`)
+## 3. S3 Commands (`runctl s3`)
 
 ### 3.1 `s3 upload`
 
@@ -470,7 +470,7 @@ This review systematically examines:
 
 ---
 
-## 4. Checkpoint Commands (`trainctl checkpoint`)
+## 4. Checkpoint Commands (`runctl checkpoint`)
 
 ### 4.1 `checkpoint list`
 
@@ -541,7 +541,7 @@ This review systematically examines:
 
 ---
 
-## 5. Resources Commands (`trainctl resources`)
+## 5. Resources Commands (`runctl resources`)
 
 ### 5.1 `resources list`
 
@@ -634,7 +634,7 @@ This review systematically examines:
 
 ---
 
-## 6. Config Commands (`trainctl config`)
+## 6. Config Commands (`runctl config`)
 
 ### 6.1 `config show`
 

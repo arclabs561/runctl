@@ -157,9 +157,9 @@ pub enum AwsCommands {
     /// Automatically detects Deep Learning AMI for GPU instance types.
     ///
     /// Examples:
-    ///   trainctl aws create t3.medium
-    ///   trainctl aws create g4dn.xlarge --spot
-    ///   trainctl aws create p3.2xlarge --spot --data-volume-size 500
+    ///   runctl aws create t3.medium
+    ///   runctl aws create g4dn.xlarge --spot
+    ///   runctl aws create p3.2xlarge --spot --data-volume-size 500
     #[command(alias = "new", alias = "spawn")]
     Create {
         /// EC2 instance type (e.g., t3.medium, g4dn.xlarge, p3.2xlarge)
@@ -227,18 +227,18 @@ pub enum AwsCommands {
         /// Requires an IAM instance profile with AmazonSSMManagedInstanceCore policy.
         /// If not provided, instances will use SSH (requires --key-name).
         ///
-        /// Example: trainctl aws create t3.micro --iam-instance-profile trainctl-ssm-profile
+        /// Example: runctl aws create t3.micro --iam-instance-profile runctl-ssm-profile
         #[arg(long, value_name = "PROFILE_NAME")]
         iam_instance_profile: Option<String>,
     },
     /// Start training job on an EC2 instance
     ///
     /// Uploads training script and dependencies, then starts training in the background.
-    /// Training runs in a detached process and can be monitored with 'trainctl aws monitor'.
+    /// Training runs in a detached process and can be monitored with 'runctl aws monitor'.
     ///
     /// Examples:
-    ///   trainctl aws train i-1234567890abcdef0 training/train.py
-    ///   trainctl aws train i-1234567890abcdef0 training/train.py -- --epochs 50 --batch-size 32
+    ///   runctl aws train i-1234567890abcdef0 training/train.py
+    ///   runctl aws train i-1234567890abcdef0 training/train.py -- --epochs 50 --batch-size 32
     #[command(alias = "run", alias = "start")]
     Train {
         /// EC2 instance ID (e.g., i-1234567890abcdef0)
@@ -283,8 +283,8 @@ pub enum AwsCommands {
 
         /// Additional arguments to pass to training script
         ///
-        /// Use '--' to separate trainctl args from script args:
-        ///   trainctl aws train i-123 -- --epochs 50 --batch-size 32
+        /// Use '--' to separate runctl args from script args:
+        ///   runctl aws train i-123 -- --epochs 50 --batch-size 32
         #[arg(last = true, value_name = "ARGS")]
         script_args: Vec<String>,
     },
@@ -293,8 +293,8 @@ pub enum AwsCommands {
     /// Shows training logs and checkpoint progress. Use --follow for continuous updates.
     ///
     /// Examples:
-    ///   trainctl aws monitor i-1234567890abcdef0
-    ///   trainctl aws monitor i-1234567890abcdef0 --follow
+    ///   runctl aws monitor i-1234567890abcdef0
+    ///   runctl aws monitor i-1234567890abcdef0 --follow
     #[command(alias = "watch", alias = "logs")]
     Monitor {
         /// EC2 instance ID
@@ -312,8 +312,8 @@ pub enum AwsCommands {
     /// The instance can be restarted later. Use 'terminate' to permanently delete.
     ///
     /// Examples:
-    ///   trainctl aws stop i-1234567890abcdef0
-    ///   trainctl aws stop i-1234567890abcdef0 --force
+    ///   runctl aws stop i-1234567890abcdef0
+    ///   runctl aws stop i-1234567890abcdef0 --force
     #[command(alias = "pause")]
     Stop {
         /// EC2 instance ID
@@ -334,8 +334,8 @@ pub enum AwsCommands {
     /// unless --force is used.
     ///
     /// Examples:
-    ///   trainctl aws terminate i-1234567890abcdef0
-    ///   trainctl aws terminate i-1234567890abcdef0 --force
+    ///   runctl aws terminate i-1234567890abcdef0
+    ///   runctl aws terminate i-1234567890abcdef0 --force
     #[command(alias = "destroy", alias = "rm", alias = "delete")]
     Terminate {
         /// EC2 instance ID
@@ -355,8 +355,8 @@ pub enum AwsCommands {
     /// Use --watch for continuous monitoring. Use --detailed for full process information.
     ///
     /// Examples:
-    ///   trainctl aws processes i-1234567890abcdef0
-    ///   trainctl aws processes i-1234567890abcdef0 --watch --detailed
+    ///   runctl aws processes i-1234567890abcdef0
+    ///   runctl aws processes i-1234567890abcdef0 --watch --detailed
     Processes {
         /// EC2 instance ID (e.g., i-1234567890abcdef0)
         #[arg(value_name = "INSTANCE_ID")]
@@ -556,7 +556,7 @@ fn get_project_name(provided: Option<String>, config: &Config) -> String {
     }
 
     // Final fallback
-    "trainctl-project".to_string()
+    "runctl-project".to_string()
 }
 
 async fn create_instance(
@@ -579,9 +579,9 @@ async fn create_instance(
             message: format!(
                 "Too many instances running ({}). Creation blocked to prevent accidental mass creation.\n\n\
                 To resolve:\n\
-                  1. List running instances: trainctl resources list --platform aws\n\
-                  2. Terminate unused instances: trainctl aws terminate <instance-id>\n\
-                  3. Stop instances (preserves data): trainctl aws stop <instance-id>\n\
+                  1. List running instances: runctl resources list --platform aws\n\
+                  2. Terminate unused instances: runctl aws terminate <instance-id>\n\
+                  3. Stop instances (preserves data): runctl aws stop <instance-id>\n\
                   4. Use a different AWS account or region\n\n\
                 To override this limit, modify the safety check in the code.",
                 running_count
@@ -593,7 +593,7 @@ async fn create_instance(
             "WARNING: {} instances already running. Proceeding with caution.",
             running_count
         );
-        println!("  Use 'trainctl resources list' to review running instances.");
+        println!("  Use 'runctl resources list' to review running instances.");
     }
 
     info!(
@@ -734,7 +734,7 @@ async fn create_instance(
             if output_format != "json" {
                 println!("WARNING: Failed to attach data volume: {}", e);
                 println!(
-                    "   You can attach manually: trainctl aws ebs create --size {} --attach",
+                    "   You can attach manually: runctl aws ebs create --size {} --attach",
                     data_size
                 );
             }
@@ -856,9 +856,9 @@ else
 fi
 
 # Create dependency cache directory
-mkdir -p /opt/trainctl-cache
-chmod 777 /opt/trainctl-cache
-echo "Dependency cache: /opt/trainctl-cache"
+mkdir -p /opt/runctl-cache
+chmod 777 /opt/runctl-cache
+echo "Dependency cache: /opt/runctl-cache"
 
 # Setup data volume if attached
 if [ -b /dev/nvme1n1 ] || [ -b /dev/xvdf ]; then
@@ -984,7 +984,7 @@ async fn auto_attach_data_volume(
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("CreatedBy")
-                        .value("trainctl")
+                        .value("runctl")
                         .build(),
                 )
                 .build(),
@@ -1272,7 +1272,7 @@ async fn create_ondemand_instance(
     Ok(instance_id)
 }
 
-/// Tag an instance with Name and trainctl metadata
+/// Tag an instance with Name and runctl metadata
 async fn tag_instance(
     client: &Ec2Client,
     instance_id: &str,
@@ -1285,12 +1285,7 @@ async fn tag_instance(
     let user_id = get_user_id(config);
 
     // config is used via get_user_id() call above
-    let name_tag = format!(
-        "trainctl-{}-{}-{}",
-        user_id,
-        project_name,
-        &instance_id[..8]
-    );
+    let name_tag = format!("runctl-{}-{}-{}", user_id, project_name, &instance_id[..8]);
 
     client
         .create_tags()
@@ -1298,18 +1293,18 @@ async fn tag_instance(
         .tags(Tag::builder().key("Name").value(&name_tag).build())
         .tags(
             Tag::builder()
-                .key("trainctl:created")
+                .key("runctl:created")
                 .value(timestamp)
                 .build(),
         )
         .tags(
             Tag::builder()
-                .key("trainctl:project")
+                .key("runctl:project")
                 .value(project_name)
                 .build(),
         )
-        .tags(Tag::builder().key("trainctl:user").value(&user_id).build())
-        .tags(Tag::builder().key("CreatedBy").value("trainctl").build())
+        .tags(Tag::builder().key("runctl:user").value(&user_id).build())
+        .tags(Tag::builder().key("CreatedBy").value("runctl").build())
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to tag instance: {}", e)))?;
@@ -1349,23 +1344,24 @@ async fn train_on_instance(
             TrainctlError::Aws(format!(
                 "Instance {} not found.\n\n\
             To resolve:\n\
-              1. Verify instance ID: trainctl resources list --platform aws\n\
+              1. Verify instance ID: runctl resources list --platform aws\n\
               2. Check if instance was terminated: aws ec2 describe-instances --instance-ids {}\n\
               3. Verify you're using the correct AWS region/account",
                 options.instance_id, options.instance_id
             ))
         })?;
 
-    let public_ip = instance.public_ip_address()
-        .ok_or_else(|| TrainctlError::Aws(format!(
+    let public_ip = instance.public_ip_address().ok_or_else(|| {
+        TrainctlError::Aws(format!(
             "Instance {} has no public IP address.\n\n\
             To resolve:\n\
               1. Check if instance is in a public subnet with internet gateway\n\
               2. Verify security groups allow SSH (port 22)\n\
-              3. Check instance state: trainctl aws processes {}\n\
-              4. Use SSM instead if IAM role is configured: trainctl aws train {} --sync-code false",
+              3. Check instance state: runctl aws processes {}\n\
+              4. Use SSM instead if IAM role is configured: runctl aws train {} --sync-code false",
             options.instance_id, options.instance_id, options.instance_id
-        )))?;
+        ))
+    })?;
 
     let key_name = instance.key_name();
     let key_path = key_name
@@ -1393,7 +1389,7 @@ async fn train_on_instance(
                   1. Set SSH_KEY_PATH environment variable: export SSH_KEY_PATH=~/.ssh/{}.pem\n\
                   2. Place key in standard location: ~/.ssh/{}.pem or ~/.ssh/{}\n\
                   3. Set correct permissions: chmod 600 ~/.ssh/{}.pem\n\
-                  4. Use SSM instead (if IAM role configured): trainctl aws train {} --sync-code false",
+                  4. Use SSM instead (if IAM role configured): runctl aws train {} --sync-code false",
                 key_name_str, key_name_str, key_name_str, key_name_str, key_name_str, options.instance_id
             ))
         })?;
@@ -1646,7 +1642,7 @@ echo "Monitor with: tail -f {project_dir}/training.log"
                 method: "ssm".to_string(),
                 instance_id: options.instance_id.clone(),
                 log_path: format!("{}/training.log", project_dir),
-                monitor_command: format!("trainctl aws monitor {}", options.instance_id),
+                monitor_command: format!("runctl aws monitor {}", options.instance_id),
             },
             Err(e) => {
                 if output_format != "json" {
@@ -1659,7 +1655,7 @@ echo "Monitor with: tail -f {project_dir}/training.log"
                     method: "ssh".to_string(),
                     instance_id: options.instance_id.clone(),
                     log_path: format!("{}/training.log", project_dir),
-                    monitor_command: format!("trainctl aws monitor {}", options.instance_id),
+                    monitor_command: format!("runctl aws monitor {}", options.instance_id),
                 }
             }
         }
@@ -1671,7 +1667,7 @@ echo "Monitor with: tail -f {project_dir}/training.log"
             method: "ssh".to_string(),
             instance_id: options.instance_id.clone(),
             log_path: format!("{}/training.log", project_dir),
-            monitor_command: format!("trainctl aws monitor {}", options.instance_id),
+            monitor_command: format!("runctl aws monitor {}", options.instance_id),
         }
     };
 
@@ -1683,7 +1679,7 @@ echo "Monitor with: tail -f {project_dir}/training.log"
             "   Monitor: ssh -i {} {}@{} 'tail -f {}/training.log'",
             key_path, user, public_ip, project_dir
         );
-        println!("   Or: trainctl aws monitor {}", options.instance_id);
+        println!("   Or: runctl aws monitor {}", options.instance_id);
     }
 
     Ok(())
@@ -1843,7 +1839,7 @@ async fn terminate_instance(
         );
         println!("Volumes will remain after instance termination.");
         println!(
-            "   List volumes: trainctl aws ebs list --instance-id {}",
+            "   List volumes: runctl aws ebs list --instance-id {}",
             instance_id
         );
     }
@@ -2075,7 +2071,7 @@ fi
     } else {
         println!("Instance stop requested: {}", instance_id);
         println!(
-            "Instance can be restarted with: trainctl aws start {}",
+            "Instance can be restarted with: runctl aws start {}",
             instance_id
         );
     }

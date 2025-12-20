@@ -46,7 +46,7 @@ volume = ec2.create_volume(
         'ResourceType': 'volume',
         'Tags': [
             {'Key': 'Name', 'Value': 'training-datasets'},
-            {'Key': 'Project', 'Value': 'trainctl'},
+            {'Key': 'Project', 'Value': 'runctl'},
         ]
     }]
 )
@@ -55,15 +55,15 @@ volume = ec2.create_volume(
 # aws s3 sync s3://bucket/datasets/ /mnt/data/
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
 # Create and pre-warm EBS volume
-trainctl aws ebs create --size 500 --type gp3 \
+runctl aws ebs create --size 500 --type gp3 \
     --name training-datasets \
     --pre-warm s3://bucket/datasets/
 
 # Launch spot instance with pre-warmed volume
-trainctl aws create --spot \
+runctl aws create --spot \
     --ebs-volume vol-xxxxx \
     --mount-point /mnt/data
 ```
@@ -85,14 +85,14 @@ volume = ec2.create_volume(
 )
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
 # Backup checkpoints to snapshot
-trainctl aws ebs snapshot vol-xxxxx \
+runctl aws ebs snapshot vol-xxxxx \
     --description "Checkpoint backup"
 
 # Restore on new instance
-trainctl aws create --spot \
+runctl aws create --spot \
     --ebs-snapshot snap-xxxxx \
     --mount-point /mnt/checkpoints
 ```
@@ -114,10 +114,10 @@ instance = ec2.run_instances(
 )
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
 # Launch EBS-optimized instance with persistent volume
-trainctl aws create --spot \
+runctl aws create --spot \
     --instance-type c5.2xlarge \
     --ebs-optimized \
     --ebs-volume vol-xxxxx \
@@ -141,7 +141,7 @@ trainctl aws create --spot \
 ```bash
 # io2 volumes support multi-attach (read-only)
 # Share dataset volume across multiple spot instances
-trainctl aws ebs create --type io2 \
+runctl aws ebs create --type io2 \
     --multi-attach \
     --size 1000 \
     --name shared-datasets
@@ -151,7 +151,7 @@ trainctl aws ebs create --type io2 \
 
 ```bash
 # gp3 volumes: tune IOPS and throughput
-trainctl aws ebs create --type gp3 \
+runctl aws ebs create --type gp3 \
     --size 500 \
     --iops 3000 \
     --throughput 125  # MB/s
@@ -161,7 +161,7 @@ trainctl aws ebs create --type gp3 \
 
 ```bash
 # Cluster placement group for low latency
-trainctl aws create --spot \
+runctl aws create --spot \
     --placement-group cluster \
     --ebs-volume vol-xxxxx
 ```
@@ -171,13 +171,13 @@ trainctl aws create --spot \
 ```bash
 # Create AMI with pre-installed dependencies
 # Faster instance startup
-trainctl aws ami create \
+runctl aws ami create \
     --instance-id i-xxxxx \
     --name training-base \
     --description "Pre-configured training environment"
 
 # Launch from AMI
-trainctl aws create --spot \
+runctl aws create --spot \
     --ami ami-xxxxx \
     --ebs-volume vol-xxxxx
 ```
@@ -188,12 +188,12 @@ trainctl aws create --spot \
 
 1. **Create EBS volumes**
    ```rust
-   trainctl aws ebs create --size 500 --type gp3
+   runctl aws ebs create --size 500 --type gp3
    ```
 
 2. **Attach to instances**
    ```rust
-   trainctl aws create --ebs-volume vol-xxxxx
+   runctl aws create --ebs-volume vol-xxxxx
    ```
 
 3. **Mount volumes**
@@ -205,13 +205,13 @@ trainctl aws create --spot \
 
 4. **Pre-populate volumes**
    ```rust
-   trainctl aws ebs pre-warm vol-xxxxx s3://bucket/data/
+   runctl aws ebs pre-warm vol-xxxxx s3://bucket/data/
    ```
 
 5. **Snapshot management**
    ```rust
-   trainctl aws ebs snapshot vol-xxxxx
-   trainctl aws ebs restore snap-xxxxx
+   runctl aws ebs snapshot vol-xxxxx
+   runctl aws ebs restore snap-xxxxx
    ```
 
 ### Phase 3: Advanced Features
@@ -269,26 +269,26 @@ trainctl aws create --spot \
    - Tag volumes for easy identification
    - Auto-cleanup after training completes
 
-## trainctl Commands (Proposed)
+## runctl Commands (Proposed)
 
 ```bash
 # EBS Volume Management
-trainctl aws ebs create --size 500 --type gp3 --name datasets
-trainctl aws ebs list
-trainctl aws ebs attach vol-xxxxx --instance i-xxxxx --device /dev/sdf
-trainctl aws ebs detach vol-xxxxx
-trainctl aws ebs delete vol-xxxxx
+runctl aws ebs create --size 500 --type gp3 --name datasets
+runctl aws ebs list
+runctl aws ebs attach vol-xxxxx --instance i-xxxxx --device /dev/sdf
+runctl aws ebs detach vol-xxxxx
+runctl aws ebs delete vol-xxxxx
 
 # Pre-warming
-trainctl aws ebs pre-warm vol-xxxxx s3://bucket/data/ --mount /mnt/data
+runctl aws ebs pre-warm vol-xxxxx s3://bucket/data/ --mount /mnt/data
 
 # Snapshots
-trainctl aws ebs snapshot vol-xxxxx --description "Checkpoint backup"
-trainctl aws ebs snapshot list
-trainctl aws ebs restore snap-xxxxx --size 100
+runctl aws ebs snapshot vol-xxxxx --description "Checkpoint backup"
+runctl aws ebs snapshot list
+runctl aws ebs restore snap-xxxxx --size 100
 
 # Integration with instance creation
-trainctl aws create --spot \
+runctl aws create --spot \
     --ebs-volume vol-xxxxx \
     --ebs-mount /mnt/data \
     --ebs-persist
@@ -301,7 +301,7 @@ trainctl aws create --spot \
 ```bash
 # Use instance store for temporary files (faster, free)
 # But backup to EBS/S3 before termination
-trainctl aws create --spot \
+runctl aws create --spot \
     --instance-store /dev/sdb  # Use for temp files
     --ebs-volume vol-xxxxx     # Use for persistent data
 ```
@@ -310,7 +310,7 @@ trainctl aws create --spot \
 
 ```bash
 # For cross-region transfers
-trainctl s3 upload --use-acceleration \
+runctl s3 upload --use-acceleration \
     ./data/ s3://bucket/data/
 ```
 
@@ -318,7 +318,7 @@ trainctl s3 upload --use-acceleration \
 
 ```bash
 # Use s5cmd for parallel downloads
-trainctl s3 download --parallel 10 \
+runctl s3 download --parallel 10 \
     s3://bucket/data/ ./data/
 ```
 
@@ -326,7 +326,7 @@ trainctl s3 download --parallel 10 \
 
 ```bash
 # Launch instances in same AZ as S3 bucket
-trainctl aws create --spot \
+runctl aws create --spot \
     --availability-zone us-east-1a \
     --s3-bucket-region us-east-1
 ```
@@ -335,7 +335,7 @@ trainctl aws create --spot \
 
 ```bash
 # Compress datasets before upload
-trainctl s3 upload --compress \
+runctl s3 upload --compress \
     ./data/ s3://bucket/data/
 ```
 

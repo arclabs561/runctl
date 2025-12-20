@@ -1,4 +1,4 @@
-# Code Review: trainctl
+# Code Review: runctl
 
 **Date**: 2025-01-03  
 **Scope**: Complete codebase review focusing on style, safety, and correctness
@@ -71,7 +71,7 @@ let parse_metric = |prefix: &str, data: &str| -> f64 {
 };
 
 // src/config.rs:107
-.unwrap_or_else(|| PathBuf::from(".trainctl.toml"))  // Should handle this explicitly
+.unwrap_or_else(|| PathBuf::from(".runctl.toml"))  // Should handle this explicitly
 ```
 
 **Impact**:

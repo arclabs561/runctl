@@ -1,13 +1,13 @@
-//! Property-based tests for trainctl
+//! Property-based tests for runctl
 //!
 //! These tests use proptest to generate random inputs and verify
 //! that properties hold across a wide range of scenarios.
 
 use chrono::{Duration, Utc};
 use proptest::prelude::*;
+use runctl::resources::estimate_instance_cost;
+use runctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
 use std::path::PathBuf;
-use trainctl::resources::estimate_instance_cost;
-use trainctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
 
 proptest! {
     #[test]

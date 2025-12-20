@@ -4,10 +4,10 @@
 //! Run with: TRAINCTL_E2E=1 cargo test --test safe_cleanup_test --features e2e
 
 use chrono::Utc;
+use runctl::provider::{ResourceState, ResourceStatus};
+use runctl::resource_tracking::ResourceTracker;
+use runctl::safe_cleanup::{safe_cleanup, CleanupSafety};
 use std::env;
-use trainctl::provider::{ResourceState, ResourceStatus};
-use trainctl::resource_tracking::ResourceTracker;
-use trainctl::safe_cleanup::{safe_cleanup, CleanupSafety};
 
 /// Check if E2E tests should run
 fn should_run_e2e() -> bool {
@@ -34,7 +34,7 @@ async fn test_protected_resources() {
         launch_time: Some(Utc::now()),
         cost_per_hour: 0.01,
         public_ip: None,
-        tags: vec![("trainctl:protected".to_string(), "true".to_string())],
+        tags: vec![("runctl:protected".to_string(), "true".to_string())],
     };
 
     tracker.register(protected_resource.clone()).await.unwrap();
@@ -123,7 +123,7 @@ async fn test_cleanup_with_protection() {
         launch_time: Some(Utc::now()),
         cost_per_hour: 0.01,
         public_ip: None,
-        tags: vec![("trainctl:protected".to_string(), "true".to_string())],
+        tags: vec![("runctl:protected".to_string(), "true".to_string())],
     };
 
     let unprotected = ResourceStatus {

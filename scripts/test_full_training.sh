@@ -29,7 +29,7 @@ echo ""
 
 # Step 1: Create instance
 echo "Step 1: Creating instance..."
-INSTANCE_ID=$(trainctl aws create \
+INSTANCE_ID=$(runctl aws create \
     --instance-type "$INSTANCE_TYPE" \
     --project-name "$PROJECT_NAME" \
     2>&1 | grep -o 'i-[a-z0-9]*' | head -1)
@@ -65,7 +65,7 @@ done
 if [ "$STATE" != "running" ]; then
     echo ""
     echo "ERROR: Instance did not start in time"
-    trainctl aws terminate "$INSTANCE_ID" || true
+    runctl aws terminate "$INSTANCE_ID" || true
     exit 1
 fi
 
@@ -77,8 +77,8 @@ if [ -f "$SCRIPT_PATH" ]; then
     # Get project directory (parent of script)
     SCRIPT_DIR=$(dirname "$(realpath "$SCRIPT_PATH")")
     
-    # Use trainctl to sync (this would require the actual sync command)
-    echo "  Code sync would happen here (using trainctl aws train --sync-code)"
+    # Use runctl to sync (this would require the actual sync command)
+    echo "  Code sync would happen here (using runctl aws train --sync-code)"
     echo "  For now, we'll create the script directly on the instance"
 else
     echo "  WARNING: Training script not found: $SCRIPT_PATH"
@@ -172,7 +172,7 @@ while [ $ELAPSED -lt $MAX_WAIT ]; do
             --instance-id "$INSTANCE_ID" \
             --query 'StandardErrorContent' \
             --output text
-        trainctl aws terminate "$INSTANCE_ID" || true
+        runctl aws terminate "$INSTANCE_ID" || true
         exit 1
     fi
     
@@ -184,7 +184,7 @@ done
 if [ "$STATUS" != "Success" ]; then
     echo ""
     echo "ERROR: Training did not complete in time"
-    trainctl aws terminate "$INSTANCE_ID" || true
+    runctl aws terminate "$INSTANCE_ID" || true
     exit 1
 fi
 
@@ -224,7 +224,7 @@ fi
 # Step 5: Cleanup
 echo ""
 echo "Step 5: Cleaning up..."
-trainctl aws terminate "$INSTANCE_ID" || true
+runctl aws terminate "$INSTANCE_ID" || true
 
 echo ""
 echo "=========================================="

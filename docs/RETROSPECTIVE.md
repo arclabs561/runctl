@@ -402,9 +402,9 @@ cargo test --lib
 // Add metrics
 use metrics::{counter, histogram, gauge};
 
-counter!("trainctl.instances.created", 1);
-histogram!("trainctl.operation.duration", duration);
-gauge!("trainctl.resources.running", count);
+counter!("runctl.instances.created", 1);
+histogram!("runctl.operation.duration", duration);
+gauge!("runctl.resources.running", count);
 ```
 
 **Recommendation:** Add structured logging, metrics, and optional telemetry.
@@ -432,9 +432,9 @@ match error {
     TrainctlError::ResourceNotFound { resource_id, .. } => {
         eprintln!("❌ Resource not found: {}", resource_id);
         eprintln!("💡 Suggestions:");
-        eprintln!("   - Check spelling: trainctl resources list");
+        eprintln!("   - Check spelling: runctl resources list");
         eprintln!("   - Resource may have been deleted");
-        eprintln!("   - Check different region: trainctl config show");
+        eprintln!("   - Check different region: runctl config show");
     }
 }
 ```

@@ -97,7 +97,7 @@ For CI/CD pipelines:
 ## Best Practices
 
 1. **Always use dry-run first** in tests
-2. **Tag resources** created by tests (`trainctl:test=true`)
+2. **Tag resources** created by tests (`runctl:test=true`)
 3. **Clean up in test teardown** (even on failure)
 4. **Use temporary resources** when possible
 5. **Verify cleanup** in assertions

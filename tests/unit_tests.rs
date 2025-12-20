@@ -1,12 +1,12 @@
-//! Comprehensive unit tests for trainctl modules
+//! Comprehensive unit tests for runctl modules
 //!
 //! These tests verify individual functions and modules in isolation.
 
 use chrono::{Duration, Utc};
+use runctl::config::Config;
+use runctl::error::{ConfigError, TrainctlError};
+use runctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
 use std::path::PathBuf;
-use trainctl::config::Config;
-use trainctl::error::{ConfigError, TrainctlError};
-use trainctl::utils::{calculate_accumulated_cost, format_duration, is_old_instance};
 
 #[test]
 fn test_format_duration_edge_cases() {
@@ -273,8 +273,8 @@ fn test_tag_format() {
     // Valid tag keys
     let valid_keys = vec![
         "Name",
-        "trainctl:persistent",
-        "trainctl:protected",
+        "runctl:persistent",
+        "runctl:protected",
         "Environment",
         "Project",
     ];
@@ -316,7 +316,7 @@ fn test_cost_thresholds() {
 
 #[test]
 fn test_retry_attempt_counting() {
-    use trainctl::retry::ExponentialBackoffPolicy;
+    use runctl::retry::ExponentialBackoffPolicy;
 
     let policy = ExponentialBackoffPolicy::for_cloud_api();
 
@@ -360,7 +360,7 @@ fn test_snapshot_naming() {
 
 #[test]
 fn test_cost_estimation_consistency() {
-    use trainctl::resources::estimate_instance_cost;
+    use runctl::resources::estimate_instance_cost;
 
     // Same instance type should return same cost
     let cost1 = estimate_instance_cost("t3.micro");
@@ -380,7 +380,7 @@ fn test_cost_estimation_consistency() {
 fn test_config_path_resolution() {
     // Test that config loading handles various path scenarios
     let temp_dir = tempfile::tempdir().unwrap();
-    let config_path = temp_dir.path().join(".trainctl.toml");
+    let config_path = temp_dir.path().join(".runctl.toml");
 
     // Non-existent path should return default
     let config = Config::load(Some(&config_path));

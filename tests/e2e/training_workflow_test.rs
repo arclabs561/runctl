@@ -154,13 +154,13 @@ async fn test_full_training_workflow() {
                     .tags(
                         aws_sdk_ec2::types::Tag::builder()
                             .key("Name")
-                            .value("trainctl-e2e-test")
+                            .value("runctl-e2e-test")
                             .build()
                     )
                     .tags(
                         aws_sdk_ec2::types::Tag::builder()
                             .key("CreatedBy")
-                            .value("trainctl-e2e-test")
+                            .value("runctl-e2e-test")
                             .build()
                     )
                     .build()

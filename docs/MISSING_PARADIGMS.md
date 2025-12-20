@@ -1,6 +1,6 @@
 # Missing Paradigms and Architectural Patterns
 
-Based on research of Rust CLI best practices and ML orchestration patterns (2024), this document identifies critical missing paradigms in `trainctl`.
+Based on research of Rust CLI best practices and ML orchestration patterns (2024), this document identifies critical missing paradigms in `runctl`.
 
 ## Critical Missing Patterns
 

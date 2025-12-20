@@ -2,9 +2,9 @@
 //!
 //! Tests for individual modules that don't require external dependencies.
 
+use runctl::config::Config;
+use runctl::error::{ConfigError, TrainctlError};
 use std::path::PathBuf;
-use trainctl::config::Config;
-use trainctl::error::{ConfigError, TrainctlError};
 
 mod config_tests {
     use super::*;
@@ -90,11 +90,11 @@ mod error_tests {
     }
 
     #[test]
-    fn test_trainctl_error_from_config_error() {
+    fn test_runctl_error_from_config_error() {
         let config_err = ConfigError::InvalidProvider("test".to_string());
-        let trainctl_err: TrainctlError = config_err.into();
+        let runctl_err: TrainctlError = config_err.into();
 
-        match trainctl_err {
+        match runctl_err {
             TrainctlError::Config(_) => {}
             _ => panic!("Should be Config error"),
         }
@@ -103,9 +103,9 @@ mod error_tests {
     #[test]
     fn test_error_chain() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
-        let trainctl_err: TrainctlError = io_err.into();
+        let runctl_err: TrainctlError = io_err.into();
 
-        match trainctl_err {
+        match runctl_err {
             TrainctlError::Io(_) => {}
             _ => panic!("Should be Io error"),
         }
@@ -150,7 +150,7 @@ mod s3_path_tests {
 
 mod instance_type_tests {
 
-    use trainctl::resources::estimate_instance_cost;
+    use runctl::resources::estimate_instance_cost;
 
     #[test]
     fn test_cost_estimation_known_types() {
@@ -235,10 +235,10 @@ mod tag_tests {
         // Valid keys
         let valid_keys = vec![
             "Name",
-            "trainctl:persistent",
-            "trainctl:project",
-            "trainctl:user",
-            "trainctl:created",
+            "runctl:persistent",
+            "runctl:project",
+            "runctl:user",
+            "runctl:created",
             "CreatedBy",
             "Environment",
             "Project-Name",
@@ -260,7 +260,7 @@ mod tag_tests {
             "false",
             "production",
             "my-project-name",
-            "trainctl-alice-project-i1234567",
+            "runctl-alice-project-i1234567",
             "value_with_underscores",
             "2024-01-15 10:30:00 UTC",
         ];
@@ -273,14 +273,14 @@ mod tag_tests {
     #[test]
     fn test_persistent_tag_detection() {
         let tags = vec![
-            ("trainctl:persistent", "true"),
-            ("trainctl:protected", "true"),
+            ("runctl:persistent", "true"),
+            ("runctl:protected", "true"),
             ("Name", "my-volume"),
         ];
 
-        let is_persistent = tags.iter().any(|(k, v)| {
-            (*k == "trainctl:persistent" || *k == "trainctl:protected") && *v == "true"
-        });
+        let is_persistent = tags
+            .iter()
+            .any(|(k, v)| (*k == "runctl:persistent" || *k == "runctl:protected") && *v == "true");
 
         assert!(is_persistent);
     }
@@ -291,53 +291,46 @@ mod tag_tests {
         let project_name = "test-project";
         let instance_id = "i-1234567890abcdef0";
 
-        let name_tag = format!(
-            "trainctl-{}-{}-{}",
-            user_id,
-            project_name,
-            &instance_id[..8]
-        );
+        let name_tag = format!("runctl-{}-{}-{}", user_id, project_name, &instance_id[..8]);
 
-        assert_eq!(name_tag, "trainctl-alice-test-project-i-123456");
+        assert_eq!(name_tag, "runctl-alice-test-project-i-123456");
         assert!(name_tag.len() <= 128); // AWS tag value limit
-        assert!(name_tag.starts_with("trainctl-"));
+        assert!(name_tag.starts_with("runctl-"));
     }
 
     #[test]
     fn test_project_tag_filtering() {
         let tags = vec![
-            ("trainctl:project".to_string(), "project-a".to_string()),
-            ("trainctl:user".to_string(), "alice".to_string()),
+            ("runctl:project".to_string(), "project-a".to_string()),
+            ("runctl:user".to_string(), "alice".to_string()),
             ("Name".to_string(), "instance-1".to_string()),
         ];
 
         // Filter by project
         let matches_project = tags
             .iter()
-            .any(|(k, v)| k == "trainctl:project" && v == "project-a");
+            .any(|(k, v)| k == "runctl:project" && v == "project-a");
         assert!(matches_project);
 
         let matches_wrong_project = tags
             .iter()
-            .any(|(k, v)| k == "trainctl:project" && v == "project-b");
+            .any(|(k, v)| k == "runctl:project" && v == "project-b");
         assert!(!matches_wrong_project);
     }
 
     #[test]
     fn test_user_tag_filtering() {
         let tags = vec![
-            ("trainctl:project".to_string(), "project-a".to_string()),
-            ("trainctl:user".to_string(), "alice".to_string()),
+            ("runctl:project".to_string(), "project-a".to_string()),
+            ("runctl:user".to_string(), "alice".to_string()),
             ("Name".to_string(), "instance-1".to_string()),
         ];
 
         // Filter by user
-        let matches_user = tags
-            .iter()
-            .any(|(k, v)| k == "trainctl:user" && v == "alice");
+        let matches_user = tags.iter().any(|(k, v)| k == "runctl:user" && v == "alice");
         assert!(matches_user);
 
-        let matches_wrong_user = tags.iter().any(|(k, v)| k == "trainctl:user" && v == "bob");
+        let matches_wrong_user = tags.iter().any(|(k, v)| k == "runctl:user" && v == "bob");
         assert!(!matches_wrong_user);
     }
 
@@ -404,7 +397,7 @@ mod az_tests {
 
 mod retry_tests {
 
-    use trainctl::retry::ExponentialBackoffPolicy;
+    use runctl::retry::ExponentialBackoffPolicy;
 
     #[test]
     fn test_retry_policy_creation() {
@@ -465,7 +458,7 @@ mod data_transfer_tests {
 mod cost_tests {
 
     use chrono::{Duration, Utc};
-    use trainctl::utils::calculate_accumulated_cost;
+    use runctl::utils::calculate_accumulated_cost;
 
     #[test]
     fn test_cost_calculation_zero_hourly() {

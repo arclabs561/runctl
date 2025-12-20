@@ -38,14 +38,14 @@ You've made significant security improvements:
 ### High Priority (Optional)
 
 1. **Consider Using IAM Roles for Development**
-   - You have `trainctl-test-role` available
+   - You have `runctl-test-role` available
    - Use temporary credentials instead of long-term keys
    - Command: `source scripts/assume-test-role.sh`
    - **Benefit**: Credentials expire automatically (1 hour)
 
-2. **Create Limited-Permission User for trainctl** (Optional)
+2. **Create Limited-Permission User for runctl** (Optional)
    - Current: Admin user has AdministratorAccess
-   - Option: Create trainctl-specific user with minimal permissions
+   - Option: Create runctl-specific user with minimal permissions
    - **Benefit**: Limits damage if credentials are compromised
    - **Trade-off**: More setup, but better security isolation
 
@@ -96,14 +96,14 @@ You've made significant security improvements:
    # Now using temporary credentials
    ```
 
-2. **Create trainctl User** (if you want to limit admin access):
+2. **Create runctl User** (if you want to limit admin access):
    ```bash
    # Follow guide in docs/AWS_SECURITY_RECOMMENDATIONS.md
    ```
 
 3. **Enable CloudTrail** (for audit logging):
    ```bash
-   aws cloudtrail create-trail --name trainctl-audit-trail --s3-bucket-name <bucket>
+   aws cloudtrail create-trail --name runctl-audit-trail --s3-bucket-name <bucket>
    ```
 
 ## Summary

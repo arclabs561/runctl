@@ -1,4 +1,4 @@
-# Pre-commit hooks for trainctl
+# Pre-commit hooks for runctl
 # Install: pip install pre-commit && pre-commit install
 
 repos:

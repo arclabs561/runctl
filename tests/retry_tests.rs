@@ -2,10 +2,10 @@
 //!
 //! Tests verify exponential backoff, retry policies, and error handling.
 
+use runctl::error::{IsRetryable, TrainctlError};
+use runctl::retry::{ExponentialBackoffPolicy, NoRetryPolicy, RetryPolicy};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use trainctl::error::{IsRetryable, TrainctlError};
-use trainctl::retry::{ExponentialBackoffPolicy, NoRetryPolicy, RetryPolicy};
 
 #[test]
 fn test_exponential_backoff_creation() {
@@ -182,7 +182,7 @@ fn test_is_retryable_trait() {
     };
     assert!(!validation_error.is_retryable());
 
-    let config_error = TrainctlError::Config(trainctl::error::ConfigError::InvalidProvider(
+    let config_error = TrainctlError::Config(runctl::error::ConfigError::InvalidProvider(
         "test".to_string(),
     ));
     assert!(!config_error.is_retryable());

@@ -156,7 +156,7 @@ fn test_json_output_consistency() {
 /// Test input validation across all commands
 #[test]
 fn test_validation_across_commands() {
-    use trainctl::validation::*;
+    use runctl::validation::*;
 
     // Test that validation catches invalid inputs before AWS API calls
     // Each validator is tested individually to avoid function pointer type issues

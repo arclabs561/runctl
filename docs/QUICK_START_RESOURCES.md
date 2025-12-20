@@ -4,26 +4,26 @@
 
 ```bash
 # Quick overview
-trainctl resources list
+runctl resources list
 
 # Detailed view
-trainctl resources list --detailed
+runctl resources list --detailed
 
 # Just AWS
-trainctl resources list --platform aws
+runctl resources list --platform aws
 
 # Just RunPod
-trainctl resources list --platform runpod
+runctl resources list --platform runpod
 
 # Just local processes
-trainctl resources list --platform local
+runctl resources list --platform local
 ```
 
 ## Get Insights & Recommendations
 
 ```bash
 # Get insights about your resources
-trainctl resources insights
+runctl resources insights
 ```
 
 This shows:
@@ -36,26 +36,26 @@ This shows:
 
 ```bash
 # Preview what would be cleaned up
-trainctl resources cleanup --dry-run
+runctl resources cleanup --dry-run
 
 # Actually cleanup (with confirmation)
-trainctl resources cleanup
+runctl resources cleanup
 
 # Force cleanup (no confirmation)
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ## Daily Workflow
 
 ```bash
 # Morning check
-trainctl resources summary
+runctl resources summary
 
 # Get recommendations
-trainctl resources insights
+runctl resources insights
 
 # Cleanup if needed
-trainctl resources cleanup --dry-run
+runctl resources cleanup --dry-run
 ```
 
 ## What Gets Tracked
@@ -68,10 +68,10 @@ trainctl resources cleanup --dry-run
 
 ```bash
 # See current costs
-trainctl resources summary
+runctl resources summary
 
 # Get cost insights
-trainctl resources insights
+runctl resources insights
 ```
 
 ## Safety

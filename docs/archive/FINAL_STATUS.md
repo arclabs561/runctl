@@ -18,7 +18,7 @@
    - Prevents accidental deletion of newly created resources
 
 4. ✅ **Persistent Storage Protection** - Fully implemented
-   - Persistent volumes tagged with `trainctl:persistent=true`
+   - Persistent volumes tagged with `runctl:persistent=true`
    - Protected from cleanup unless `--force` is used
    - Visual indicators (🔒) in list commands
 
@@ -84,35 +84,35 @@ As of latest audit:
 
 ### Check Running Resources
 ```bash
-trainctl resources list --platform all
+runctl resources list --platform all
 ./extras/audit-resources.sh
 ```
 
 ### Clean Up Resources
 ```bash
 # Dry run first
-trainctl resources cleanup --dry-run
+runctl resources cleanup --dry-run
 
 # Clean up (respects persistent volumes)
-trainctl resources cleanup
+runctl resources cleanup
 
 # Force cleanup (ignores protections)
-trainctl resources cleanup --force
+runctl resources cleanup --force
 ```
 
 ### Terminate Instance (with safety checks)
 ```bash
 # Normal termination (blocks if training is running)
-trainctl aws terminate <instance-id>
+runctl aws terminate <instance-id>
 
 # Force termination (skips safety checks)
-trainctl aws terminate <instance-id> --force
+runctl aws terminate <instance-id> --force
 ```
 
 ### Create Instance (with safety checks)
 ```bash
 # Will warn if > 10 instances, block if > 50
-trainctl aws create <instance-type>
+runctl aws create <instance-type>
 ```
 
 ## 📝 Remaining Work (Low Priority)

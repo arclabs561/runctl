@@ -1,6 +1,6 @@
-# Using trainctl from Python
+# Using runctl from Python
 
-This guide shows how to use trainctl programmatically from Python without requiring PyO3 bindings.
+This guide shows how to use runctl programmatically from Python without requiring PyO3 bindings.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ from pathlib import Path
 # Add scripts directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from trainctl_wrapper import Trainctl
+from runctl_wrapper import Trainctl
 
 tc = Trainctl()
 
@@ -40,7 +40,7 @@ tc.aws.monitor(instance["instance_id"], follow=True)
 
 ### Option 2: Direct Subprocess (Simple)
 
-For simple use cases, call trainctl directly:
+For simple use cases, call runctl directly:
 
 ```python
 import subprocess
@@ -48,7 +48,7 @@ import json
 
 # Create instance
 result = subprocess.run(
-    ["trainctl", "aws", "create", "--instance-type", "g4dn.xlarge", "--output", "json"],
+    ["runctl", "aws", "create", "--instance-type", "g4dn.xlarge", "--output", "json"],
     capture_output=True,
     text=True
 )
@@ -57,7 +57,7 @@ instance_id = instance["instance_id"]
 
 # Train
 subprocess.run([
-    "trainctl", "aws", "train", instance_id, "training/train.py",
+    "runctl", "aws", "train", instance_id, "training/train.py",
     "--sync-code", "--output", "json"
 ])
 ```
@@ -68,7 +68,7 @@ The wrapper script requires no additional dependencies beyond Python 3.8+:
 
 ```bash
 # No installation needed - just use the script
-python scripts/trainctl_wrapper.py
+python scripts/runctl_wrapper.py
 ```
 
 ## API Reference
@@ -78,11 +78,11 @@ python scripts/trainctl_wrapper.py
 Main wrapper class:
 
 ```python
-tc = Trainctl(binary="trainctl", output_format="json")
+tc = Trainctl(binary="runctl", output_format="json")
 ```
 
 **Methods:**
-- `version()` - Get trainctl version
+- `version()` - Get runctl version
 
 **Attributes:**
 - `tc.aws` - AWS commands
@@ -156,7 +156,7 @@ info = tc.checkpoint.info("checkpoints/checkpoint_epoch_5.pt")
 The wrapper raises `TrainctlError` on failures:
 
 ```python
-from trainctl_wrapper import Trainctl, TrainctlError
+from runctl_wrapper import Trainctl, TrainctlError
 
 tc = Trainctl()
 
@@ -172,7 +172,7 @@ except TrainctlError as e:
 ### Complete Training Workflow
 
 ```python
-from trainctl_wrapper import Trainctl, TrainctlError
+from runctl_wrapper import Trainctl, TrainctlError
 
 tc = Trainctl()
 
@@ -217,10 +217,10 @@ except TrainctlError as e:
 
 ```python
 from pytorch_lightning import Callback
-from trainctl_wrapper import Trainctl
+from runctl_wrapper import Trainctl
 
 class TrainctlCheckpointCallback(Callback):
-    """Upload checkpoints to S3 via trainctl."""
+    """Upload checkpoints to S3 via runctl."""
     
     def __init__(self, instance_id: str):
         self.tc = Trainctl()
@@ -231,7 +231,7 @@ class TrainctlCheckpointCallback(Callback):
         if checkpoint_path:
             # Upload checkpoint
             subprocess.run([
-                "trainctl", "s3", "upload",
+                "runctl", "s3", "upload",
                 checkpoint_path,
                 f"s3://my-bucket/checkpoints/{checkpoint_path.name}"
             ])
@@ -239,7 +239,7 @@ class TrainctlCheckpointCallback(Callback):
 
 ## Using with uvx Scripts
 
-You can create standalone Python scripts that use trainctl:
+You can create standalone Python scripts that use runctl:
 
 ```python
 #!/usr/bin/env -S uvx python
@@ -252,7 +252,7 @@ import json
 
 def main():
     result = subprocess.run(
-        ["trainctl", "resources", "list", "--output", "json"],
+        ["runctl", "resources", "list", "--output", "json"],
         capture_output=True,
         text=True
     )
@@ -282,7 +282,7 @@ For most use cases, the wrapper is sufficient and simpler.
 
 ## See Also
 
-- `scripts/trainctl_wrapper.py` - Full wrapper implementation
+- `scripts/runctl_wrapper.py` - Full wrapper implementation
 - `examples/python_usage.py` - Example usage
 - `docs/PYTHON_BINDINGS_ANALYSIS.md` - Analysis of Python bindings
 

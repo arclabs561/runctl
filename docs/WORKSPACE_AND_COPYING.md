@@ -2,11 +2,11 @@
 
 ## Overview
 
-trainctl uses a **bare VM approach** (not Docker/containers). When you run training, your project code is copied to the EC2 instance and runs directly on the instance.
+runctl uses a **bare VM approach** (not Docker/containers). When you run training, your project code is copied to the EC2 instance and runs directly on the instance.
 
 ## What Gets Copied
 
-When you use `--sync-code` (or it's enabled by default), trainctl:
+When you use `--sync-code` (or it's enabled by default), runctl:
 
 1. **Detects your project root** by looking for:
    - `requirements.txt`
@@ -79,7 +79,7 @@ When an instance starts, the user-data script automatically:
 
 ### Dependency Caching
 - ✅ **Pre-installed libraries**: Common ML libraries (numpy, pandas) pre-installed in user-data
-- ✅ **Cache directory**: `/opt/trainctl-cache` created for future dependency caching
+- ✅ **Cache directory**: `/opt/runctl-cache` created for future dependency caching
 - ⚠️ **Per-project deps**: Still installed from `requirements.txt` per project
 
 ### Optimization Strategies
@@ -108,10 +108,10 @@ The training script:
 
 ```bash
 # 1. Create instance
-trainctl aws create --instance-type g4dn.xlarge
+runctl aws create --instance-type g4dn.xlarge
 
 # 2. Train (with code sync)
-trainctl aws train i-123 training/train.py --sync-code
+runctl aws train i-123 training/train.py --sync-code
 
 # What happens:
 # - Project root detected: /path/to/my-project
@@ -122,7 +122,7 @@ trainctl aws train i-123 training/train.py --sync-code
 
 ## Differences from Docker
 
-| Aspect | trainctl (Bare VM) | Docker |
+| Aspect | runctl (Bare VM) | Docker |
 |--------|-------------------|--------|
 | Isolation | None (shared OS) | Container isolation |
 | Caching | None | Layer caching |

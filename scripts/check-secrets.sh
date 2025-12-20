@@ -1,5 +1,5 @@
 #!/bin/bash
-# Secret scanning script for trainctl
+# Secret scanning script for runctl
 #
 # Checks for common secret patterns and verifies .gitignore is working
 #
@@ -81,7 +81,7 @@ echo ""
 # Check 7: .gitignore coverage
 echo -e "${YELLOW}[7/8] Checking .gitignore coverage...${NC}"
 MISSING_IGNORES=0
-for pattern in ".env" ".pem" ".key" "credentials" "*.secret" ".trainctl.toml"; do
+for pattern in ".env" ".pem" ".key" "credentials" "*.secret" ".runctl.toml"; do
   if ! grep -q "$pattern" .gitignore 2>/dev/null; then
     echo -e "${YELLOW}⚠ .gitignore missing: $pattern${NC}"
     MISSING_IGNORES=$((MISSING_IGNORES + 1))
@@ -94,10 +94,10 @@ echo ""
 
 # Check 8: Config files with secrets
 echo -e "${YELLOW}[8/8] Checking config file handling...${NC}"
-if grep -q "\.trainctl\.toml" .gitignore; then
-  echo -e "${GREEN}✓ .trainctl.toml is in .gitignore${NC}"
+if grep -q "\.runctl\.toml" .gitignore; then
+  echo -e "${GREEN}✓ .runctl.toml is in .gitignore${NC}"
 else
-  echo -e "${YELLOW}⚠ .trainctl.toml not in .gitignore${NC}"
+  echo -e "${YELLOW}⚠ .runctl.toml not in .gitignore${NC}"
   ISSUES=$((ISSUES + 1))
 fi
 echo ""

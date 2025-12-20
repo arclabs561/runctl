@@ -4,9 +4,9 @@
 //! Run with: TRAINCTL_E2E=1 cargo test --test resource_tracking_test --features e2e
 
 use chrono::Utc;
+use runctl::provider::{ResourceState, ResourceStatus};
+use runctl::resource_tracking::{ResourceTracker, ResourceUsage};
 use std::env;
-use trainctl::provider::{ResourceState, ResourceStatus};
-use trainctl::resource_tracking::{ResourceTracker, ResourceUsage};
 
 /// Check if E2E tests should run
 fn should_run_e2e() -> bool {

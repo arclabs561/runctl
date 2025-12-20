@@ -23,7 +23,7 @@ This document provides a concrete, step-by-step plan for implementing the missin
 use thiserror::Error;
 use crate::provider::{ResourceState, ResourceId};
 
-/// Main error type for trainctl
+/// Main error type for runctl
 #[derive(Error, Debug)]
 pub enum TrainctlError {
     #[error("Configuration error: {0}")]
@@ -660,7 +660,7 @@ async fn main() -> Result<()> {
     // Setup resource lifecycle
     let state_dir = dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".trainctl")
+        .join(".runctl")
         .join("state");
     std::fs::create_dir_all(&state_dir)?;
     
@@ -861,7 +861,7 @@ pub struct OrchestrationMetrics {
 impl OrchestrationMetrics {
     pub fn new(registry: &Registry) -> Self {
         let training_jobs_started = Counter::new(
-            "trainctl_training_jobs_started_total",
+            "runctl_training_jobs_started_total",
             "Total number of training jobs started"
         ).unwrap();
         

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Analysis of how matryoshka-box, idf-est, and decksage use AWS/cloud training, and how trainctl translates these patterns.
+Analysis of how matryoshka-box, idf-est, and decksage use AWS/cloud training, and how runctl translates these patterns.
 
 ## decksage: AWS EC2 Training Patterns
 
@@ -21,7 +21,7 @@ if use_spot:
             ondemand_response = ec2.run_instances(...)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Already implemented in src/aws.rs
 if use_spot {
@@ -58,7 +58,7 @@ while True:
     time.sleep(30)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Implemented in src/aws.rs::train_on_instance
 let response = client
@@ -90,7 +90,7 @@ aws s3 cp ./output/ {s3_output_path} --recursive
 """
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should be in src/aws.rs::train_on_instance
 // Add S3 download before training:
@@ -115,13 +115,13 @@ tags = [
 ]
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should add to src/aws.rs::create_instance
 let tags = vec![
-    ("Name", "trainctl-training"),
-    ("Project", "trainctl"),
-    ("CreatedBy", "trainctl"),
+    ("Name", "runctl-training"),
+    ("Project", "runctl"),
+    ("CreatedBy", "runctl"),
 ];
 ```
 
@@ -137,7 +137,7 @@ runpodctl.upload(pod_id, local_path, remote_path)
 runpodctl.exec(pod_id, "python train.py")
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Already in src/runpod.rs
 // create_pod() - ✅ Implemented
@@ -154,11 +154,11 @@ if epoch % checkpoint_interval == 0:
     upload_to_s3(checkpoint_path, s3_path)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should add automatic S3 upload after checkpoint
 // In training scripts, add:
-// trainctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
+// runctl s3 upload ./checkpoints/ s3://bucket/checkpoints/ --recursive
 ```
 
 #### 3. **Background Training with Monitoring**
@@ -169,11 +169,11 @@ runpodctl.exec(pod_id, "nohup python train.py > train.log 2>&1 &")
 runpodctl.tail_logs(pod_id, "train.log")
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Already in src/runpod.rs::train_on_pod
 // Has --background flag support
-// Monitor via: trainctl runpod monitor <pod-id> --follow
+// Monitor via: runctl runpod monitor <pod-id> --follow
 ```
 
 ## matryoshka-box: Multi-GPU Training Patterns
@@ -189,7 +189,7 @@ if rank == 0:
     upload_to_s3(checkpoint_path, s3_backup_path)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should add DDP-aware checkpointing
 // Check for RANK env var:
@@ -209,7 +209,7 @@ if is_cloud:
     epochs = 50  # More epochs for cloud
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Already in src/config.rs
 // Can add platform-specific configs:
@@ -227,7 +227,7 @@ if latest_checkpoint:
     resume_from_checkpoint(latest_checkpoint)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should add to src/local.rs and src/runpod.rs
 // Auto-detect and resume from latest checkpoint:
@@ -258,11 +258,11 @@ torch.save(checkpoint, checkpoint_path)
 s3.upload_file(checkpoint_path, bucket, s3_key)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
-// trainctl checkpoint save <path>
-// trainctl s3 upload <path> s3://bucket/checkpoints/
-// Or automatic: trainctl local script.py --auto-upload-s3
+// runctl checkpoint save <path>
+// runctl s3 upload <path> s3://bucket/checkpoints/
+// Or automatic: runctl local script.py --auto-upload-s3
 ```
 
 ### 2. **Data Pipeline**
@@ -282,12 +282,12 @@ python train.py
 aws s3 sync ./output/ s3://bucket/output/
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
-// trainctl s3 download s3://bucket/datasets/ ./data/ --recursive
-// trainctl local preprocess.py
-// trainctl local train.py
-// trainctl s3 upload ./output/ s3://bucket/output/ --recursive
+// runctl s3 download s3://bucket/datasets/ ./data/ --recursive
+// runctl local preprocess.py
+// runctl local train.py
+// runctl s3 upload ./output/ s3://bucket/output/ --recursive
 ```
 
 ### 3. **Monitoring and Logging**
@@ -301,9 +301,9 @@ for line in tail_logs(log_file):
         alert()
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
-// trainctl monitor --log training.log --follow
+// runctl monitor --log training.log --follow
 // Already implemented in src/monitor.rs
 ```
 
@@ -321,19 +321,19 @@ except Exception as e:
     raise
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```rust
 // Should add signal handlers for SIGTERM/SIGINT
 // Auto-save checkpoint on interruption
 // Auto-upload to S3
 ```
 
-## Missing Features in trainctl
+## Missing Features in runctl
 
 ### High Priority
 
 1. **Automatic S3 Upload After Checkpoint**
-   - Currently: Manual `trainctl s3 upload`
+   - Currently: Manual `runctl s3 upload`
    - Needed: Auto-upload after each checkpoint save
 
 2. **S3 Data Staging in AWS Training**
@@ -394,17 +394,17 @@ ssm.send_command(instance_id, "python train.py")
 ssm.send_command(instance_id, "aws s3 cp ./output/ s3://output/")
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
 # Create instance
-INSTANCE_ID=$(trainctl aws create --spot)
+INSTANCE_ID=$(runctl aws create --spot)
 
 # Train with automatic data staging
-trainctl aws train $INSTANCE_ID train.py \
+runctl aws train $INSTANCE_ID train.py \
     --data-s3 s3://bucket/data/ \
     --output-s3 s3://bucket/output/
 
-# (trainctl handles S3 download/upload automatically)
+# (runctl handles S3 download/upload automatically)
 ```
 
 ### Example 2: Ephemeral Training
@@ -421,16 +421,16 @@ runpodctl.exec(pod_id, "python train_ephemeral.py")
 runpodctl.tail_logs(pod_id)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
 # Create pod
-POD_ID=$(trainctl runpod create)
+POD_ID=$(runctl runpod create)
 
 # Train (auto-checkpoints every epoch)
-trainctl runpod train $POD_ID train_ephemeral.py
+runctl runpod train $POD_ID train_ephemeral.py
 
 # Monitor
-trainctl runpod monitor $POD_ID --follow
+runctl runpod monitor $POD_ID --follow
 ```
 
 ### Example 3: Multi-GPU Training
@@ -446,10 +446,10 @@ if rank == 0:
     upload_to_s3(...)
 ```
 
-**trainctl translation:**
+**runctl translation:**
 ```bash
-# trainctl detects DDP and only rank 0 saves
-trainctl local train_multi_gpu.py --ddp
+# runctl detects DDP and only rank 0 saves
+runctl local train_multi_gpu.py --ddp
 
 # Auto-uploads checkpoints from rank 0
 ```
@@ -462,7 +462,7 @@ trainctl local train_multi_gpu.py --ddp
 4. **Monitoring is essential** - Log streaming, progress tracking
 5. **Cost awareness** - Spot instances, cleanup, resource tracking
 
-## Next Steps for trainctl
+## Next Steps for runctl
 
 1. Add automatic S3 integration to training commands
 2. Implement DDP-aware checkpointing

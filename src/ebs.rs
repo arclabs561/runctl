@@ -327,14 +327,14 @@ async fn create_volume(
     }
 
     // Add tags
-    let mut tags = vec![("CreatedBy".to_string(), "trainctl".to_string())];
+    let mut tags = vec![("CreatedBy".to_string(), "runctl".to_string())];
     if let Some(name_val) = &name {
         tags.push(("Name".to_string(), name_val.clone()));
     }
     // Mark as persistent if requested (protects from cleanup)
     if persistent {
-        tags.push(("trainctl:persistent".to_string(), "true".to_string()));
-        tags.push(("trainctl:protected".to_string(), "true".to_string()));
+        tags.push(("runctl:persistent".to_string(), "true".to_string()));
+        tags.push(("runctl:protected".to_string(), "true".to_string()));
     }
 
     let tag_spec = aws_sdk_ec2::types::TagSpecification::builder()
@@ -452,7 +452,7 @@ async fn list_volumes(
 
         // Check if persistent
         let is_persistent = volume.tags().iter().any(|t| {
-            t.key().map(|k| k == "trainctl:persistent").unwrap_or(false)
+            t.key().map(|k| k == "runctl:persistent").unwrap_or(false)
                 && t.value().map(|v| v == "true").unwrap_or(false)
         });
         let persistent_marker = if is_persistent { "YES" } else { "" };
@@ -614,7 +614,7 @@ async fn delete_volume(volume_id: String, force: bool, client: &Ec2Client) -> Re
     // Check if volume is persistent/protected
     let is_persistent = volume.tags().iter().any(|tag| {
         tag.key()
-            .map(|k| k == "trainctl:persistent" || k == "trainctl:protected")
+            .map(|k| k == "runctl:persistent" || k == "runctl:protected")
             .unwrap_or(false)
             && tag.value().map(|v| v == "true").unwrap_or(false)
     });
@@ -663,7 +663,7 @@ async fn delete_volume(volume_id: String, force: bool, client: &Ec2Client) -> Re
             );
             println!("   Snapshots will remain after volume deletion.");
             println!(
-                "   List snapshots: trainctl aws ebs snapshot-list --volume-id {}",
+                "   List snapshots: runctl aws ebs snapshot-list --volume-id {}",
                 volume_id
             );
         }
@@ -909,12 +909,12 @@ async fn create_temp_prewarm_instance(
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
                         .key("Name")
-                        .value("trainctl-prewarm-temp")
+                        .value("runctl-prewarm-temp")
                         .build(),
                 )
                 .tags(
                     aws_sdk_ec2::types::Tag::builder()
-                        .key("trainctl:temp")
+                        .key("runctl:temp")
                         .value("true")
                         .build(),
                 )
@@ -940,7 +940,7 @@ async fn create_snapshot(
     name: Option<String>,
     client: &Ec2Client,
 ) -> Result<()> {
-    let desc = description.unwrap_or_else(|| "trainctl snapshot".to_string());
+    let desc = description.unwrap_or_else(|| "runctl snapshot".to_string());
 
     info!("Creating snapshot of volume {}", volume_id);
 
@@ -1107,7 +1107,7 @@ async fn restore_from_snapshot(
 
     // Add tags
     let mut tags = vec![
-        ("CreatedBy".to_string(), "trainctl".to_string()),
+        ("CreatedBy".to_string(), "runctl".to_string()),
         ("RestoredFrom".to_string(), snapshot_id.clone()),
     ];
     if let Some(name_val) = &name {

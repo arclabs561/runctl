@@ -1,8 +1,8 @@
-# Testing Strategy for trainctl
+# Testing Strategy for runctl
 
 ## Overview
 
-trainctl uses a comprehensive testing strategy combining unit tests, integration tests, property-based tests, and end-to-end tests to ensure reliability and correctness.
+runctl uses a comprehensive testing strategy combining unit tests, integration tests, property-based tests, and end-to-end tests to ensure reliability and correctness.
 
 ## Test Pyramid
 
@@ -182,7 +182,7 @@ TRAINCTL_E2E=1 cargo test --features e2e -- --ignored
 4. **Test sequences** - Not just single operations
 
 ### E2E Testing
-1. **Tag resources** - Use `trainctl:test=<uuid>` tags
+1. **Tag resources** - Use `runctl:test=<uuid>` tags
 2. **Clean up** - Always clean up in teardown
 3. **Use small resources** - Minimize cost
 4. **Opt-in** - Require explicit `TRAINCTL_E2E=1`

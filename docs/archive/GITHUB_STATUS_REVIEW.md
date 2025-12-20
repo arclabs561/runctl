@@ -24,7 +24,7 @@
    - ✅ Scans for hardcoded API keys
    - ✅ Checks git history (last 50 commits)
    - ✅ Verifies sensitive files not tracked (.env, .pem, .key, etc.)
-   - ✅ Verifies `.trainctl.toml` not tracked
+   - ✅ Verifies `.runctl.toml` not tracked
 
 2. **Job Dependencies**:
    - ✅ `lint-and-test` and `build` jobs depend on `secret-scanning` passing

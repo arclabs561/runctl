@@ -12,10 +12,10 @@
 set -euo pipefail
 
 # Configuration
-ROLE_ARN="${TRAINCTL_TEST_ROLE_ARN:-arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/trainctl-test-role}"
-SESSION_NAME="trainctl-test-$(date +%s)"
+ROLE_ARN="${TRAINCTL_TEST_ROLE_ARN:-arn:aws:iam::$(aws sts get-caller-identity --query Account --output text):role/runctl-test-role}"
+SESSION_NAME="runctl-test-$(date +%s)"
 DURATION_SECONDS="${TRAINCTL_TEST_SESSION_DURATION:-3600}"  # 1 hour default
-EXTERNAL_ID="${TRAINCTL_TEST_EXTERNAL_ID:-trainctl-test-env}"
+EXTERNAL_ID="${TRAINCTL_TEST_EXTERNAL_ID:-runctl-test-env}"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -39,7 +39,7 @@ RESPONSE=$(aws sts assume-role \
 if [ $? -ne 0 ]; then
   echo -e "${YELLOW}Error: Failed to assume role${NC}"
   echo "Make sure:"
-  echo "  1. The role exists: aws iam get-role --role-name trainctl-test-role"
+  echo "  1. The role exists: aws iam get-role --role-name runctl-test-role"
   echo "  2. Your credentials have sts:AssumeRole permission"
   echo "  3. The role trust policy allows your account"
   exit 1
@@ -83,7 +83,7 @@ if [ "$EXPIRATION_EPOCH" -gt 0 ] && [ "$EXPIRATION_EPOCH" -lt "$CURRENT_EPOCH" ]
   echo -e "${RED}✗ WARNING: Credentials appear to be expired!${NC}"
 fi
 echo ""
-echo -e "${GREEN}Ready to test trainctl!${NC}"
+echo -e "${GREEN}Ready to test runctl!${NC}"
 echo ""
 echo "Example commands:"
 echo "  cargo run -- aws instances list"

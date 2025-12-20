@@ -1,13 +1,13 @@
-# Using trainctl from Python
+# Using runctl from Python
 
-trainctl can be used from Python in two ways:
+runctl can be used from Python in two ways:
 
 ## Quick Start
 
 ### 1. Python Wrapper (Recommended)
 
 ```python
-from trainctl_wrapper import Trainctl
+from runctl_wrapper import Trainctl
 
 tc = Trainctl()
 instance = tc.aws.create_instance("g4dn.xlarge", spot=True)
@@ -21,7 +21,7 @@ import subprocess
 import json
 
 result = subprocess.run(
-    ["trainctl", "aws", "create", "--instance-type", "g4dn.xlarge", "--output", "json"],
+    ["runctl", "aws", "create", "--instance-type", "g4dn.xlarge", "--output", "json"],
     capture_output=True, text=True
 )
 instance = json.loads(result.stdout)
@@ -33,16 +33,16 @@ No installation needed - just use the wrapper script:
 
 ```bash
 # Use the wrapper
-python scripts/trainctl_wrapper.py
+python scripts/runctl_wrapper.py
 
 # Or import in your code
-from trainctl_wrapper import Trainctl
+from runctl_wrapper import Trainctl
 ```
 
 ## Documentation
 
 - **Full Guide**: [docs/PYTHON_USAGE.md](docs/PYTHON_USAGE.md)
-- **API Reference**: See `scripts/trainctl_wrapper.py`
+- **API Reference**: See `scripts/runctl_wrapper.py`
 - **Examples**: `examples/python_usage.py`
 
 ## Why No PyO3 Bindings?

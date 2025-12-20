@@ -45,10 +45,10 @@ async fn test_cleanup_orphaned_resources() {
             let instance_id = instance.instance_id().unwrap_or("unknown");
             let tags = instance.tags();
 
-            // Check if instance has trainctl test tags
+            // Check if instance has runctl test tags
             let is_test_instance = tags.iter().any(|tag| {
                 tag.key()
-                    .map(|k| k.starts_with("trainctl:test"))
+                    .map(|k| k.starts_with("runctl:test"))
                     .unwrap_or(false)
             });
 
@@ -78,7 +78,7 @@ async fn test_cleanup_orphaned_resources() {
         );
         eprintln!("   Instance IDs: {:?}", test_instances);
         eprintln!("   Review these manually before deleting!");
-        eprintln!("   Use: trainctl resources cleanup --dry-run");
+        eprintln!("   Use: runctl resources cleanup --dry-run");
     } else {
         info!("✅ No orphaned test instances found");
     }

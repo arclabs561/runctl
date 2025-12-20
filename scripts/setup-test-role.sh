@@ -1,5 +1,5 @@
 #!/bin/bash
-# Automated setup script for trainctl test IAM role
+# Automated setup script for runctl test IAM role
 #
 # This script creates:
 # 1. IAM role with trust policy
@@ -15,10 +15,10 @@ set -euo pipefail
 # Configuration
 ACCOUNT_ID="${1:-$(aws sts get-caller-identity --query Account --output text)}"
 REGION="${2:-us-east-1}"
-ROLE_NAME="trainctl-test-role"
-POLICY_NAME="trainctl-test-policy"
-BOUNDARY_NAME="trainctl-test-boundary"
-BUCKET_NAME="trainctl-test-$(date +%s)"
+ROLE_NAME="runctl-test-role"
+POLICY_NAME="runctl-test-policy"
+BOUNDARY_NAME="runctl-test-boundary"
+BUCKET_NAME="runctl-test-$(date +%s)"
 
 # Colors
 GREEN='\033[0;32m'
@@ -26,14 +26,14 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${GREEN}Setting up trainctl test environment...${NC}"
+echo -e "${GREEN}Setting up runctl test environment...${NC}"
 echo "Account ID: $ACCOUNT_ID"
 echo "Region: $REGION"
 echo ""
 
 # Step 1: Create trust policy
 echo -e "${YELLOW}[1/5] Creating role trust policy...${NC}"
-cat > /tmp/trainctl-trust-policy.json <<EOF
+cat > /tmp/runctl-trust-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -45,7 +45,7 @@ cat > /tmp/trainctl-trust-policy.json <<EOF
       "Action": "sts:AssumeRole",
       "Condition": {
         "StringEquals": {
-          "sts:ExternalId": "trainctl-test-env"
+          "sts:ExternalId": "runctl-test-env"
         }
       }
     }
@@ -59,18 +59,18 @@ if aws iam get-role --role-name "$ROLE_NAME" &>/dev/null; then
   echo "Role already exists, updating trust policy..."
   aws iam update-assume-role-policy \
     --role-name "$ROLE_NAME" \
-    --policy-document file:///tmp/trainctl-trust-policy.json
+    --policy-document file:///tmp/runctl-trust-policy.json
 else
   aws iam create-role \
     --role-name "$ROLE_NAME" \
-    --assume-role-policy-document file:///tmp/trainctl-trust-policy.json \
-    --description "Testing role for trainctl CLI tool" \
+    --assume-role-policy-document file:///tmp/runctl-trust-policy.json \
+    --description "Testing role for runctl CLI tool" \
     --tags Key=Purpose,Value=testing Key=Environment,Value=test
 fi
 
 # Step 3: Create permissions policy
 echo -e "${YELLOW}[3/5] Creating permissions policy...${NC}"
-cat > /tmp/trainctl-permissions-policy.json <<EOF
+cat > /tmp/runctl-permissions-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -128,8 +128,8 @@ cat > /tmp/trainctl-permissions-policy.json <<EOF
         "s3:GetBucketLocation"
       ],
       "Resource": [
-        "arn:aws:s3:::trainctl-test-*",
-        "arn:aws:s3:::trainctl-test-*/*"
+        "arn:aws:s3:::runctl-test-*",
+        "arn:aws:s3:::runctl-test-*/*"
       ]
     },
     {
@@ -168,11 +168,11 @@ EOF
 aws iam put-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-name "$POLICY_NAME" \
-  --policy-document file:///tmp/trainctl-permissions-policy.json
+  --policy-document file:///tmp/runctl-permissions-policy.json
 
 # Step 4: Create permission boundary (optional but recommended)
 echo -e "${YELLOW}[4/5] Creating permission boundary...${NC}"
-cat > /tmp/trainctl-boundary-policy.json <<EOF
+cat > /tmp/runctl-boundary-policy.json <<EOF
 {
   "Version": "2012-10-17",
   "Statement": [
@@ -210,13 +210,13 @@ if aws iam get-policy --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${BOUNDARY
   echo "Boundary policy exists, updating..."
   aws iam create-policy-version \
     --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/${BOUNDARY_NAME}" \
-    --policy-document file:///tmp/trainctl-boundary-policy.json \
+    --policy-document file:///tmp/runctl-boundary-policy.json \
     --set-as-default
 else
   aws iam create-policy \
     --policy-name "$BOUNDARY_NAME" \
-    --policy-document file:///tmp/trainctl-boundary-policy.json \
-    --description "Permission boundary for trainctl test role"
+    --policy-document file:///tmp/runctl-boundary-policy.json \
+    --description "Permission boundary for runctl test role"
 fi
 
 aws iam put-role-permissions-boundary \
