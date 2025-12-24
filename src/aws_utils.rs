@@ -180,7 +180,7 @@ pub async fn wait_for_instance_running(client: &Ec2Client, instance_id: &str) ->
                 pb.finish_with_message("Instance ready");
                 return Ok(());
             }
-            Some("terminated") | Some("shutting-down") => {
+            Some("terminated" | "shutting-down") => {
                 pb.finish_with_message("Instance terminated");
                 return Err(TrainctlError::Resource {
                     resource_type: "instance".to_string(),

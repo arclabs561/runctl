@@ -39,12 +39,11 @@ fn test_ebs_create_json_output() {
     test_json_output(&["aws", "ebs", "create", "--size", "10"]);
 }
 
-// NOTE: ebs list does not yet support JSON output - _output_format is unused in list_volumes
-// #[test]
-// #[ignore]
-// fn test_ebs_list_json_output() {
-//     test_json_output(&["aws", "ebs", "list"]);
-// }
+#[test]
+#[ignore] // Requires AWS credentials
+fn test_ebs_list_json_output() {
+    test_json_output(&["aws", "ebs", "list"]);
+}
 
 #[test]
 #[ignore] // Requires AWS credentials

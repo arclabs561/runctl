@@ -216,7 +216,7 @@ pub fn recommend_volume_type(use_case: VolumeUseCase, size_gb: i32) -> &'static 
 /// Format volume type description for help text
 #[allow(dead_code)] // Reserved for future EBS optimization features
 pub fn volume_type_description() -> String {
-    r#"Volume Types:
+    r"Volume Types:
   gp3  - General Purpose SSD (default, recommended)
          • Baseline: 3,000 IOPS, 125 MiB/s
          • Max: 80,000 IOPS, 2,000 MiB/s
@@ -253,6 +253,6 @@ Recommendations:
   • Checkpoints: gp3 or io2 (if multi-attach needed)
   • General purpose: gp3 (default)
   • Archive: sc1 or gp3 (if random access needed)
-"#
+"
     .to_string()
 }

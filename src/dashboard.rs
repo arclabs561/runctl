@@ -268,7 +268,7 @@ async fn get_instance_processes(
     // Get top processes via SSM
     let ssm_client = SsmClient::new(sdk_config);
 
-    let command = r#"ps aux --sort=-%cpu | head -20 | awk '{print $2,$1,$3,$4,$11}'"#;
+    let command = r"ps aux --sort=-%cpu | head -20 | awk '{print $2,$1,$3,$4,$11}'";
     let output = aws_utils::execute_ssm_command(&ssm_client, instance_id, command).await?;
 
     let mut processes = Vec::new();

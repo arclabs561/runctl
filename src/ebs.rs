@@ -136,7 +136,7 @@ pub enum EbsCommands {
     },
 }
 
-pub async fn handle_command(cmd: EbsCommands, config: &Config, _output_format: &str) -> Result<()> {
+pub async fn handle_command(cmd: EbsCommands, config: &Config, output_format: &str) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
     let ssm_client = SsmClient::new(&aws_config);
@@ -169,7 +169,9 @@ pub async fn handle_command(cmd: EbsCommands, config: &Config, _output_format: &
             )
             .await
         }
-        EbsCommands::List { detailed, name } => list_volumes(detailed, name, &client).await,
+        EbsCommands::List { detailed, name } => {
+            list_volumes(detailed, name, &client, output_format).await
+        }
         EbsCommands::Attach {
             volume_id,
             instance_id,
@@ -396,6 +398,7 @@ async fn list_volumes(
     detailed: bool,
     name_filter: Option<String>,
     client: &Ec2Client,
+    output_format: &str,
 ) -> Result<()> {
     let response = client
         .describe_volumes()
@@ -405,20 +408,9 @@ async fn list_volumes(
 
     let volumes = response.volumes();
 
-    if detailed {
-        println!(
-            "{:<20} {:<10} {:<8} {:<12} {:<15} {:<10} {:<3} {:<20}",
-            "Volume ID", "Size (GB)", "Type", "State", "AZ", "Attached", "Persist", "Name"
-        );
-        println!("{}", "-".repeat(120));
-    } else {
-        println!(
-            "{:<20} {:<10} {:<8} {:<12} {:<15} {:<3}",
-            "Volume ID", "Size (GB)", "Type", "State", "Attached", "Persist"
-        );
-        println!("{}", "-".repeat(75));
-    }
-
+    // Collect volume data
+    let mut volume_data: Vec<serde_json::Value> = Vec::new();
+    
     for volume in volumes {
         // Filter by name if specified
         if let Some(ref name_filter_val) = name_filter {
@@ -449,32 +441,80 @@ async fn list_volumes(
             .attachments()
             .first()
             .and_then(|a| a.instance_id())
-            .unwrap_or("-");
+            .map(|s| s.to_string());
 
         // Check if persistent
         let is_persistent = volume.tags().iter().any(|t| {
             t.key().map(|k| k == "runctl:persistent").unwrap_or(false)
                 && t.value().map(|v| v == "true").unwrap_or(false)
         });
-        let persistent_marker = if is_persistent { "YES" } else { "" };
 
+        let name = volume
+            .tags()
+            .iter()
+            .find(|t| t.key().map(|k| k == "Name").unwrap_or(false))
+            .and_then(|t| t.value())
+            .map(|s| s.to_string());
+
+        volume_data.push(serde_json::json!({
+            "volume_id": volume_id,
+            "size_gb": size,
+            "volume_type": vol_type,
+            "state": state,
+            "availability_zone": az,
+            "attached_to": attached_to,
+            "persistent": is_persistent,
+            "name": name,
+        }));
+    }
+
+    if output_format == "json" {
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
+            "volumes": volume_data
+        }))?);
+    } else {
+        // Text output
         if detailed {
-            let name = volume
-                .tags()
-                .iter()
-                .find(|t| t.key().map(|k| k == "Name").unwrap_or(false))
-                .and_then(|t| t.value())
-                .unwrap_or("-");
-
             println!(
                 "{:<20} {:<10} {:<8} {:<12} {:<15} {:<10} {:<3} {:<20}",
-                volume_id, size, vol_type, state, az, attached_to, persistent_marker, name
+                "Volume ID", "Size (GB)", "Type", "State", "AZ", "Attached", "Persist", "Name"
             );
+            println!("{}", "-".repeat(120));
         } else {
             println!(
                 "{:<20} {:<10} {:<8} {:<12} {:<15} {:<3}",
-                volume_id, size, vol_type, state, attached_to, persistent_marker
+                "Volume ID", "Size (GB)", "Type", "State", "Attached", "Persist"
             );
+            println!("{}", "-".repeat(75));
+        }
+
+        for v in &volume_data {
+            let persistent_marker = if v["persistent"].as_bool().unwrap_or(false) { "YES" } else { "" };
+            let attached = v["attached_to"].as_str().unwrap_or("-");
+
+            if detailed {
+                println!(
+                    "{:<20} {:<10} {:<8} {:<12} {:<15} {:<10} {:<3} {:<20}",
+                    v["volume_id"].as_str().unwrap_or(""),
+                    v["size_gb"].as_i64().unwrap_or(0),
+                    v["volume_type"].as_str().unwrap_or(""),
+                    v["state"].as_str().unwrap_or(""),
+                    v["availability_zone"].as_str().unwrap_or(""),
+                    attached,
+                    persistent_marker,
+                    v["name"].as_str().unwrap_or("-")
+                );
+            } else {
+                println!(
+                    "{:<20} {:<10} {:<8} {:<12} {:<15} {:<3}",
+                    v["volume_id"].as_str().unwrap_or(""),
+                    v["size_gb"].as_i64().unwrap_or(0),
+                    v["volume_type"].as_str().unwrap_or(""),
+                    v["state"].as_str().unwrap_or(""),
+                    attached,
+                    persistent_marker
+                );
+            }
         }
     }
 

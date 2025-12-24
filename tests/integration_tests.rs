@@ -87,9 +87,9 @@ fn test_json_output_consistency() {
     // - data: {...}
     // - message: string (optional)
 
-    // NOTE: aws ebs list does not support JSON output yet, so it's excluded
     let commands = vec![
         vec!["aws", "create", "--instance-type", "t3.micro", "--dry-run"],
+        vec!["aws", "ebs", "list"],
         vec!["resources", "list"],
         vec!["config", "show"],
     ];
