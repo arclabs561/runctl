@@ -93,7 +93,7 @@ async fn test_ebs_complete_lifecycle() {
             .map(|s| format!("{:?}", s))
             .unwrap_or_default();
 
-        if state == "available" {
+        if state.to_lowercase() == "available" {
             info!("Volume is available");
             break;
         }
@@ -117,7 +117,7 @@ async fn test_ebs_complete_lifecycle() {
         .state()
         .map(|s| format!("{:?}", s))
         .unwrap_or_default();
-    assert_eq!(state, "available", "Volume should be available");
+    assert_eq!(state.to_lowercase(), "available", "Volume should be available");
     assert_eq!(volume.size().unwrap_or(0), 1, "Volume should be 1 GB");
 
     // 4. Create snapshot
