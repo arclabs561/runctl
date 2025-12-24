@@ -128,7 +128,7 @@ enable_warnings = true
 "#;
 
     // Test that config can be parsed as TOML
-    let parsed: Result<toml::Value, _> = toml::from_str(&config_str);
+    let parsed: Result<toml::Value, _> = toml::from_str(config_str);
     assert!(parsed.is_ok(), "Config should parse as valid TOML");
 
     // Test that Config can be loaded from file
@@ -199,8 +199,7 @@ fn test_s3_path_parsing_invalid() {
     ];
 
     for path in invalid_paths {
-        if path.starts_with("s3://") {
-            let path_part = &path[5..];
+        if let Some(path_part) = path.strip_prefix("s3://") {
             if path_part.is_empty() {
                 continue; // This is invalid
             }
@@ -231,16 +230,20 @@ fn test_instance_type_validation() {
     }
 }
 
+fn is_valid_volume_size(size: i32) -> bool {
+    (1..=16384).contains(&size)
+}
+
 #[test]
 fn test_volume_size_validation() {
     // Valid sizes
-    assert!(1 >= 1 && 1 <= 16384);
-    assert!(100 >= 1 && 100 <= 16384);
-    assert!(16384 >= 1 && 16384 <= 16384);
+    assert!(is_valid_volume_size(1));
+    assert!(is_valid_volume_size(100));
+    assert!(is_valid_volume_size(16384));
 
-    // Invalid sizes (should be caught by validation)
-    assert!(0 < 1); // Too small
-    assert!(16385 > 16384); // Too large
+    // Invalid sizes
+    assert!(!is_valid_volume_size(0));
+    assert!(!is_valid_volume_size(16385));
 }
 
 #[test]

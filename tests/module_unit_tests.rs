@@ -193,25 +193,36 @@ mod instance_type_tests {
 }
 
 mod volume_tests {
+    const VOLUME_SIZE_MIN: i32 = 1;
+    const VOLUME_SIZE_MAX: i32 = 16384;
+    const GP3_IOPS_MIN: i32 = 3000;
+    const GP3_IOPS_MAX: i32 = 16000;
+
+    fn is_valid_volume_size(size: i32) -> bool {
+        (VOLUME_SIZE_MIN..=VOLUME_SIZE_MAX).contains(&size)
+    }
+
+    fn is_valid_gp3_iops(iops: i32) -> bool {
+        (GP3_IOPS_MIN..=GP3_IOPS_MAX).contains(&iops)
+    }
 
     #[test]
     fn test_volume_size_constraints() {
         // Valid sizes
-        assert!(1 >= 1 && 1 <= 16384);
-        assert!(100 >= 1 && 100 <= 16384);
-        assert!(16384 >= 1 && 16384 <= 16384);
+        assert!(is_valid_volume_size(1));
+        assert!(is_valid_volume_size(100));
+        assert!(is_valid_volume_size(16384));
 
-        // Edge cases
-        assert!(1 == 1); // Minimum
-        assert!(16384 == 16384); // Maximum
+        // Invalid sizes
+        assert!(!is_valid_volume_size(0));
+        assert!(!is_valid_volume_size(16385));
     }
 
     #[test]
     fn test_volume_type_validation() {
-        let valid_types = vec!["gp3", "gp2", "io1", "io2", "st1", "sc1"];
+        let valid_types = ["gp3", "gp2", "io1", "io2", "st1", "sc1"];
 
         for vol_type in valid_types {
-            // Should be valid volume type string
             assert!(!vol_type.is_empty());
         }
     }
@@ -219,12 +230,10 @@ mod volume_tests {
     #[test]
     fn test_volume_iops_constraints() {
         // gp3: 3000-16000 IOPS
-        assert!(3000 >= 3000 && 3000 <= 16000);
-        assert!(16000 >= 3000 && 16000 <= 16000);
-
-        // io1/io2: 100-64000 IOPS (depending on volume type and size)
-        assert!(100 >= 100);
-        assert!(64000 <= 64000);
+        assert!(is_valid_gp3_iops(3000));
+        assert!(is_valid_gp3_iops(16000));
+        assert!(!is_valid_gp3_iops(2999));
+        assert!(!is_valid_gp3_iops(16001));
     }
 }
 
@@ -272,11 +281,9 @@ mod tag_tests {
 
     #[test]
     fn test_persistent_tag_detection() {
-        let tags = vec![
-            ("runctl:persistent", "true"),
+        let tags = [("runctl:persistent", "true"),
             ("runctl:protected", "true"),
-            ("Name", "my-volume"),
-        ];
+            ("Name", "my-volume")];
 
         let is_persistent = tags
             .iter()
@@ -300,11 +307,9 @@ mod tag_tests {
 
     #[test]
     fn test_project_tag_filtering() {
-        let tags = vec![
-            ("runctl:project".to_string(), "project-a".to_string()),
+        let tags = [("runctl:project".to_string(), "project-a".to_string()),
             ("runctl:user".to_string(), "alice".to_string()),
-            ("Name".to_string(), "instance-1".to_string()),
-        ];
+            ("Name".to_string(), "instance-1".to_string())];
 
         // Filter by project
         let matches_project = tags
@@ -320,11 +325,9 @@ mod tag_tests {
 
     #[test]
     fn test_user_tag_filtering() {
-        let tags = vec![
-            ("runctl:project".to_string(), "project-a".to_string()),
+        let tags = [("runctl:project".to_string(), "project-a".to_string()),
             ("runctl:user".to_string(), "alice".to_string()),
-            ("Name".to_string(), "instance-1".to_string()),
-        ];
+            ("Name".to_string(), "instance-1".to_string())];
 
         // Filter by user
         let matches_user = tags.iter().any(|(k, v)| k == "runctl:user" && v == "alice");
@@ -432,7 +435,7 @@ mod data_transfer_tests {
     fn test_data_location_parsing_local() {
         let local_path = "/tmp/data";
         let path = PathBuf::from(local_path);
-        assert!(path.to_string_lossy().len() > 0);
+        assert!(!path.to_string_lossy().is_empty());
     }
 
     #[test]

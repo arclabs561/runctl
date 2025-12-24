@@ -71,8 +71,7 @@ proptest! {
                 message: "test".to_string(),
                 source: None,
             },
-            "io" => TrainctlError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            "io" => TrainctlError::Io(std::io::Error::other(
                 "test"
             )),
             _ => TrainctlError::DataTransfer("test".to_string()),

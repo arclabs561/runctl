@@ -11,19 +11,17 @@ use std::process::Command;
 /// Test that JSON output is valid JSON
 fn test_json_output(command: &[&str]) {
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--"])
+        .args(["run", "--release", "--"])
         .args(command)
-        .args(&["--output", "json"])
+        .args(["--output", "json"])
         .output()
         .expect("Failed to execute command");
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Try to parse as JSON
-        let _json: serde_json::Value = serde_json::from_str(&stdout).expect(&format!(
-            "Invalid JSON output from command: {:?}\nOutput: {}",
-            command, stdout
-        ));
+        let _json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|_| panic!("Invalid JSON output from command: {:?}\nOutput: {}",
+            command, stdout));
     }
 }
 
@@ -152,13 +150,13 @@ fn test_help_text_present() {
     for cmd in commands {
         let cmd_parts: Vec<&str> = cmd.split_whitespace().collect();
         let mut cargo_cmd = Command::new("cargo");
-        cargo_cmd.args(&["run", "--release", "--"]);
+        cargo_cmd.args(["run", "--release", "--"]);
         cargo_cmd.args(&cmd_parts);
         cargo_cmd.arg("--help");
 
         let output = cargo_cmd
             .output()
-            .expect(&format!("Failed to execute {} --help", cmd));
+            .unwrap_or_else(|_| panic!("Failed to execute {} --help", cmd));
 
         assert!(
             output.status.success(),
@@ -179,8 +177,8 @@ fn test_help_text_present() {
 fn test_json_error_output() {
     // Test that errors are also JSON when --output json is used
     let output = Command::new("cargo")
-        .args(&["run", "--release", "--"])
-        .args(&[
+        .args(["run", "--release", "--"])
+        .args([
             "aws",
             "terminate",
             "invalid-instance-id",
@@ -211,7 +209,7 @@ fn test_json_error_output() {
         }
         let json_str = &stderr[json_start..json_end];
         let _json: serde_json::Value = serde_json::from_str(json_str)
-            .expect(&format!("Error output should be JSON, got: {}", stderr));
+            .unwrap_or_else(|_| panic!("Error output should be JSON, got: {}", stderr));
     } else {
         // If no JSON found, that's okay - AWS SDK might output differently
         // This test is more of a smoke test

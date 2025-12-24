@@ -96,16 +96,16 @@ fn test_json_output_consistency() {
 
     for cmd in commands {
         let output = Command::new("cargo")
-            .args(&["run", "--release", "--"])
+            .args(["run", "--release", "--"])
             .args(&cmd)
-            .args(&["--output", "json"])
+            .args(["--output", "json"])
             .output()
-            .expect(&format!("Failed to execute: {:?}", cmd));
+            .unwrap_or_else(|_| panic!("Failed to execute: {:?}", cmd));
 
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let json: serde_json::Value = serde_json::from_str(&stdout)
-                .expect(&format!("Invalid JSON from {:?}: {}", cmd, stdout));
+                .unwrap_or_else(|_| panic!("Invalid JSON from {:?}: {}", cmd, stdout));
 
             // Check for common fields
             assert!(json.is_object(), "JSON should be an object");

@@ -66,7 +66,7 @@ async fn test_list_aws_instances() {
     );
 
     // Test passes if we can list instances (even if none are running)
-    assert!(total_instances >= 0);
+    // (no assertion needed - if describe_instances succeeded, test passes)
 }
 
 #[tokio::test]
@@ -129,7 +129,7 @@ async fn test_resource_summary() {
     }
 
     // Test passes if we can generate summary
-    assert!(true);
+    // (no assertion needed - if we got here without error, test passes)
 }
 
 #[tokio::test]
@@ -196,7 +196,7 @@ async fn test_zombie_detection() {
     }
 
     // Test passes (just reports, doesn't fail)
-    assert!(true);
+    // (no assertion needed - if we got here without error, test passes)
 }
 
 #[tokio::test]
@@ -252,5 +252,5 @@ async fn test_cleanup_dry_run() {
     }
 
     // Test passes - dry-run doesn't actually delete
-    assert!(true);
+    // (no assertion needed - if we got here without error, test passes)
 }

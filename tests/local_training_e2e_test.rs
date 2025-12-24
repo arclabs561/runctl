@@ -56,9 +56,7 @@ fn test_uv_detection() {
         .map(|o| o.status.success())
         .unwrap_or(false);
 
-    // Test should pass regardless (uv is optional)
-    assert!(true);
-
+    // Log the result (test passes regardless since uv is optional)
     if has_uv {
         println!("✓ uv is available");
     } else {

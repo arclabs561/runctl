@@ -131,5 +131,5 @@ async fn test_list_all_resources() {
     info!("  Terminated: {}", terminated);
 
     // This test just reports, doesn't fail
-    assert!(true);
+    // (no assertion needed - if we got here without error, test passes)
 }

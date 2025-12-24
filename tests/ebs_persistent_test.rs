@@ -15,10 +15,8 @@ async fn test_persistent_volume_creation() {
         return;
     }
 
-    // This would test creating a persistent volume
-    // and verifying it has the correct tags
-    // For now, just verify test structure
-    assert!(true);
+    // Placeholder: requires real AWS API calls to test properly
+    // See tests/ebs_lifecycle_e2e_test.rs for actual volume creation tests
 }
 
 #[tokio::test]
@@ -28,7 +26,6 @@ async fn test_persistent_volume_protection() {
         return;
     }
 
-    // Test that persistent volumes cannot be deleted without --force
-    // This would require actual AWS API calls
-    assert!(true);
+    // Placeholder: requires real AWS API calls to test properly
+    // See tests/persistent_storage_e2e_test.rs for actual protection tests
 }

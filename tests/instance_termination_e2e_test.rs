@@ -110,10 +110,6 @@ async fn test_termination_with_attached_persistent_volume() {
 async fn test_termination_warns_about_attached_volumes() {
     require_e2e!();
 
-    // Test that terminate_instance function checks for attached volumes
-    // and warns appropriately
-    // This would require creating an instance and attaching a volume
-    // For cost reasons, we'll just verify the logic exists
-
-    assert!(true);
+    // Placeholder: requires creating real resources which costs money
+    // The warning logic is unit-tested elsewhere
 }

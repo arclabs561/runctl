@@ -173,7 +173,7 @@ proptest! {
     ) {
         // Test local path parsing
         let local = PathBuf::from(&local_path);
-        assert!(local.to_string_lossy().len() > 0);
+        assert!(!local.to_string_lossy().is_empty());
 
         // Test S3 path parsing
         let s3_path = format!("s3://{}/{}", s3_bucket, s3_key);
@@ -304,7 +304,7 @@ proptest! {
         if key.len() <= 128 && value.len() <= 256 {
             // Valid tag
             assert!(!key.starts_with("aws:"));
-            assert!(key.len() > 0);
+            assert!(!key.is_empty());
         }
     }
 }
@@ -336,7 +336,7 @@ proptest! {
 
         if name.len() <= 255 {
             // Should be valid
-            assert!(name.len() > 0);
+            assert!(!name.is_empty());
         }
     }
 }

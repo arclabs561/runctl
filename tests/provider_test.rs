@@ -66,11 +66,13 @@ fn test_training_job() {
 
 #[test]
 fn test_create_resource_options() {
-    let mut options = CreateResourceOptions::default();
-    options.use_spot = true;
-    options.spot_max_price = Some("0.1".to_string());
-    options.disk_gb = Some(100);
-    options.tags.push(("Name".to_string(), "test".to_string()));
+    let options = CreateResourceOptions {
+        use_spot: true,
+        spot_max_price: Some("0.1".to_string()),
+        disk_gb: Some(100),
+        tags: vec![("Name".to_string(), "test".to_string())],
+        ..Default::default()
+    };
 
     assert!(options.use_spot);
     assert_eq!(options.disk_gb, Some(100));
