@@ -44,7 +44,7 @@ async fn test_termination_with_attached_persistent_volume() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create persistent volume
     let vol_response = client

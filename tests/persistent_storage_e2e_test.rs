@@ -48,7 +48,7 @@ async fn test_persistent_volume_creation_and_tagging() {
 
     // Get default region/AZ
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     info!("Creating persistent volume in {}", az);
 
@@ -141,7 +141,7 @@ async fn test_persistent_volume_protection_from_deletion() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create persistent volume
     let _volume_name = format!("{}-protected", test_tag);
@@ -221,7 +221,7 @@ async fn test_persistent_volume_survives_instance_termination() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create persistent volume
     let _volume_name = format!("{}-survives", test_tag);
@@ -299,7 +299,7 @@ async fn test_cleanup_skips_persistent_volumes() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create persistent volume
     let vol_persistent = client

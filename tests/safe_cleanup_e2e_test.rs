@@ -66,9 +66,9 @@ async fn test_dry_run_cleanup() {
     }
 
     let tracker = ResourceTracker::new();
-    let safety = CleanupSafety::new();
+    // Use 0 min age to bypass time-based protection in test
+    let safety = CleanupSafety::with_min_age(0);
 
-    // Create test resources
     let resource1 = ResourceStatus {
         id: "cleanup-test-1".to_string(),
         name: None,
@@ -112,9 +112,9 @@ async fn test_cleanup_with_protection() {
     }
 
     let tracker = ResourceTracker::new();
-    let safety = CleanupSafety::new();
-
-    // Create protected and unprotected resources
+    // Use 0 min age to bypass time-based protection in test
+    let safety = CleanupSafety::with_min_age(0);
+    
     let protected = ResourceStatus {
         id: "protected-cleanup".to_string(),
         name: None,

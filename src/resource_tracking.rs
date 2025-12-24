@@ -55,6 +55,9 @@ impl ResourceTracker {
             });
         }
 
+        // Convert tags from Vec<(String, String)> to HashMap
+        let tags: HashMap<String, String> = status.tags.iter().cloned().collect();
+
         resources.insert(
             status.id.clone(),
             TrackedResource {
@@ -62,7 +65,7 @@ impl ResourceTracker {
                 created_at: Utc::now(),
                 usage_history: Vec::new(),
                 accumulated_cost: 0.0,
-                tags: HashMap::new(),
+                tags,
             },
         );
 

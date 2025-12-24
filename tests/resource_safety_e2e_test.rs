@@ -47,8 +47,8 @@ async fn test_volume_attachment_az_validation() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az1 = format!("{}-1a", region);
-    let az2 = format!("{}-1b", region);
+    let az1 = format!("{}a", region);
+    let az2 = format!("{}b", region);
 
     info!(
         "Testing AZ validation: volume in {}, instance in {}",
@@ -119,7 +119,7 @@ async fn test_volume_deletion_with_snapshots() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create volume
     let vol_response = client
@@ -244,7 +244,7 @@ async fn test_attached_volume_deletion_protection() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create volume
     let vol_response = client

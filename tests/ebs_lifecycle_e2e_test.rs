@@ -46,7 +46,7 @@ async fn test_ebs_complete_lifecycle() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // 1. Create volume
     info!("Step 1: Creating volume");
@@ -214,7 +214,7 @@ async fn test_persistent_vs_ephemeral_behavior() {
     let test_tag = test_tag();
 
     let region = aws_config.region().unwrap().as_ref();
-    let az = format!("{}-1a", region);
+    let az = format!("{}a", region);
 
     // Create persistent volume
     let persistent_vol = client
