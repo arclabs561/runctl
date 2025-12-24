@@ -66,10 +66,9 @@ async fn monitor_log(log_path: &Path, follow: bool) -> Result<()> {
                 }
             })
             .map_err(|e| {
-                TrainctlError::Io(std::io::Error::other(format!(
-                    "Failed to create file watcher: {}",
-                    e
-                )))
+                TrainctlError::Io(std::io::Error::other(
+                    format!("Failed to create file watcher: {}", e),
+                ))
             })?;
 
         watcher

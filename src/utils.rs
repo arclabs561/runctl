@@ -1,7 +1,12 @@
+//! Common utility functions for runctl
+//!
+//! Provides helpers for path management, time formatting, and cost calculations.
+
 use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};
 use std::path::Path;
 
+/// Ensures a directory exists, creating it and parent directories if necessary.
 pub fn ensure_dir(path: &Path) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(path).map_err(|e| {
@@ -15,6 +20,7 @@ pub fn ensure_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Formats a duration in seconds as a human-readable string (e.g., "1h 23m 45s").
 pub fn format_duration(secs: u64) -> String {
     let hours = secs / 3600;
     let minutes = (secs % 3600) / 60;
@@ -29,6 +35,7 @@ pub fn format_duration(secs: u64) -> String {
     }
 }
 
+/// Formats runtime since launch as a human-readable string.
 pub fn format_runtime(launch_time: Option<DateTime<Utc>>) -> Option<String> {
     launch_time.map(|lt| {
         let now = Utc::now();
@@ -38,6 +45,7 @@ pub fn format_runtime(launch_time: Option<DateTime<Utc>>) -> Option<String> {
     })
 }
 
+/// Calculates accumulated cost based on hourly rate and launch time.
 pub fn calculate_accumulated_cost(cost_per_hour: f64, launch_time: Option<DateTime<Utc>>) -> f64 {
     if let Some(lt) = launch_time {
         let now = Utc::now();
@@ -49,6 +57,7 @@ pub fn calculate_accumulated_cost(cost_per_hour: f64, launch_time: Option<DateTi
     }
 }
 
+/// Returns true if the instance has been running longer than the threshold.
 pub fn is_old_instance(launch_time: Option<DateTime<Utc>>, hours_threshold: i64) -> bool {
     if let Some(lt) = launch_time {
         let now = Utc::now();

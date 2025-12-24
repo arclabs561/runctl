@@ -45,6 +45,9 @@ runctl aws processes $INSTANCE_ID --watch
 
 # Stop when done (preserves data)
 runctl aws stop $INSTANCE_ID
+
+# Restart a stopped instance
+runctl aws start $INSTANCE_ID --wait
 ```
 
 ## Testing with Temporary Credentials
@@ -68,7 +71,7 @@ source scripts/assume-test-role.sh
 ./scripts/test-runctl-integration.sh     # runctl integration
 ```
 
-See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed setup instructions and [docs/AWS_TESTING_REVIEW.md](docs/AWS_TESTING_REVIEW.md) for review of security and robustness.
+See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed setup instructions.
 
 ## Configuration
 

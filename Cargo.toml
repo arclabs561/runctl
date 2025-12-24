@@ -2,12 +2,14 @@
 name = "runctl"
 version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <you@example.com>"]
-description = "Cloud compute orchestration CLI for long-running jobs"
+description = "ML training orchestration CLI for AWS EC2, RunPod, and local environments"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/arclabs561/runctl"
 homepage = "https://github.com/arclabs561/runctl"
-# publish = false  # Uncomment to prevent accidental publishing
+readme = "README.md"
+keywords = ["ml", "training", "aws", "ec2", "orchestration"]
+categories = ["command-line-utilities", "development-tools"]
+publish = false  # Remove when ready for crates.io
 
 [[bin]]
 name = "runctl"

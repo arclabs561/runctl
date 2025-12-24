@@ -115,10 +115,7 @@ proptest! {
         size_bytes in 0u64..1_000_000_000_000u64  // 0 to 1 TB
     ) {
         // Properties:
-        // 1. Size should be non-negative (already enforced by range)
-        prop_assert!(size_bytes >= 0);
-
-        // 2. Size in GB should be reasonable
+        // 1. Size in GB should be reasonable
         let size_gb = size_bytes as f64 / 1_000_000_000.0;
         prop_assert!(size_gb >= 0.0);
         prop_assert!(size_gb <= 1000.0); // Reasonable max

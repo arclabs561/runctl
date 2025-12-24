@@ -8,75 +8,35 @@
 
 use std::process::Command;
 
-/// Test full AWS workflow (create -> train -> monitor -> terminate)
-#[test]
-#[ignore] // Requires AWS credentials
-fn test_aws_full_workflow() {
-    // This would test:
-    // 1. Create instance
-    // 2. Train on instance
-    // 3. Monitor training
-    // 4. Terminate instance
-    // All with JSON output for programmatic use
-}
+// NOTE: E2E workflow tests for AWS, EBS, and S3 operations are in the
+// tests/e2e/ directory. They require AWS credentials and explicit opt-in
+// via TRAINCTL_E2E=1. See tests/E2E_TEST_GUIDE.md for details.
 
-/// Test EBS volume lifecycle
-#[test]
-#[ignore] // Requires AWS credentials
-fn test_ebs_lifecycle() {
-    // This would test:
-    // 1. Create volume
-    // 2. Attach to instance
-    // 3. Detach from instance
-    // 4. Delete volume
-    // All with JSON output
-}
-
-/// Test S3 operations
-#[test]
-#[ignore] // Requires AWS credentials and S3 bucket
-fn test_s3_operations() {
-    // This would test:
-    // 1. Upload to S3
-    // 2. List S3 objects
-    // 3. Download from S3
-    // 4. Sync S3
-    // All with JSON output
-}
-
-/// Test checkpoint operations
-#[test]
-fn test_checkpoint_operations() {
+/// Test checkpoint operations using library API directly (avoids slow cargo run)
+#[tokio::test]
+async fn test_checkpoint_operations() {
     use std::fs;
-
     use tempfile::TempDir;
+    use runctl::checkpoint::get_checkpoint_paths;
 
     let temp_dir = TempDir::new().unwrap();
     let checkpoint_dir = temp_dir.path().join("checkpoints");
     fs::create_dir_all(&checkpoint_dir).unwrap();
 
-    // Create a dummy checkpoint
-    let checkpoint_file = checkpoint_dir.join("checkpoint_epoch_1.json");
-    fs::write(&checkpoint_file, r#"{"epoch": 1, "loss": 0.5}"#).unwrap();
+    // Create dummy checkpoints with .pt extension (recognized by get_checkpoint_paths)
+    fs::write(
+        checkpoint_dir.join("checkpoint_epoch_1.pt"),
+        "dummy checkpoint data",
+    ).unwrap();
+    fs::write(
+        checkpoint_dir.join("checkpoint_epoch_2.pt"),
+        "dummy checkpoint data",
+    ).unwrap();
 
-    // Test list checkpoints
-    let output = Command::new("cargo")
-        .args(&["run", "--release", "--"])
-        .args(&[
-            "checkpoint",
-            "list",
-            checkpoint_dir.to_str().unwrap(),
-            "--output",
-            "json",
-        ])
-        .output()
-        .expect("Failed to execute checkpoint list");
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let _json: serde_json::Value = serde_json::from_str(&stdout)
-            .expect(&format!("Invalid JSON from checkpoint list: {}", stdout));
-    }
+    // Test get_checkpoint_paths using library function
+    let checkpoints = get_checkpoint_paths(&checkpoint_dir).await;
+    assert!(checkpoints.is_ok(), "get_checkpoint_paths should succeed");
+    assert_eq!(checkpoints.unwrap().len(), 2, "Should find 2 checkpoints");
 }
 
 /// Test project name derivation in different scenarios

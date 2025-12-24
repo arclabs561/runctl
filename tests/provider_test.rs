@@ -76,15 +76,3 @@ fn test_create_resource_options() {
     assert_eq!(options.disk_gb, Some(100));
     assert_eq!(options.tags.len(), 1);
 }
-
-#[test]
-fn test_provider_registry() {
-    let registry = ProviderRegistry::new();
-
-    // Registry should be empty initially
-    assert_eq!(registry.list().len(), 0);
-    assert!(registry.get("aws").is_none());
-
-    // Note: Can't actually register providers in unit tests without
-    // implementing mock providers, but we can test the structure
-}

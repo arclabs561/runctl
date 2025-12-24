@@ -239,7 +239,7 @@ pub enum AwsCommands {
     /// Examples:
     ///   runctl aws train i-1234567890abcdef0 training/train.py
     ///   runctl aws train i-1234567890abcdef0 training/train.py -- --epochs 50 --batch-size 32
-    #[command(alias = "run", alias = "start")]
+    #[command(alias = "run")]
     Train {
         /// EC2 instance ID (e.g., i-1234567890abcdef0)
         #[arg(value_name = "INSTANCE_ID")]
@@ -309,7 +309,7 @@ pub enum AwsCommands {
     /// Stop an instance (preserves data, can be restarted)
     ///
     /// Stops the instance gracefully, preserving all data on attached volumes.
-    /// The instance can be restarted later. Use 'terminate' to permanently delete.
+    /// The instance can be restarted later with 'start'. Use 'terminate' to permanently delete.
     ///
     /// Examples:
     ///   runctl aws stop i-1234567890abcdef0
@@ -325,6 +325,26 @@ pub enum AwsCommands {
         /// Skips checks for running training jobs. Use with caution.
         #[arg(long)]
         force: bool,
+    },
+
+    /// Start a stopped instance
+    ///
+    /// Starts a previously stopped instance. The instance will retain its
+    /// instance ID, attached volumes, and configuration. Note that the public
+    /// IP address may change unless you're using an Elastic IP.
+    ///
+    /// Examples:
+    ///   runctl aws start i-1234567890abcdef0
+    ///   runctl aws start i-1234567890abcdef0 --wait
+    #[command(alias = "resume")]
+    Start {
+        /// EC2 instance ID
+        #[arg(value_name = "INSTANCE_ID")]
+        instance_id: String,
+
+        /// Wait for instance to be running before returning
+        #[arg(long)]
+        wait: bool,
     },
 
     /// Terminate an instance (permanently deletes, data on volumes preserved)
@@ -472,6 +492,9 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
         } => monitor_instance(instance_id, follow, &aws_config, output_format).await,
         AwsCommands::Stop { instance_id, force } => {
             stop_instance(instance_id, force, &aws_config, output_format).await
+        }
+        AwsCommands::Start { instance_id, wait } => {
+            start_instance(instance_id, wait, &aws_config, output_format).await
         }
         AwsCommands::Terminate { instance_id, force } => {
             terminate_instance(instance_id, force, &aws_config, output_format).await
@@ -2073,6 +2096,157 @@ fi
             "Instance can be restarted with: runctl aws start {}",
             instance_id
         );
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize, Deserialize)]
+struct StartInstanceResult {
+    success: bool,
+    instance_id: String,
+    state: String,
+    public_ip: Option<String>,
+    message: String,
+}
+
+async fn start_instance(
+    instance_id: String,
+    wait: bool,
+    aws_config: &aws_config::SdkConfig,
+    output_format: &str,
+) -> Result<()> {
+    let client = Ec2Client::new(aws_config);
+
+    // Check instance state
+    let instance_response = client
+        .describe_instances()
+        .instance_ids(&instance_id)
+        .send()
+        .await
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+
+    let instance = instance_response
+        .reservations()
+        .iter()
+        .flat_map(|r| r.instances())
+        .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
+        .ok_or_else(|| TrainctlError::Aws(format!("Instance not found: {}", instance_id)))?;
+
+    let state = instance
+        .state()
+        .and_then(|s| s.name())
+        .map(|s| s.as_str())
+        .unwrap_or("unknown");
+
+    if state == "running" {
+        if output_format == "json" {
+            let result = StartInstanceResult {
+                success: true,
+                instance_id: instance_id.clone(),
+                state: "running".to_string(),
+                public_ip: instance.public_ip_address().map(|s| s.to_string()),
+                message: format!("Instance {} is already running", instance_id),
+            };
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        } else {
+            println!("Instance {} is already running", instance_id);
+            if let Some(ip) = instance.public_ip_address() {
+                println!("  Public IP: {}", ip);
+            }
+        }
+        return Ok(());
+    }
+
+    if state != "stopped" {
+        return Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: format!(
+                "Instance {} is in state '{}', can only start stopped instances",
+                instance_id, state
+            ),
+            source: None,
+        });
+    }
+
+    // Start the instance
+    client
+        .start_instances()
+        .instance_ids(&instance_id)
+        .send()
+        .await
+        .map_err(|e| TrainctlError::Aws(format!("Failed to start instance: {}", e)))?;
+
+    if output_format != "json" {
+        println!("Starting instance: {}", instance_id);
+    }
+
+    // Wait for instance to be running if requested
+    let mut final_ip: Option<String> = None;
+    if wait {
+        if output_format != "json" {
+            println!("  Waiting for instance to be running...");
+        }
+
+        let mut attempts = 0;
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            attempts += 1;
+
+            let check_response = client
+                .describe_instances()
+                .instance_ids(&instance_id)
+                .send()
+                .await
+                .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+
+            let inst = check_response
+                .reservations()
+                .iter()
+                .flat_map(|r| r.instances())
+                .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false));
+
+            if let Some(inst) = inst {
+                let current_state = inst
+                    .state()
+                    .and_then(|s| s.name())
+                    .map(|s| s.as_str())
+                    .unwrap_or("unknown");
+
+                if current_state == "running" {
+                    final_ip = inst.public_ip_address().map(|s| s.to_string());
+                    break;
+                }
+            }
+
+            if attempts > 60 {
+                return Err(TrainctlError::CloudProvider {
+                    provider: "aws".to_string(),
+                    message: "Timeout waiting for instance to start (5 minutes)".to_string(),
+                    source: None,
+                });
+            }
+        }
+    }
+
+    let final_state = if wait { "running" } else { "pending" };
+
+    if output_format == "json" {
+        let result = StartInstanceResult {
+            success: true,
+            instance_id: instance_id.clone(),
+            state: final_state.to_string(),
+            public_ip: final_ip.clone(),
+            message: format!("Instance {} start requested", instance_id),
+        };
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else {
+        println!("Instance {} is now {}", instance_id, final_state);
+        if let Some(ip) = final_ip {
+            println!("  Public IP: {}", ip);
+        } else if !wait {
+            println!("  Use --wait to get the public IP once running");
+        }
     }
 
     Ok(())

@@ -1,47 +1,45 @@
 # runctl Documentation
 
-## Current Documentation
+## User Guides
 
-### User Guides
 - **[README.md](../README.md)** - Main project documentation and quick start
-- **[EXAMPLES.md](../EXAMPLES.md)** - Usage examples and workflows
-- **[QUICK_START_RESOURCES.md](../QUICK_START_RESOURCES.md)** - Quick resource management guide
+- **[EXAMPLES.md](EXAMPLES.md)** - Usage examples and workflows
 
-### Feature-Specific Guides
-- **[S3_OPERATIONS.md](../S3_OPERATIONS.md)** - S3 operations guide (upload, download, sync, cleanup)
-- **[RESOURCE_MANAGEMENT.md](../RESOURCE_MANAGEMENT.md)** - Resource management and zombie detection
-- **[ML_TRAINER_FEATURES.md](../ML_TRAINER_FEATURES.md)** - Features for real ML trainers
+## AWS & Cloud
 
-### Optimization & Best Practices
-- **[EBS_OPTIMIZATION.md](EBS_OPTIMIZATION.md)** - EBS volumes for spot instances and persistent storage
-- **[OPTIMIZATION_OPPORTUNITIES.md](OPTIMIZATION_OPPORTUNITIES.md)** - Comprehensive optimization guide
+- **[AWS_TESTING_SETUP.md](AWS_TESTING_SETUP.md)** - AWS testing environment setup
+- **[AWS_SECURITY_BEST_PRACTICES.md](AWS_SECURITY_BEST_PRACTICES.md)** - Security best practices
+- **[AWS_ROOT_CREDENTIALS_MIGRATION.md](AWS_ROOT_CREDENTIALS_MIGRATION.md)** - Migrating from root credentials
+- **[SSM_SETUP.md](SSM_SETUP.md)** - AWS Systems Manager setup
+- **[SSM_QUICK_START.md](SSM_QUICK_START.md)** - SSM quick start guide
+- **[S3_OPERATIONS.md](S3_OPERATIONS.md)** - S3 upload, download, sync, cleanup
+- **[EBS_OPTIMIZATION.md](EBS_OPTIMIZATION.md)** - EBS volumes for persistent storage
 
-### Development & Reference
-- **[REFERENCE_PATTERNS.md](REFERENCE_PATTERNS.md)** - Analysis of reference repository patterns
-- **[IMPLEMENTATION_GAPS.md](IMPLEMENTATION_GAPS.md)** - Missing features and implementation plan
-- **[TRANSLATION_GUIDE.md](TRANSLATION_GUIDE.md)** - How to translate reference repo patterns to runctl
+## Features
 
-### Testing
-- **[TESTING.md](../TESTING.md)** - Testing guide
-- **[TEST_SUMMARY.md](../TEST_SUMMARY.md)** - Test coverage summary
-- **[tests/README.md](../tests/README.md)** - Test structure and running tests
-- **[tests/e2e/README.md](../tests/e2e/README.md)** - E2E test guide
+- **[DASHBOARD_FEATURE.md](DASHBOARD_FEATURE.md)** - Interactive TUI dashboard (`runctl top`)
+- **[RESOURCE_MANAGEMENT.md](RESOURCE_MANAGEMENT.md)** - Resource tracking and cleanup
+- **[ADDITIONAL_PROVIDERS.md](ADDITIONAL_PROVIDERS.md)** - RunPod and other providers
 
-### Project Management
-- **[CONTRIBUTING.md](../CONTRIBUTING.md)** - Contributing guidelines
-- **[CHANGELOG.md](../CHANGELOG.md)** - Change log
-- **[PROJECT_STATUS.md](../PROJECT_STATUS.md)** - Current project status
-- **[ORGANIZATION_SUMMARY.md](../ORGANIZATION_SUMMARY.md)** - Project organization
+## Security
 
-## Archived Documentation
+- **[SECURITY_QUICK_START.md](SECURITY_QUICK_START.md)** - Security quick start
+- **[SECURITY_AND_SECRETS.md](SECURITY_AND_SECRETS.md)** - Secrets management
+- **[GITHUB_SECRETS_GUIDE.md](GITHUB_SECRETS_GUIDE.md)** - GitHub Actions secrets setup
+- **[SETUP_GITHUB.md](SETUP_GITHUB.md)** - GitHub repository setup
 
-See [archive/](archive/) for older documentation that has been superseded or consolidated.
+## Development
 
-## Quick Links
+- **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** - Implementation roadmap
+- **[PROVIDER_ARCHITECTURE.md](PROVIDER_ARCHITECTURE.md)** - Provider abstraction design
+- **[TESTING.md](TESTING.md)** - Testing guide
+- **[E2E_TESTS.md](E2E_TESTS.md)** - End-to-end testing
 
-- **Getting Started**: [README.md](../README.md)
-- **Examples**: [EXAMPLES.md](../EXAMPLES.md)
-- **Reference Patterns**: [REFERENCE_PATTERNS.md](REFERENCE_PATTERNS.md)
-- **EBS Optimization**: [EBS_OPTIMIZATION.md](EBS_OPTIMIZATION.md)
-- **Missing Features**: [IMPLEMENTATION_GAPS.md](IMPLEMENTATION_GAPS.md)
-- **Contributing**: [CONTRIBUTING.md](../CONTRIBUTING.md)
+## Python Integration
+
+- **[PYTHON_USAGE.md](PYTHON_USAGE.md)** - Using runctl with Python
+- **[README_PYTHON.md](README_PYTHON.md)** - Python utilities
+
+## Archived
+
+See [archive/](archive/) for development notes and superseded documentation.
