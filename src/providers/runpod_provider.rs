@@ -1,4 +1,9 @@
 //! RunPod provider implementation
+//!
+//! **Status**: Skeleton implementation - not yet used by CLI.
+//!
+//! The CLI currently uses direct implementations. This provider is kept for future
+//! migration to a fully provider-agnostic architecture (see `docs/PROVIDER_TRAIT_DECISION.md`).
 
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};

@@ -5,9 +5,11 @@
 //!
 //! **Current status**: These types are defined but not yet used by the CLI.
 //! The CLI currently uses direct implementations in `aws.rs`, `runpod.rs`, etc.
-//! This module is kept for potential future refactoring to a fully provider-agnostic design.
+//!
+//! **Decision**: See `docs/PROVIDER_TRAIT_DECISION.md` for rationale on keeping the trait
+//! system but not forcing migration until multi-cloud support is actually needed.
 
-#![allow(dead_code)] // Reserved for future provider abstraction
+#![allow(dead_code)] // Reserved for future provider abstraction - see docs/PROVIDER_TRAIT_DECISION.md
 
 use crate::error::Result;
 use async_trait::async_trait;

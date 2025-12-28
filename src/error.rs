@@ -108,8 +108,8 @@ pub type Result<T> = std::result::Result<T, TrainctlError>;
 
 /// Trait for determining if an error is retryable
 ///
-/// Reserved for future retry logic integration with custom error types.
-#[allow(dead_code)]
+/// Used by `RetryPolicy` implementations to determine whether an error
+/// should trigger a retry attempt.
 pub trait IsRetryable {
     fn is_retryable(&self) -> bool;
 }

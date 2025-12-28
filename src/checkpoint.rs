@@ -395,34 +395,42 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_checkpoint_paths_empty_dir() {
-        let temp_dir = TempDir::new().unwrap();
-        let checkpoints = get_checkpoint_paths(temp_dir.path()).await.unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let checkpoints = get_checkpoint_paths(temp_dir.path())
+            .await
+            .expect("Failed to get checkpoint paths");
         assert_eq!(checkpoints.len(), 0);
     }
 
     #[tokio::test]
     async fn test_get_checkpoint_paths_with_files() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let checkpoint_dir = temp_dir.path().join("checkpoints");
-        fs::create_dir_all(&checkpoint_dir).unwrap();
+        fs::create_dir_all(&checkpoint_dir).expect("Failed to create checkpoint directory");
 
         // Create some checkpoint files
-        fs::write(checkpoint_dir.join("checkpoint1.pt"), b"fake checkpoint").unwrap();
-        fs::write(checkpoint_dir.join("checkpoint2.pt"), b"fake checkpoint").unwrap();
+        fs::write(checkpoint_dir.join("checkpoint1.pt"), b"fake checkpoint")
+            .expect("Failed to write checkpoint1.pt");
+        fs::write(checkpoint_dir.join("checkpoint2.pt"), b"fake checkpoint")
+            .expect("Failed to write checkpoint2.pt");
         fs::write(
             checkpoint_dir.join("not_a_checkpoint.txt"),
             b"not a checkpoint",
         )
-        .unwrap();
+        .expect("Failed to write not_a_checkpoint.txt");
 
-        let checkpoints = get_checkpoint_paths(&checkpoint_dir).await.unwrap();
+        let checkpoints = get_checkpoint_paths(&checkpoint_dir)
+            .await
+            .expect("Failed to get checkpoint paths");
         assert_eq!(checkpoints.len(), 2);
-        assert!(checkpoints.iter().all(|p| p.extension().unwrap() == "pt"));
+        assert!(checkpoints
+            .iter()
+            .all(|p| p.extension().expect("Path should have extension") == "pt"));
     }
 
     #[tokio::test]
     async fn test_list_checkpoints_nonexistent_dir() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let fake_dir = temp_dir.path().join("nonexistent");
 
         // Should not panic, just print message
@@ -431,14 +439,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_cleanup_checkpoints_dry_run() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let checkpoint_dir = temp_dir.path().join("checkpoints");
-        fs::create_dir_all(&checkpoint_dir).unwrap();
+        fs::create_dir_all(&checkpoint_dir).expect("Failed to create checkpoint directory");
 
         // Create 5 checkpoint files
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
-            fs::write(&path, b"fake checkpoint").unwrap();
+            fs::write(&path, b"fake checkpoint")
+                .expect(&format!("Failed to write checkpoint{}.pt", i));
             // Add small delay to ensure different modification times
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -446,55 +455,63 @@ mod tests {
         // Dry run - should not delete anything
         cleanup_checkpoints(&checkpoint_dir, 3, true, "text")
             .await
-            .unwrap();
+            .expect("Failed to cleanup checkpoints");
 
         // All files should still exist
-        let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
+        let entries: Vec<_> = fs::read_dir(&checkpoint_dir)
+            .expect("Failed to read checkpoint directory")
+            .collect();
         assert_eq!(entries.len(), 5);
     }
 
     #[tokio::test]
     async fn test_cleanup_checkpoints_actual() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let checkpoint_dir = temp_dir.path().join("checkpoints");
-        fs::create_dir_all(&checkpoint_dir).unwrap();
+        fs::create_dir_all(&checkpoint_dir).expect("Failed to create checkpoint directory");
 
         // Create 5 checkpoint files
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
-            fs::write(&path, b"fake checkpoint").unwrap();
+            fs::write(&path, b"fake checkpoint")
+                .expect(&format!("Failed to write checkpoint{}.pt", i));
             std::thread::sleep(Duration::from_millis(10));
         }
 
         // Keep last 2, delete others
         cleanup_checkpoints(&checkpoint_dir, 2, false, "text")
             .await
-            .unwrap();
+            .expect("Failed to cleanup checkpoints");
 
         // Should have 2 files left
-        let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
+        let entries: Vec<_> = fs::read_dir(&checkpoint_dir)
+            .expect("Failed to read checkpoint directory")
+            .collect();
         assert_eq!(entries.len(), 2);
     }
 
     #[tokio::test]
     async fn test_cleanup_checkpoints_not_enough() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let checkpoint_dir = temp_dir.path().join("checkpoints");
-        fs::create_dir_all(&checkpoint_dir).unwrap();
+        fs::create_dir_all(&checkpoint_dir).expect("Failed to create checkpoint directory");
 
         // Create 2 checkpoint files
         for i in 1..=2 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
-            fs::write(&path, b"fake checkpoint").unwrap();
+            fs::write(&path, b"fake checkpoint")
+                .expect(&format!("Failed to write checkpoint{}.pt", i));
         }
 
         // Try to keep 5, but only have 2
         cleanup_checkpoints(&checkpoint_dir, 5, false, "text")
             .await
-            .unwrap();
+            .expect("Failed to cleanup checkpoints");
 
         // All should still exist
-        let entries: Vec<_> = fs::read_dir(&checkpoint_dir).unwrap().collect();
+        let entries: Vec<_> = fs::read_dir(&checkpoint_dir)
+            .expect("Failed to read checkpoint directory")
+            .collect();
         assert_eq!(entries.len(), 2);
     }
 }
