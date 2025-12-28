@@ -189,7 +189,11 @@ async fn test_persistent_volume_protection_from_deletion() {
         .state()
         .map(|s| format!("{:?}", s))
         .unwrap_or_default();
-    assert_eq!(state.to_lowercase(), "available", "Volume should be available");
+    assert_eq!(
+        state.to_lowercase(),
+        "available",
+        "Volume should be available"
+    );
 
     // Verify it has persistent tag (simulating runctl's check)
     let tags = volume.tags();
@@ -277,7 +281,11 @@ async fn test_persistent_volume_survives_instance_termination() {
         .state()
         .map(|s| format!("{:?}", s))
         .unwrap_or_default();
-    assert_eq!(state.to_lowercase(), "available", "Volume should be available");
+    assert_eq!(
+        state.to_lowercase(),
+        "available",
+        "Volume should be available"
+    );
 
     // Cleanup
     client

@@ -13,13 +13,17 @@ mod diagnostics;
 mod ebs;
 mod ebs_optimization;
 mod error;
+mod error_helpers;
 mod local;
 mod monitor;
 mod provider;
 mod providers;
+mod resource_tracking;
 mod resources;
+mod retry;
 mod runpod;
 mod s3;
+mod safe_cleanup;
 mod ssh_sync;
 mod training;
 mod utils;
@@ -239,51 +243,52 @@ async fn main() -> Result<()> {
     let config = Config::load(cli.config.as_deref())?;
 
     // Execute command with error handling for JSON output
+    // Preserve error context by using anyhow::Error::from instead of string conversion
     let result: anyhow::Result<()> = match cli.command {
         Commands::Local { script, args } => local::train(script, args, &config)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Runpod { subcommand } => runpod::handle_command(subcommand, &config)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Aws { subcommand } => aws::handle_command(subcommand, &config, &cli.output)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Monitor {
             log,
             checkpoint,
             follow,
         } => monitor::monitor(log, checkpoint, follow)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Checkpoint { subcommand } => checkpoint::handle_command(subcommand, &cli.output)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Config { subcommand } => {
             config::handle_command(subcommand, cli.config.as_deref(), &cli.output)
                 .await
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(anyhow::Error::from)
         }
         Commands::S3 { subcommand } => s3::handle_command(subcommand, &config, &cli.output)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Resources { subcommand } => {
             resources::handle_command(subcommand, &config, &cli.output)
                 .await
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(anyhow::Error::from)
         }
         Commands::Init { output } => {
-            config::init_config(&output).map_err(|e| anyhow::anyhow!("{}", e))?;
+            config::init_config(&output).map_err(anyhow::Error::from)?;
             Ok(())
         }
         Commands::Status { detailed } => {
             resources::show_quick_status(detailed, &config, &cli.output)
                 .await
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(anyhow::Error::from)
         }
         Commands::Top { interval } => dashboard::run_dashboard(&config, interval)
             .await
-            .map_err(|e| anyhow::anyhow!("{}", e)),
+            .map_err(anyhow::Error::from),
         Commands::Transfer {
             source,
             destination,
@@ -301,14 +306,14 @@ async fn main() -> Result<()> {
             &config,
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{}", e)),
+        .map_err(anyhow::Error::from),
         Commands::Exec { command, args } => {
             // Exec command - run arbitrary command with runctl environment
             // For now, treat as local training with the command as script
             let script = PathBuf::from(&command);
             local::train(script, args, &config)
                 .await
-                .map_err(|e| anyhow::anyhow!("{}", e))
+                .map_err(anyhow::Error::from)
         }
     };
 

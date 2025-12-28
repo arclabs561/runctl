@@ -68,6 +68,34 @@ pub fn is_old_instance(launch_time: Option<DateTime<Utc>>, hours_threshold: i64)
     }
 }
 
+/// Get cost information for an instance, preferring ResourceTracker if available
+///
+/// If the resource exists in the tracker, returns the tracked cost (which is
+/// automatically updated). Otherwise, calculates cost from instance type and launch time.
+pub async fn get_instance_cost_with_tracker(
+    tracker: Option<&crate::resource_tracking::ResourceTracker>,
+    instance_id: &str,
+    instance_type: &str,
+    launch_time: Option<chrono::DateTime<chrono::Utc>>,
+    is_running: bool,
+) -> (f64, f64) {
+    if let Some(tracker) = tracker {
+        if let Some(tracked) = tracker.get_by_id(&instance_id.to_string()).await {
+            // get_by_id now automatically updates accumulated_cost
+            return (tracked.status.cost_per_hour, tracked.accumulated_cost);
+        }
+    }
+
+    // Fallback to calculation
+    let cost_per_hour = get_instance_cost(instance_type);
+    let accumulated = if is_running {
+        calculate_accumulated_cost(cost_per_hour, launch_time)
+    } else {
+        0.0
+    };
+    (cost_per_hour, accumulated)
+}
+
 /// Get hourly cost for an instance type (approximate)
 /// Updated for 2024-2025 pricing (may vary by region)
 pub fn get_instance_cost(instance_type: &str) -> f64 {

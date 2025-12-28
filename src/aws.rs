@@ -2,11 +2,14 @@ use crate::aws_utils::{count_running_instances, execute_ssm_command};
 use crate::config::Config;
 use crate::diagnostics::check_high_resource_usage;
 use crate::error::{Result, TrainctlError};
+use crate::provider::{normalize_state, ResourceState, ResourceStatus};
+use crate::safe_cleanup::{safe_cleanup, CleanupSafety};
 use aws_config::BehaviorVersion;
+use aws_sdk_ec2::types::Instance as Ec2Instance;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
 use base64::Engine;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -473,6 +476,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             project_name,
             script_args,
         } => {
+            crate::validation::validate_instance_id(&instance_id)?;
             let final_project_name = get_project_name(project_name, config);
             let options = TrainInstanceOptions {
                 instance_id,
@@ -489,15 +493,21 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
         AwsCommands::Monitor {
             instance_id,
             follow,
-        } => monitor_instance(instance_id, follow, &aws_config, output_format).await,
+        } => {
+            crate::validation::validate_instance_id(&instance_id)?;
+            monitor_instance(instance_id, follow, &aws_config, output_format).await
+        }
         AwsCommands::Stop { instance_id, force } => {
-            stop_instance(instance_id, force, &aws_config, output_format).await
+            crate::validation::validate_instance_id(&instance_id)?;
+            stop_instance(instance_id, force, &aws_config, output_format, config).await
         }
         AwsCommands::Start { instance_id, wait } => {
-            start_instance(instance_id, wait, &aws_config, output_format).await
+            crate::validation::validate_instance_id(&instance_id)?;
+            start_instance(instance_id, wait, &aws_config, output_format, config).await
         }
         AwsCommands::Terminate { instance_id, force } => {
-            terminate_instance(instance_id, force, &aws_config, output_format).await
+            crate::validation::validate_instance_id(&instance_id)?;
+            terminate_instance(instance_id, force, &aws_config, output_format, config).await
         }
         AwsCommands::Processes {
             instance_id,
@@ -505,6 +515,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             watch,
             interval,
         } => {
+            crate::validation::validate_instance_id(&instance_id)?;
             show_processes(
                 instance_id,
                 detailed,
@@ -540,6 +551,102 @@ fn get_user_id(config: &Config) -> String {
 
     // Fallback
     "unknown".to_string()
+}
+
+/// Convert EC2 instance to ResourceStatus for ResourceTracker
+///
+/// Extracts relevant information from an AWS EC2 instance and converts it
+/// to the provider-agnostic ResourceStatus format.
+///
+/// # Arguments
+/// * `instance` - AWS EC2 instance
+/// * `instance_id` - The instance ID (for error messages)
+///
+/// # Returns
+/// A ResourceStatus with normalized state, cost, and metadata.
+pub(crate) fn ec2_instance_to_resource_status(
+    instance: &Ec2Instance,
+    instance_id: &str,
+) -> Result<ResourceStatus> {
+    let state = instance
+        .state()
+        .and_then(|s| s.name())
+        .map(|s| normalize_state(s.as_str()))
+        .unwrap_or(ResourceState::Unknown);
+
+    let launch_time = instance
+        .launch_time()
+        .and_then(|lt| {
+            lt.to_millis()
+                .ok()
+                .and_then(|ms| DateTime::from_timestamp(ms / 1000, 0))
+        })
+        .map(|dt| dt.with_timezone(&Utc));
+
+    let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
+
+    let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
+
+    let tags: Vec<(String, String)> = instance
+        .tags()
+        .iter()
+        .filter_map(|t| {
+            t.key()
+                .and_then(|k| t.value().map(|v| (k.to_string(), v.to_string())))
+        })
+        .collect();
+
+    let cost_per_hour =
+        crate::utils::get_instance_cost(instance_type.as_deref().unwrap_or("unknown"));
+
+    Ok(ResourceStatus {
+        id: instance_id.to_string(),
+        name: tags
+            .iter()
+            .find(|(k, _)| k == "Name")
+            .map(|(_, v)| v.clone()),
+        state,
+        instance_type,
+        launch_time,
+        cost_per_hour,
+        public_ip,
+        tags,
+    })
+}
+
+/// Update resource status in ResourceTracker
+async fn update_resource_status_in_tracker(instance_id: &str, client: &Ec2Client, config: &Config) {
+    if let Some(tracker) = &config.resource_tracker {
+        if let Ok(response) = client
+            .describe_instances()
+            .instance_ids(instance_id)
+            .send()
+            .await
+        {
+            if let Some(instance) = response
+                .reservations()
+                .iter()
+                .flat_map(|r| r.instances())
+                .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
+            {
+                if let Ok(resource_status) = ec2_instance_to_resource_status(instance, instance_id)
+                {
+                    // Try to update existing resource, or register if new
+                    let instance_id_string = instance_id.to_string();
+                    if tracker.exists(&instance_id_string).await {
+                        // For now, we can't directly update status, so we remove and re-register
+                        // In a more sophisticated implementation, we'd have an update method
+                        let _ = tracker.remove(&instance_id_string).await;
+                    }
+                    if let Err(e) = tracker.register(resource_status).await {
+                        warn!("Failed to update resource in tracker: {}", e);
+                    } else {
+                        info!("Updated instance {} status in ResourceTracker", instance_id);
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Get project name, deriving from current directory if not provided
@@ -580,6 +687,14 @@ fn get_project_name(provided: Option<String>, config: &Config) -> String {
 
     // Final fallback
     "runctl-project".to_string()
+}
+
+/// Validate project name if provided, with helpful error messages
+fn validate_project_name_option(name: Option<&String>) -> Result<()> {
+    if let Some(name) = name {
+        crate::validation::validate_project_name(name)?;
+    }
+    Ok(())
 }
 
 async fn create_instance(
@@ -760,6 +875,32 @@ async fn create_instance(
                     "   You can attach manually: runctl aws ebs create --size {} --attach",
                     data_size
                 );
+            }
+        }
+    }
+
+    // Register resource with ResourceTracker
+    if let Some(tracker) = &config.resource_tracker {
+        // Get instance details for registration
+        let instance_response = client
+            .describe_instances()
+            .instance_ids(&instance_id)
+            .send()
+            .await
+            .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+
+        if let Some(instance) = instance_response
+            .reservations()
+            .iter()
+            .flat_map(|r| r.instances())
+            .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
+        {
+            if let Ok(resource_status) = ec2_instance_to_resource_status(instance, &instance_id) {
+                if let Err(e) = tracker.register(resource_status).await {
+                    warn!("Failed to register resource in tracker: {}", e);
+                } else {
+                    info!("Registered instance {} with ResourceTracker", instance_id);
+                }
             }
         }
     }
@@ -1827,6 +1968,7 @@ async fn terminate_instance(
     force: bool,
     aws_config: &aws_config::SdkConfig,
     output_format: &str,
+    config: &Config,
 ) -> Result<()> {
     let client = Ec2Client::new(aws_config);
     let ssm_client = SsmClient::new(aws_config);
@@ -1933,12 +2075,54 @@ fi
         println!("Force termination enabled, skipping safety checks.");
     }
 
+    // Use safe cleanup if ResourceTracker is available
+    if let Some(tracker) = &config.resource_tracker {
+        let safety = CleanupSafety::new();
+        let cleanup_result = safe_cleanup(
+            vec![instance_id.clone()],
+            tracker,
+            &safety,
+            false, // dry_run
+            force,
+        )
+        .await?;
+
+        if !cleanup_result.deleted.is_empty() {
+            info!("Safe cleanup approved termination of {}", instance_id);
+        } else if !cleanup_result.skipped.is_empty() {
+            let (id, reason) = &cleanup_result.skipped[0];
+            if !force {
+                return Err(TrainctlError::CloudProvider {
+                    provider: "aws".to_string(),
+                    message: format!(
+                        "Termination blocked by safe cleanup: {}\nUse --force to override.",
+                        reason
+                    ),
+                    source: None,
+                });
+            }
+            warn!(
+                "Safe cleanup blocked termination of {}: {}, but --force overrides",
+                id, reason
+            );
+        }
+    }
+
     client
         .terminate_instances()
         .instance_ids(&instance_id)
         .send()
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to terminate instance: {}", e)))?;
+
+    // Remove from ResourceTracker after successful termination
+    if let Some(tracker) = &config.resource_tracker {
+        if let Err(e) = tracker.remove(&instance_id).await {
+            warn!("Failed to remove resource from tracker: {}", e);
+        } else {
+            info!("Removed instance {} from ResourceTracker", instance_id);
+        }
+    }
 
     let state = "terminating".to_string();
 
@@ -1963,6 +2147,7 @@ async fn stop_instance(
     force: bool,
     aws_config: &aws_config::SdkConfig,
     output_format: &str,
+    config: &Config,
 ) -> Result<()> {
     let client = Ec2Client::new(aws_config);
     let ssm_client = SsmClient::new(aws_config);
@@ -2080,6 +2265,9 @@ fi
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to stop instance: {}", e)))?;
 
+    // Update ResourceTracker
+    update_resource_status_in_tracker(&instance_id, &client, config).await;
+
     let state = "stopping".to_string();
 
     if output_format == "json" {
@@ -2115,6 +2303,7 @@ async fn start_instance(
     wait: bool,
     aws_config: &aws_config::SdkConfig,
     output_format: &str,
+    config: &Config,
 ) -> Result<()> {
     let client = Ec2Client::new(aws_config);
 
@@ -2227,6 +2416,8 @@ async fn start_instance(
                 });
             }
         }
+        // Update ResourceTracker after instance is running
+        update_resource_status_in_tracker(&instance_id, &client, config).await;
     }
 
     let final_state = if wait { "running" } else { "pending" };

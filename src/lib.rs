@@ -10,6 +10,7 @@ pub mod data_transfer;
 pub mod diagnostics;
 pub mod ebs_optimization;
 pub mod error;
+pub mod error_helpers;
 pub mod fast_data_loading;
 pub mod provider;
 pub mod providers;

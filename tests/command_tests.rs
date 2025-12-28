@@ -20,8 +20,12 @@ fn test_json_output(command: &[&str]) {
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         // Try to parse as JSON
-        let _json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|_| panic!("Invalid JSON output from command: {:?}\nOutput: {}",
-            command, stdout));
+        let _json: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|_| {
+            panic!(
+                "Invalid JSON output from command: {:?}\nOutput: {}",
+                command, stdout
+            )
+        });
     }
 }
 

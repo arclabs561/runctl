@@ -4,6 +4,7 @@
 //! code duplication and ensure consistent behavior.
 
 use crate::error::{Result, TrainctlError};
+use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -56,6 +57,9 @@ pub async fn execute_ssm_command(
     info!("Command ID: {}, waiting for completion...", command_id);
 
     // Poll for completion with exponential backoff and progress indicator
+    // Note: We use manual polling here instead of RetryPolicy because we need
+    // to check status and handle different states (Success, InProgress, etc.)
+    // RetryPolicy is better suited for simple retry-on-failure scenarios.
     let max_attempts = SSM_COMMAND_MAX_ATTEMPTS;
     let mut delay = Duration::from_secs(SSM_COMMAND_INITIAL_DELAY_SECS);
 
@@ -80,13 +84,39 @@ pub async fn execute_ssm_command(
             delay = Duration::from_secs(SSM_COMMAND_MAX_DELAY_SECS);
         }
 
-        let invocation = client
-            .get_command_invocation()
-            .command_id(&command_id)
-            .instance_id(instance_id)
-            .send()
-            .await
-            .map_err(|e| TrainctlError::Ssm(format!("Failed to get command invocation: {}", e)))?;
+        // Use RetryPolicy for the actual API call (handles transient failures)
+        let retry_policy = ExponentialBackoffPolicy::for_cloud_api();
+        let command_id_clone = command_id.clone();
+        let instance_id_clone = instance_id.to_string();
+        let invocation_result = retry_policy
+            .execute_with_retry(|| {
+                let command_id = command_id_clone.clone();
+                let instance_id = instance_id_clone.clone();
+                async move {
+                    client
+                        .get_command_invocation()
+                        .command_id(&command_id)
+                        .instance_id(&instance_id)
+                        .send()
+                        .await
+                        .map_err(|e| {
+                            TrainctlError::Ssm(format!("Failed to get command invocation: {}", e))
+                        })
+                }
+            })
+            .await;
+
+        let invocation = match invocation_result {
+            Ok(inv) => inv,
+            Err(e) => {
+                warn!(
+                    "Failed to get command invocation (attempt {}): {}",
+                    attempt + 1,
+                    e
+                );
+                continue; // Retry on next iteration
+            }
+        };
 
         let status = invocation.status().map(|s| s.as_str()).unwrap_or("Unknown");
 

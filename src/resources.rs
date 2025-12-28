@@ -1,6 +1,8 @@
 use crate::checkpoint;
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
+use crate::provider::{normalize_state, ResourceState, ResourceStatus};
+use crate::resource_tracking::ResourceTracker;
 use crate::utils::{calculate_accumulated_cost, format_runtime, is_old_instance};
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
@@ -12,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 use sysinfo::{Pid, System};
+use tracing::info;
 
 #[derive(Subcommand, Clone)]
 pub enum ResourceCommands {
@@ -206,34 +209,45 @@ pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &
             .collect();
 
         let running_count = running.len();
-        let hourly_cost: f64 = running
-            .iter()
-            .filter_map(|inst| {
-                inst.get("instance_type")
-                    .and_then(|t| t.as_str())
-                    .map(crate::utils::get_instance_cost)
-            })
-            .sum();
 
-        let total_cost: f64 = running
-            .iter()
-            .filter_map(|inst| {
-                let hourly = inst
-                    .get("instance_type")
-                    .and_then(|t| t.as_str())
-                    .map(crate::utils::get_instance_cost)?;
-                let hours = inst
-                    .get("launch_time")
-                    .and_then(|lt| lt.as_str())
-                    .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                    .map(|dt| {
-                        let runtime = Utc::now().signed_duration_since(dt.with_timezone(&Utc));
-                        runtime.num_hours().max(0) as f64
-                    })
-                    .unwrap_or(0.0);
-                Some(hourly * hours)
-            })
-            .sum();
+        // Try to use ResourceTracker for cost data if available
+        let (hourly_cost, total_cost) = if let Some(tracker) = &config.resource_tracker {
+            let tracked = tracker.get_running().await;
+            let hourly: f64 = tracked.iter().map(|r| r.status.cost_per_hour).sum();
+            let total: f64 = tracked.iter().map(|r| r.accumulated_cost).sum();
+            (hourly, total)
+        } else {
+            // Fallback to calculating from JSON data
+            let hourly: f64 = running
+                .iter()
+                .filter_map(|inst| {
+                    inst.get("instance_type")
+                        .and_then(|t| t.as_str())
+                        .map(crate::utils::get_instance_cost)
+                })
+                .sum();
+
+            let total: f64 = running
+                .iter()
+                .filter_map(|inst| {
+                    let hourly = inst
+                        .get("instance_type")
+                        .and_then(|t| t.as_str())
+                        .map(crate::utils::get_instance_cost)?;
+                    let hours = inst
+                        .get("launch_time")
+                        .and_then(|lt| lt.as_str())
+                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                        .map(|dt| {
+                            let runtime = Utc::now().signed_duration_since(dt.with_timezone(&Utc));
+                            runtime.num_hours().max(0) as f64
+                        })
+                        .unwrap_or(0.0);
+                    Some(hourly * hours)
+                })
+                .sum();
+            (hourly, total)
+        };
 
         println!(
             "{} instances running, ${:.2}/hr, ${:.2} total",
@@ -582,7 +596,105 @@ struct ListAwsInstancesOptions {
     user_filter: Option<String>,
 }
 
-async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) -> Result<()> {
+/// Sync ResourceTracker with current AWS state
+///
+/// This function queries AWS for all EC2 instances and updates the ResourceTracker
+/// to match the current state. It's useful for:
+/// - Initializing the tracker with existing resources
+/// - Periodically syncing tracker state with actual AWS state
+/// - Recovering from tracker state inconsistencies
+///
+/// # Arguments
+/// * `client` - AWS EC2 client
+/// * `tracker` - ResourceTracker to sync
+///
+/// # Errors
+/// Returns an error if AWS API calls fail or if resource conversion fails.
+pub(crate) async fn sync_resource_tracker_with_aws(
+    client: &Ec2Client,
+    tracker: &ResourceTracker,
+) -> Result<()> {
+    use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
+
+    // Use retry logic for describe_instances
+    let response = ExponentialBackoffPolicy::for_cloud_api()
+        .execute_with_retry(|| async {
+            client
+                .describe_instances()
+                .send()
+                .await
+                .map_err(|e| TrainctlError::Aws(format!("Failed to list EC2 instances: {}", e)))
+        })
+        .await?;
+
+    for reservation in response.reservations() {
+        for instance in reservation.instances() {
+            if let Some(instance_id) = instance.instance_id() {
+                // Convert to ResourceStatus (duplicate logic since aws module is not accessible from library)
+                let state = instance
+                    .state()
+                    .and_then(|s| s.name())
+                    .map(|s| normalize_state(s.as_str()))
+                    .unwrap_or(ResourceState::Unknown);
+
+                let launch_time = instance
+                    .launch_time()
+                    .and_then(|lt| {
+                        lt.to_millis()
+                            .ok()
+                            .and_then(|ms| DateTime::from_timestamp(ms / 1000, 0))
+                    })
+                    .map(|dt| dt.with_timezone(&Utc));
+
+                let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
+                let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
+
+                let tags: Vec<(String, String)> = instance
+                    .tags()
+                    .iter()
+                    .filter_map(|t| {
+                        t.key()
+                            .and_then(|k| t.value().map(|v| (k.to_string(), v.to_string())))
+                    })
+                    .collect();
+
+                let cost_per_hour =
+                    crate::utils::get_instance_cost(instance_type.as_deref().unwrap_or("unknown"));
+
+                let resource_status = ResourceStatus {
+                    id: instance_id.to_string(),
+                    name: tags
+                        .iter()
+                        .find(|(k, _)| k == "Name")
+                        .map(|(_, v)| v.clone()),
+                    state,
+                    instance_type,
+                    launch_time,
+                    cost_per_hour,
+                    public_ip,
+                    tags,
+                };
+
+                let instance_id_string = instance_id.to_string();
+                if tracker.exists(&instance_id_string).await {
+                    // Remove and re-register to update (no direct update method yet)
+                    let _ = tracker.remove(&instance_id_string).await;
+                }
+                if let Err(e) = tracker.register(resource_status).await {
+                    // Ignore errors for resources that already exist (race condition)
+                    if !e.to_string().contains("already exists") {
+                        info!("Failed to sync resource {}: {}", instance_id, e);
+                    }
+                } else {
+                    info!("Synced resource {} to ResourceTracker", instance_id);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn list_aws_instances(options: ListAwsInstancesOptions, config: &Config) -> Result<()> {
     let _section_style = Style::new().bold().yellow();
     println!("\nAWS EC2 INSTANCES:");
     println!("{}", "-".repeat(80));
@@ -590,11 +702,24 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) 
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
 
-    let response = client
-        .describe_instances()
-        .send()
-        .await
-        .map_err(|e| TrainctlError::Aws(format!("Failed to list EC2 instances: {}", e)))?;
+    // Sync ResourceTracker with current AWS state if available
+    if let Some(tracker) = &config.resource_tracker {
+        if let Err(e) = sync_resource_tracker_with_aws(&client, tracker).await {
+            info!("Failed to sync ResourceTracker: {}", e);
+        }
+    }
+
+    // Use retry logic for describe_instances
+    use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
+    let response = ExponentialBackoffPolicy::for_cloud_api()
+        .execute_with_retry(|| async {
+            client
+                .describe_instances()
+                .send()
+                .await
+                .map_err(|e| TrainctlError::Aws(format!("Failed to list EC2 instances: {}", e)))
+        })
+        .await?;
 
     // Collect all instance info
     let mut instances: Vec<InstanceInfo> = Vec::new();
@@ -627,12 +752,15 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, _config: &Config) 
                 .launch_time()
                 .and_then(|t| Utc.timestamp_opt(t.secs(), 0).single());
 
-            let cost_per_hour = estimate_instance_cost(&instance_type_str);
-            let accumulated_cost = if state_str == "running" {
-                calculate_accumulated_cost(cost_per_hour, launch_time)
-            } else {
-                0.0
-            };
+            // Try to get cost from ResourceTracker if available, otherwise calculate
+            let (cost_per_hour, accumulated_cost) = crate::utils::get_instance_cost_with_tracker(
+                config.resource_tracker.as_deref(),
+                &instance_id,
+                &instance_type_str,
+                launch_time,
+                state_str == "running",
+            )
+            .await;
 
             if state_str == "running" {
                 total_hourly_cost += cost_per_hour;
@@ -1176,12 +1304,24 @@ async fn list_local_processes(detailed: bool) -> Result<()> {
     Ok(())
 }
 
-async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
+async fn show_summary(config: &Config, output_format: &str) -> Result<()> {
     if output_format == "json" {
-        let summary = get_resource_summary_json(_config).await?;
+        let summary = get_resource_summary_json(config).await?;
         println!("{}", serde_json::to_string_pretty(&summary)?);
         return Ok(());
     }
+
+    // Sync ResourceTracker with current AWS state if available
+    if let Some(tracker) = &config.resource_tracker {
+        let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
+        let client = Ec2Client::new(&aws_config);
+        if let Err(e) = sync_resource_tracker_with_aws(&client, tracker).await {
+            info!("Failed to sync ResourceTracker: {}", e);
+        }
+        // Refresh all costs before generating summary
+        tracker.refresh_costs().await;
+    }
+
     let mut summary = ResourceSummary {
         aws_instances: Vec::new(),
         runpod_pods: Vec::new(),
@@ -1211,7 +1351,17 @@ async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
                         .instance_type()
                         .map(|t| format!("{}", t))
                         .unwrap_or_else(|| "unknown".to_string());
-                    let cost = estimate_instance_cost(&instance_type);
+
+                    // Use ResourceTracker cost if available, otherwise calculate
+                    let cost = if let Some(tracker) = &config.resource_tracker {
+                        if let Some(tracked) = tracker.get_by_id(&instance_id).await {
+                            tracked.status.cost_per_hour
+                        } else {
+                            estimate_instance_cost(&instance_type)
+                        }
+                    } else {
+                        estimate_instance_cost(&instance_type)
+                    };
                     summary.total_cost_estimate += cost;
 
                     summary.aws_instances.push(AwsInstance {
@@ -1243,16 +1393,40 @@ async fn show_summary(_config: &Config, output_format: &str) -> Result<()> {
     println!();
 
     // Calculate accumulated costs and breakdowns
-    let mut total_accumulated = 0.0;
+    // Use ResourceTracker if available for more accurate accumulated costs
+    let mut total_accumulated = if let Some(tracker) = &config.resource_tracker {
+        tracker.get_total_cost().await
+    } else {
+        0.0
+    };
     let mut type_breakdown: HashMap<String, (usize, f64, f64)> = HashMap::new();
 
     for inst in &summary.aws_instances {
-        let accumulated = if let Some(lt) = inst.launch_time {
-            calculate_accumulated_cost(inst.cost_per_hour, Some(lt))
+        // Use ResourceTracker accumulated cost if available
+        let accumulated = if let Some(tracker) = &config.resource_tracker {
+            if let Some(tracked) = tracker.get_by_id(&inst.instance_id).await {
+                tracked.accumulated_cost
+            } else {
+                // Fallback to calculation
+                if let Some(lt) = inst.launch_time {
+                    calculate_accumulated_cost(inst.cost_per_hour, Some(lt))
+                } else {
+                    0.0
+                }
+            }
         } else {
-            0.0
+            // No tracker, calculate
+            if let Some(lt) = inst.launch_time {
+                calculate_accumulated_cost(inst.cost_per_hour, Some(lt))
+            } else {
+                0.0
+            }
         };
-        total_accumulated += accumulated;
+
+        // Only add to total if not using tracker (tracker already has total)
+        if config.resource_tracker.is_none() {
+            total_accumulated += accumulated;
+        }
 
         let entry = type_breakdown
             .entry(inst.instance_type.clone())

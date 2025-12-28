@@ -1,15 +1,39 @@
 use crate::error::{ConfigError, Result, TrainctlError};
+use crate::resource_tracking::ResourceTracker;
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Config {
     pub runpod: Option<RunpodConfig>,
     pub aws: Option<AwsConfig>,
     pub local: Option<LocalConfig>,
     pub checkpoint: CheckpointConfig,
     pub monitoring: MonitoringConfig,
+    #[serde(skip)]
+    pub resource_tracker: Option<Arc<ResourceTracker>>,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("runpod", &self.runpod)
+            .field("aws", &self.aws)
+            .field("local", &self.local)
+            .field("checkpoint", &self.checkpoint)
+            .field("monitoring", &self.monitoring)
+            .field(
+                "resource_tracker",
+                &if self.resource_tracker.is_some() {
+                    "Some(ResourceTracker)"
+                } else {
+                    "None"
+                },
+            )
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +114,7 @@ impl Default for Config {
                 update_interval_secs: 10,
                 enable_warnings: true,
             },
+            resource_tracker: Some(Arc::new(ResourceTracker::new())),
         }
     }
 }
@@ -121,10 +146,14 @@ impl Config {
                     e
                 )))
             })?;
-            let config: Config = toml::from_str(&content)
+            let mut config: Config = toml::from_str(&content)
                 .map_err(|_e| TrainctlError::Config(ConfigError::ParseError(
                     format!("Failed to parse config: {}\n  Common issues:\n    - Invalid TOML syntax\n    - Missing required fields\n    - Incorrect value types\n  Tip: Run 'runctl init' to create a new config file", config_path.display())
                 )))?;
+            // Initialize resource tracker if not present
+            if config.resource_tracker.is_none() {
+                config.resource_tracker = Some(Arc::new(ResourceTracker::new()));
+            }
             Ok(config)
         } else {
             // Use defaults but warn if user explicitly provided a path
@@ -134,7 +163,12 @@ impl Config {
                     "   Using default configuration. Run 'runctl init' to create a config file."
                 );
             }
-            Ok(Config::default())
+            let mut config = Config::default();
+            // Ensure resource tracker is initialized
+            if config.resource_tracker.is_none() {
+                config.resource_tracker = Some(Arc::new(ResourceTracker::new()));
+            }
+            Ok(config)
         }
     }
 

@@ -281,9 +281,11 @@ mod tag_tests {
 
     #[test]
     fn test_persistent_tag_detection() {
-        let tags = [("runctl:persistent", "true"),
+        let tags = [
+            ("runctl:persistent", "true"),
             ("runctl:protected", "true"),
-            ("Name", "my-volume")];
+            ("Name", "my-volume"),
+        ];
 
         let is_persistent = tags
             .iter()
@@ -307,9 +309,11 @@ mod tag_tests {
 
     #[test]
     fn test_project_tag_filtering() {
-        let tags = [("runctl:project".to_string(), "project-a".to_string()),
+        let tags = [
+            ("runctl:project".to_string(), "project-a".to_string()),
             ("runctl:user".to_string(), "alice".to_string()),
-            ("Name".to_string(), "instance-1".to_string())];
+            ("Name".to_string(), "instance-1".to_string()),
+        ];
 
         // Filter by project
         let matches_project = tags
@@ -325,9 +329,11 @@ mod tag_tests {
 
     #[test]
     fn test_user_tag_filtering() {
-        let tags = [("runctl:project".to_string(), "project-a".to_string()),
+        let tags = [
+            ("runctl:project".to_string(), "project-a".to_string()),
             ("runctl:user".to_string(), "alice".to_string()),
-            ("Name".to_string(), "instance-1".to_string())];
+            ("Name".to_string(), "instance-1".to_string()),
+        ];
 
         // Filter by user
         let matches_user = tags.iter().any(|(k, v)| k == "runctl:user" && v == "alice");

@@ -94,13 +94,20 @@ pub fn validate_snapshot_id(snapshot_id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Validate project name
-///
-/// Project names should be alphanumeric with hyphens/underscores, max 64 chars.
 /// Validate project name format
 ///
-/// Currently unused but kept for future validation needs.
-#[allow(dead_code)]
+/// Project names should be alphanumeric with hyphens/underscores, max 64 chars.
+/// Used for tagging and organizing resources.
+///
+/// # Examples
+/// ```
+/// use runctl::validation::validate_project_name;
+///
+/// assert!(validate_project_name("my-project").is_ok());
+/// assert!(validate_project_name("project_123").is_ok());
+/// assert!(validate_project_name("").is_err());
+/// assert!(validate_project_name(&"a".repeat(65)).is_err());
+/// ```
 pub fn validate_project_name(name: &str) -> Result<()> {
     if name.is_empty() {
         return Err(TrainctlError::Validation {

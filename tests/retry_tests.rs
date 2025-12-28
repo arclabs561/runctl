@@ -61,9 +61,7 @@ async fn test_retry_succeeds_after_failures() {
         .execute_with_retry(|| async {
             let count = call_count.fetch_add(1, Ordering::SeqCst);
             if count < 2 {
-                Err(TrainctlError::Io(std::io::Error::other(
-                    "transient error",
-                )))
+                Err(TrainctlError::Io(std::io::Error::other("transient error")))
             } else {
                 Ok::<String, TrainctlError>("success".to_string())
             }
@@ -121,9 +119,7 @@ async fn test_no_retry_policy_behavior() {
     let result = policy
         .execute_with_retry(|| async {
             call_count.fetch_add(1, Ordering::SeqCst);
-            Err::<String, TrainctlError>(TrainctlError::Io(std::io::Error::other(
-                "error",
-            )))
+            Err::<String, TrainctlError>(TrainctlError::Io(std::io::Error::other("error")))
         })
         .await;
 
@@ -144,9 +140,7 @@ async fn test_retry_backoff_timing() {
             if count < 2 {
                 // Small delay to ensure backoff is applied
                 tokio::time::sleep(Duration::from_millis(10)).await;
-                Err::<String, TrainctlError>(TrainctlError::Io(std::io::Error::other(
-                    "transient",
-                )))
+                Err::<String, TrainctlError>(TrainctlError::Io(std::io::Error::other("transient")))
             } else {
                 Ok::<String, TrainctlError>("success".to_string())
             }

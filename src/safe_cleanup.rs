@@ -2,6 +2,41 @@
 //!
 //! Provides careful resource cleanup with confirmation, dry-run,
 //! and safety checks to prevent accidental deletion.
+//!
+//! ## Protection Mechanisms
+//!
+//! Resources can be protected from deletion through:
+//! - **Explicit protection**: Call `safety.protect(resource_id)` to mark a resource as protected
+//! - **Tag-based protection**: Resources with `runctl:protected=true` tag are automatically protected
+//! - **Time-based protection**: Resources newer than `min_age_minutes` require `--force` to delete
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::safe_cleanup::{safe_cleanup, CleanupSafety};
+//! use runctl::resource_tracking::ResourceTracker;
+//!
+//! let tracker = ResourceTracker::new();
+//! let safety = CleanupSafety::new();
+//!
+//! // Dry-run to see what would be deleted
+//! let result = safe_cleanup(
+//!     vec!["i-123".to_string()],
+//!     &tracker,
+//!     &safety,
+//!     true,  // dry_run
+//!     false, // force
+//! ).await?;
+//!
+//! // Actual cleanup
+//! let result = safe_cleanup(
+//!     vec!["i-123".to_string()],
+//!     &tracker,
+//!     &safety,
+//!     false, // dry_run
+//!     false, // force
+//! ).await?;
+//! ```
 
 use crate::error::Result;
 use crate::provider::ResourceId;

@@ -74,12 +74,52 @@ pub enum ExecutionStatus {
 }
 
 /// Trait for abstracting training operations across cloud providers
+///
+/// This trait provides a unified interface for working with different cloud providers
+/// (AWS EC2, RunPod, Lyceum AI, etc.) in a provider-agnostic way.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use runctl::provider::TrainingProvider;
+///
+/// # async fn example(provider: impl TrainingProvider) -> runctl::error::Result<()> {
+/// // Create a resource
+/// let resource_id = provider.create_resource(
+///     "g4dn.xlarge",
+///     CreateResourceOptions::default()
+/// ).await?;
+///
+/// // Get status
+/// let status = provider.get_resource_status(&resource_id).await?;
+/// println!("Resource state: {:?}", status.state);
+///
+/// // Execute training
+/// let job = TrainingJob {
+///     script: "train.py".into(),
+///     args: vec![],
+///     data_source: Some("s3://bucket/data".to_string()),
+///     output_dest: None,
+///     checkpoint_dir: Some("./checkpoints".into()),
+///     environment: vec![],
+/// };
+/// let training_status = provider.train(&resource_id, job).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[async_trait]
 pub trait TrainingProvider: Send + Sync {
     /// Provider name (e.g., "aws", "runpod", "lyceum")
     fn name(&self) -> &'static str;
 
     /// Create a new compute resource (instance, pod, etc.)
+    ///
+    /// # Arguments
+    /// * `instance_type` - The instance/pod type (e.g., "g4dn.xlarge", "RTX 4090")
+    /// * `options` - Additional options for resource creation
+    ///
+    /// # Returns
+    /// The resource ID that can be used to reference this resource later
     async fn create_resource(
         &self,
         instance_type: &str,
@@ -87,15 +127,35 @@ pub trait TrainingProvider: Send + Sync {
     ) -> Result<ResourceId>;
 
     /// Get status of a resource
+    ///
+    /// # Arguments
+    /// * `resource_id` - The ID of the resource to query
+    ///
+    /// # Returns
+    /// Current status including state, cost, launch time, etc.
     async fn get_resource_status(&self, resource_id: &ResourceId) -> Result<ResourceStatus>;
 
     /// List all resources managed by this provider
+    ///
+    /// # Returns
+    /// A vector of all resources with their current status
     async fn list_resources(&self) -> Result<Vec<ResourceStatus>>;
 
     /// Execute a training job on a resource
+    ///
+    /// # Arguments
+    /// * `resource_id` - The resource to run the job on
+    /// * `job` - The training job configuration
+    ///
+    /// # Returns
+    /// Initial training status (job will continue running asynchronously)
     async fn train(&self, resource_id: &ResourceId, job: TrainingJob) -> Result<TrainingStatus>;
 
     /// Monitor training progress (logs, checkpoints, etc.)
+    ///
+    /// # Arguments
+    /// * `resource_id` - The resource running the training job
+    /// * `follow` - If true, continuously stream logs (like `tail -f`)
     async fn monitor(&self, resource_id: &ResourceId, follow: bool) -> Result<()>;
 
     /// Download results from a resource

@@ -2,6 +2,28 @@
 //!
 //! Provides retry policies for handling transient failures
 //! in cloud API calls and other operations.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::retry::{ExponentialBackoffPolicy, RetryPolicy};
+//!
+//! let policy = ExponentialBackoffPolicy::for_cloud_api();
+//!
+//! let result = policy.execute_with_retry(|| async {
+//!     // Your operation that might fail
+//!     cloud_client.describe_instances().send().await
+//!         .map_err(|e| TrainctlError::Aws(e.to_string()))
+//! }).await?;
+//! ```
+//!
+//! ## Retry Policies
+//!
+//! - `ExponentialBackoffPolicy::for_cloud_api()` - 5 attempts, optimized for cloud APIs
+//! - `ExponentialBackoffPolicy::new(n)` - Custom number of attempts
+//! - `NoRetryPolicy` - No retries (for operations that shouldn't be retried)
+//!
+//! Only retryable errors (as determined by `IsRetryable` trait) are retried.
 
 use crate::error::{IsRetryable, Result, TrainctlError};
 use std::future::Future;

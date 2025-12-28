@@ -114,7 +114,7 @@ async fn test_cleanup_with_protection() {
     let tracker = ResourceTracker::new();
     // Use 0 min age to bypass time-based protection in test
     let safety = CleanupSafety::with_min_age(0);
-    
+
     let protected = ResourceStatus {
         id: "protected-cleanup".to_string(),
         name: None,

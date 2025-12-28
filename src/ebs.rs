@@ -410,7 +410,7 @@ async fn list_volumes(
 
     // Collect volume data
     let mut volume_data: Vec<serde_json::Value> = Vec::new();
-    
+
     for volume in volumes {
         // Filter by name if specified
         if let Some(ref name_filter_val) = name_filter {
@@ -469,9 +469,12 @@ async fn list_volumes(
     }
 
     if output_format == "json" {
-        println!("{}", serde_json::to_string_pretty(&serde_json::json!({
-            "volumes": volume_data
-        }))?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "volumes": volume_data
+            }))?
+        );
     } else {
         // Text output
         if detailed {
@@ -489,7 +492,11 @@ async fn list_volumes(
         }
 
         for v in &volume_data {
-            let persistent_marker = if v["persistent"].as_bool().unwrap_or(false) { "YES" } else { "" };
+            let persistent_marker = if v["persistent"].as_bool().unwrap_or(false) {
+                "YES"
+            } else {
+                ""
+            };
             let attached = v["attached_to"].as_str().unwrap_or("-");
 
             if detailed {

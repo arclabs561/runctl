@@ -45,6 +45,9 @@ impl ResourceTracker {
     }
 
     /// Register a new resource
+    ///
+    /// The resource's accumulated_cost will be automatically calculated
+    /// when it is accessed via get_running(), get_by_id(), etc.
     pub async fn register(&self, status: ResourceStatus) -> Result<()> {
         let mut resources = self.resources.lock().await;
 
@@ -73,6 +76,10 @@ impl ResourceTracker {
     }
 
     /// Update resource status and usage
+    ///
+    /// This adds a usage record to the resource's history.
+    /// Note: This does not update accumulated_cost - that is calculated
+    /// automatically when the resource is accessed via get_running(), get_by_id(), etc.
     pub async fn update_usage(&self, resource_id: &ResourceId, usage: ResourceUsage) -> Result<()> {
         let mut resources = self.resources.lock().await;
 
@@ -94,41 +101,133 @@ impl ResourceTracker {
         Ok(())
     }
 
-    /// Get all running resources
+    /// Update resource state (e.g., when instance is stopped/started)
+    ///
+    /// Updates the state of a tracked resource. This is useful when resources
+    /// change state outside of the normal sync process.
+    ///
+    /// # Arguments
+    /// * `resource_id` - The ID of the resource to update
+    /// * `new_state` - The new state of the resource
+    ///
+    /// # Errors
+    /// Returns `ResourceNotFound` if the resource doesn't exist in the tracker.
+    pub async fn update_state(
+        &self,
+        resource_id: &ResourceId,
+        new_state: crate::provider::ResourceState,
+    ) -> Result<()> {
+        let mut resources = self.resources.lock().await;
+
+        let resource =
+            resources
+                .get_mut(resource_id)
+                .ok_or_else(|| TrainctlError::ResourceNotFound {
+                    resource_type: "resource".to_string(),
+                    resource_id: resource_id.clone(),
+                })?;
+
+        resource.status.state = new_state;
+        // Update cost since state affects cost calculation
+        Self::update_resource_cost(resource);
+
+        Ok(())
+    }
+
+    /// Calculate accumulated cost for a resource based on launch time
+    fn calculate_accumulated_cost_for_resource(resource: &TrackedResource) -> f64 {
+        use crate::utils::calculate_accumulated_cost;
+        if matches!(
+            resource.status.state,
+            ResourceState::Running | ResourceState::Starting
+        ) {
+            calculate_accumulated_cost(resource.status.cost_per_hour, resource.status.launch_time)
+        } else {
+            0.0
+        }
+    }
+
+    /// Update accumulated cost for a resource in-place
+    fn update_resource_cost(resource: &mut TrackedResource) {
+        resource.accumulated_cost = Self::calculate_accumulated_cost_for_resource(resource);
+    }
+
+    /// Get all running resources with automatically updated costs
+    ///
+    /// The accumulated_cost for each resource is recalculated based on
+    /// launch time and current time before returning.
     pub async fn get_running(&self) -> Vec<TrackedResource> {
-        let resources = self.resources.lock().await;
+        let mut resources = self.resources.lock().await;
         resources
-            .values()
+            .values_mut()
             .filter(|r| {
                 matches!(
                     r.status.state,
                     ResourceState::Running | ResourceState::Starting
                 )
             })
-            .cloned()
+            .map(|r| {
+                // Update accumulated cost before returning
+                Self::update_resource_cost(r);
+                r.clone()
+            })
             .collect()
     }
 
-    /// Get total cost of all resources
+    /// Get total cost of all resources with automatically updated costs
+    ///
+    /// All resource costs are recalculated before summing.
     pub async fn get_total_cost(&self) -> f64 {
-        let resources = self.resources.lock().await;
-        resources.values().map(|r| r.accumulated_cost).sum()
+        let mut resources = self.resources.lock().await;
+        resources
+            .values_mut()
+            .map(|r| {
+                // Update accumulated cost before summing
+                Self::update_resource_cost(r);
+                r.accumulated_cost
+            })
+            .sum()
     }
 
-    /// Get resources by tag
+    /// Refresh costs for all resources
+    ///
+    /// Manually recalculates accumulated_cost for all resources.
+    /// This is useful for periodic updates or before generating reports.
+    /// Note: Costs are automatically updated when accessing resources via
+    /// get_running(), get_by_id(), etc., so this is usually not necessary.
+    pub async fn refresh_costs(&self) {
+        let mut resources = self.resources.lock().await;
+        for resource in resources.values_mut() {
+            Self::update_resource_cost(resource);
+        }
+    }
+
+    /// Get resources by tag with automatically updated costs
+    ///
+    /// The accumulated_cost for each matching resource is recalculated.
     pub async fn get_by_tag(&self, key: &str, value: &str) -> Vec<TrackedResource> {
-        let resources = self.resources.lock().await;
+        let mut resources = self.resources.lock().await;
         resources
-            .values()
+            .values_mut()
             .filter(|r| r.tags.get(key).map(|v| v == value).unwrap_or(false))
-            .cloned()
+            .map(|r| {
+                // Update accumulated cost before returning
+                Self::update_resource_cost(r);
+                r.clone()
+            })
             .collect()
     }
 
-    /// Get resource by ID
+    /// Get resource by ID with automatically updated cost
+    ///
+    /// The accumulated_cost is recalculated based on launch time and current time.
     pub async fn get_by_id(&self, resource_id: &ResourceId) -> Option<TrackedResource> {
-        let resources = self.resources.lock().await;
-        resources.get(resource_id).cloned()
+        let mut resources = self.resources.lock().await;
+        resources.get_mut(resource_id).map(|r| {
+            // Update accumulated cost before returning
+            Self::update_resource_cost(r);
+            r.clone()
+        })
     }
 
     /// Check if resource exists

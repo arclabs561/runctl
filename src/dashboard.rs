@@ -10,9 +10,11 @@ use crate::aws_utils;
 use crate::config::Config;
 use crate::diagnostics;
 use crate::error::{Result, TrainctlError};
+use crate::resource_tracking::ResourceUsage as TrackedResourceUsage;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
+use chrono::Utc;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -162,23 +164,28 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
         .await;
     let ec2_client = Ec2Client::new(&sdk_config);
 
-    // Get running instances
-    let response = ec2_client
-        .describe_instances()
-        .set_filters(Some(vec![aws_sdk_ec2::types::Filter::builder()
-            .name("instance-state-name")
-            .values("running")
-            .build()]))
-        .send()
-        .await
-        .map_err(|e| TrainctlError::Aws(e.to_string()))?;
+    // Get running instances with retry logic
+    use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
+    let response = ExponentialBackoffPolicy::for_cloud_api()
+        .execute_with_retry(|| async {
+            ec2_client
+                .describe_instances()
+                .set_filters(Some(vec![aws_sdk_ec2::types::Filter::builder()
+                    .name("instance-state-name")
+                    .values("running")
+                    .build()]))
+                .send()
+                .await
+                .map_err(|e| TrainctlError::Aws(format!("Failed to describe instances: {}", e)))
+        })
+        .await?;
 
     let mut instances = Vec::new();
     let mut total_cost = 0.0;
     let mut running_count = 0;
 
-    for reservation in response.reservations().iter() {
-        for instance in reservation.instances().iter() {
+    for reservation in response.reservations() {
+        for instance in reservation.instances() {
             if let Some(instance_id) = instance.instance_id() {
                 running_count += 1;
                 let instance_type = instance
@@ -191,8 +198,7 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
                     .map(|n| n.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
-                // Calculate costs
-                let cost_per_hour = crate::utils::get_instance_cost(&instance_type);
+                // Calculate runtime duration (needed for both cost and display)
                 let launch_time = instance
                     .launch_time()
                     .and_then(|t| chrono::DateTime::from_timestamp(t.secs(), 0));
@@ -201,15 +207,42 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
                 } else {
                     chrono::TimeDelta::zero()
                 };
-                let accumulated_cost =
-                    cost_per_hour * (runtime_duration.num_seconds().max(0) as f64 / 3600.0);
+
+                // Get costs from ResourceTracker if available, otherwise calculate
+                let instance_id_string = instance_id.to_string();
+                let (cost_per_hour, accumulated_cost) =
+                    crate::utils::get_instance_cost_with_tracker(
+                        config.resource_tracker.as_deref(),
+                        &instance_id_string,
+                        &instance_type,
+                        launch_time,
+                        state == "running",
+                    )
+                    .await;
                 total_cost += accumulated_cost;
 
                 // Get resource usage (async, but don't block on errors)
                 let (cpu_usage, memory_usage, gpu_usage) = if state == "running" {
-                    get_instance_usage(&sdk_config, instance_id)
-                        .await
-                        .unwrap_or((0.0, 0.0, None))
+                    let usage_result = get_instance_usage(&sdk_config, instance_id).await;
+
+                    // Update ResourceTracker with usage data if available
+                    if let (Ok((cpu, mem, gpu)), Some(tracker)) =
+                        (&usage_result, &config.resource_tracker)
+                    {
+                        let usage = TrackedResourceUsage {
+                            cpu_percent: *cpu,
+                            memory_mb: *mem * 1024.0, // Convert GB to MB (assuming mem is in GB)
+                            gpu_utilization: *gpu,
+                            network_in_mb: 0.0,  // Not tracked yet
+                            network_out_mb: 0.0, // Not tracked yet
+                            timestamp: Utc::now(),
+                        };
+                        if let Err(e) = tracker.update_usage(&instance_id_string, usage).await {
+                            tracing::debug!("Failed to update usage in tracker: {}", e);
+                        }
+                    }
+
+                    usage_result.unwrap_or((0.0, 0.0, None))
                 } else {
                     (0.0, 0.0, None)
                 };
@@ -229,8 +262,15 @@ async fn update_state(state: &mut DashboardState, config: &Config) -> Result<()>
         }
     }
 
+    // Use ResourceTracker total cost if available
+    let final_total_cost = if let Some(tracker) = &config.resource_tracker {
+        tracker.get_total_cost().await
+    } else {
+        total_cost
+    };
+
     state.instances = instances;
-    state.total_cost = total_cost;
+    state.total_cost = final_total_cost;
     state.running_count = running_count;
     state.last_update = now;
 

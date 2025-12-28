@@ -15,9 +15,9 @@ use std::process::Command;
 /// Test checkpoint operations using library API directly (avoids slow cargo run)
 #[tokio::test]
 async fn test_checkpoint_operations() {
+    use runctl::checkpoint::get_checkpoint_paths;
     use std::fs;
     use tempfile::TempDir;
-    use runctl::checkpoint::get_checkpoint_paths;
 
     let temp_dir = TempDir::new().unwrap();
     let checkpoint_dir = temp_dir.path().join("checkpoints");
@@ -27,11 +27,13 @@ async fn test_checkpoint_operations() {
     fs::write(
         checkpoint_dir.join("checkpoint_epoch_1.pt"),
         "dummy checkpoint data",
-    ).unwrap();
+    )
+    .unwrap();
     fs::write(
         checkpoint_dir.join("checkpoint_epoch_2.pt"),
         "dummy checkpoint data",
-    ).unwrap();
+    )
+    .unwrap();
 
     // Test get_checkpoint_paths using library function
     let checkpoints = get_checkpoint_paths(&checkpoint_dir).await;

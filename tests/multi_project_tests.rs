@@ -68,11 +68,15 @@ fn test_tag_keys() {
 #[test]
 fn test_project_filtering_logic() {
     // Test the filtering logic for project tags
-    let tags1 = [("runctl:project".to_string(), "project-a".to_string()),
-        ("Name".to_string(), "instance-1".to_string())];
+    let tags1 = [
+        ("runctl:project".to_string(), "project-a".to_string()),
+        ("Name".to_string(), "instance-1".to_string()),
+    ];
 
-    let tags2 = [("runctl:project".to_string(), "project-b".to_string()),
-        ("Name".to_string(), "instance-2".to_string())];
+    let tags2 = [
+        ("runctl:project".to_string(), "project-b".to_string()),
+        ("Name".to_string(), "instance-2".to_string()),
+    ];
 
     // Filter by project-a
     let matches_project_a = tags1
@@ -89,11 +93,15 @@ fn test_project_filtering_logic() {
 #[test]
 fn test_user_filtering_logic() {
     // Test the filtering logic for user tags
-    let tags1 = [("runctl:user".to_string(), "alice".to_string()),
-        ("Name".to_string(), "instance-1".to_string())];
+    let tags1 = [
+        ("runctl:user".to_string(), "alice".to_string()),
+        ("Name".to_string(), "instance-1".to_string()),
+    ];
 
-    let tags2 = [("runctl:user".to_string(), "bob".to_string()),
-        ("Name".to_string(), "instance-2".to_string())];
+    let tags2 = [
+        ("runctl:user".to_string(), "bob".to_string()),
+        ("Name".to_string(), "instance-2".to_string()),
+    ];
 
     // Filter by alice
     let matches_alice = tags1
