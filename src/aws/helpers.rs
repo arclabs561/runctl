@@ -119,11 +119,7 @@ pub(crate) fn find_instance_in_response<'a>(
         .reservations()
         .iter()
         .flat_map(|r| r.instances())
-        .find(|i| {
-            i.instance_id()
-                .map(|id| id == instance_id)
-                .unwrap_or(false)
-        })
+        .find(|i| i.instance_id().map(|id| id == instance_id).unwrap_or(false))
 }
 
 /// Update resource status in ResourceTracker
@@ -152,15 +148,13 @@ pub(crate) async fn update_resource_status_in_tracker(
                         {
                             tracing::warn!("Failed to update resource state: {}", e);
                         }
+                    } else if let Err(e) = tracker.register(resource_status).await {
+                        tracing::warn!("Failed to update resource in tracker: {}", e);
                     } else {
-                        if let Err(e) = tracker.register(resource_status).await {
-                            tracing::warn!("Failed to update resource in tracker: {}", e);
-                        } else {
-                            tracing::info!(
-                                "Updated instance {} status in ResourceTracker",
-                                instance_id
-                            );
-                        }
+                        tracing::info!(
+                            "Updated instance {} status in ResourceTracker",
+                            instance_id
+                        );
                     }
                 }
             }

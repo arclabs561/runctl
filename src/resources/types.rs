@@ -95,4 +95,3 @@ pub struct ListAwsInstancesOptions {
     pub project_filter: Option<String>,
     pub user_filter: Option<String>,
 }
-

@@ -107,13 +107,19 @@ async fn test_lifecycle_stop_updates_state() {
     // Get initial cost (should be ~0.01 for 1 hour of running)
     let tracked_before = tracker.get_by_id(&resource.id).await.unwrap();
     let cost_before = tracked_before.accumulated_cost;
-    assert!(cost_before > 0.0, "Resource should have accumulated cost from 1 hour of running");
-    
+    assert!(
+        cost_before > 0.0,
+        "Resource should have accumulated cost from 1 hour of running"
+    );
+
     // Get cost after a brief moment (should be slightly higher)
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let tracked_running = tracker.get_by_id(&resource.id).await.unwrap();
     let cost_while_running = tracked_running.accumulated_cost;
-    assert!(cost_while_running >= cost_before, "Cost should increase or stay same while running");
+    assert!(
+        cost_while_running >= cost_before,
+        "Cost should increase or stay same while running"
+    );
 
     // Simulate stop operation (what stop_instance does via update_resource_status_in_tracker)
     tracker
@@ -132,7 +138,10 @@ async fn test_lifecycle_stop_updates_state() {
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let tracked_final = tracker.get_by_id(&resource.id).await.unwrap();
     // Cost should remain the same (stopped instances don't accrue cost)
-    assert_eq!(tracked_final.accumulated_cost, tracked_after.accumulated_cost);
+    assert_eq!(
+        tracked_final.accumulated_cost,
+        tracked_after.accumulated_cost
+    );
 }
 
 #[tokio::test]
@@ -198,7 +207,10 @@ async fn test_lifecycle_spot_instance_registration() {
 
     let tracked = tracker.get_by_id(&spot_resource.id).await.unwrap();
     assert_eq!(tracked.status.id, spot_resource.id);
-    assert_eq!(tracked.status.instance_type, Some("g4dn.xlarge".to_string()));
+    assert_eq!(
+        tracked.status.instance_type,
+        Some("g4dn.xlarge".to_string())
+    );
     assert_eq!(tracked.status.cost_per_hour, 0.50);
 
     // Verify tags are preserved
@@ -248,7 +260,10 @@ async fn test_lifecycle_full_workflow() {
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     let running = tracker.get_by_id(&resource.id).await.unwrap();
     // Cost should increase after running for a bit
-    assert!(running.accumulated_cost >= cost_after_stop, "Cost should increase or stay same after restart");
+    assert!(
+        running.accumulated_cost >= cost_after_stop,
+        "Cost should increase or stay same after restart"
+    );
 
     // 5. Terminate instance
     tracker.remove(&resource.id).await.unwrap();
@@ -302,4 +317,3 @@ async fn test_lifecycle_cost_accumulation_through_states() {
     let running_again = tracker.get_by_id(&resource.id).await.unwrap();
     assert!(running_again.accumulated_cost >= restarted.accumulated_cost);
 }
-

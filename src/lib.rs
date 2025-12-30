@@ -66,6 +66,6 @@ pub use provider::{
 pub use providers::ProviderRegistry;
 pub use resource_tracking::{ResourceTracker, ResourceUsage, TrackedResource};
 pub use retry::{ExponentialBackoffPolicy, RetryPolicy};
-pub use safe_cleanup::{CleanupResult, CleanupSafety, safe_cleanup};
+pub use safe_cleanup::{safe_cleanup, CleanupResult, CleanupSafety};
 pub use training::{TrainingSession, TrainingStatus};
 pub use validation::{validate_path, validate_path_path};

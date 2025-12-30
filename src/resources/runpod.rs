@@ -95,4 +95,3 @@ pub async fn list_runpod_pods(detailed: bool, _config: &Config) -> Result<()> {
 
     Ok(())
 }
-

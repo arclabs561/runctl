@@ -470,7 +470,7 @@ mod tests {
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
             fs::write(&path, b"fake checkpoint")
-                .expect(&format!("Failed to write checkpoint{}.pt", i));
+                .unwrap_or_else(|_| panic!("Failed to write checkpoint{}.pt", i));
             // Add small delay to ensure different modification times
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -497,7 +497,7 @@ mod tests {
         for i in 1..=5 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
             fs::write(&path, b"fake checkpoint")
-                .expect(&format!("Failed to write checkpoint{}.pt", i));
+                .unwrap_or_else(|_| panic!("Failed to write checkpoint{}.pt", i));
             std::thread::sleep(Duration::from_millis(10));
         }
 
@@ -523,7 +523,7 @@ mod tests {
         for i in 1..=2 {
             let path = checkpoint_dir.join(format!("checkpoint{}.pt", i));
             fs::write(&path, b"fake checkpoint")
-                .expect(&format!("Failed to write checkpoint{}.pt", i));
+                .unwrap_or_else(|_| panic!("Failed to write checkpoint{}.pt", i));
         }
 
         // Try to keep 5, but only have 2

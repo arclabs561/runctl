@@ -15,4 +15,3 @@ pub fn estimate_instance_cost(instance_type: &str) -> f64 {
         _ => 0.1,                             // Default estimate
     }
 }
-

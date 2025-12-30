@@ -115,9 +115,9 @@ impl TrainingProvider for AwsProvider {
             .collect();
 
         let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
-        let launch_time = instance
-            .launch_time()
-            .map(|lt| DateTime::<Utc>::from_timestamp(lt.secs(), 0).unwrap_or_else(chrono::Utc::now));
+        let launch_time = instance.launch_time().map(|lt| {
+            DateTime::<Utc>::from_timestamp(lt.secs(), 0).unwrap_or_else(chrono::Utc::now)
+        });
 
         let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
 

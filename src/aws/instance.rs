@@ -161,7 +161,8 @@ pub async fn create_instance(
                         println!("   Creating and attaching {}GB data volume...", data_size);
                     }
                     if let Err(e) =
-                        auto_attach_data_volume(&client, &instance_id, data_size, &aws_cfg.region).await
+                        auto_attach_data_volume(&client, &instance_id, data_size, &aws_cfg.region)
+                            .await
                     {
                         if output_format != "json" {
                             println!("WARNING: Failed to attach data volume: {}", e);
@@ -181,14 +182,24 @@ pub async fn create_instance(
                         .instance_ids(&instance_id)
                         .send()
                         .await
-                        .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+                        .map_err(|e| {
+                            TrainctlError::Aws(format!("Failed to describe instance: {}", e))
+                        })?;
 
-                    if let Some(instance) = crate::aws::helpers::find_instance_in_response(&instance_response, &instance_id) {
-                        if let Ok(resource_status) = ec2_instance_to_resource_status(instance, &instance_id) {
+                    if let Some(instance) = crate::aws::helpers::find_instance_in_response(
+                        &instance_response,
+                        &instance_id,
+                    ) {
+                        if let Ok(resource_status) =
+                            ec2_instance_to_resource_status(instance, &instance_id)
+                        {
                             if let Err(e) = tracker.register(resource_status).await {
                                 warn!("Failed to register resource in tracker: {}", e);
                             } else {
-                                info!("Registered spot instance {} with ResourceTracker", instance_id);
+                                info!(
+                                    "Registered spot instance {} with ResourceTracker",
+                                    instance_id
+                                );
                             }
                         }
                     }
@@ -275,7 +286,9 @@ pub async fn create_instance(
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
-        if let Some(instance) = crate::aws::helpers::find_instance_in_response(&instance_response, &instance_id) {
+        if let Some(instance) =
+            crate::aws::helpers::find_instance_in_response(&instance_response, &instance_id)
+        {
             if let Ok(resource_status) = ec2_instance_to_resource_status(instance, &instance_id) {
                 if let Err(e) = tracker.register(resource_status).await {
                     warn!("Failed to register resource in tracker: {}", e);

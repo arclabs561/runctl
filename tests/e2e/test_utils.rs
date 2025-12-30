@@ -106,11 +106,7 @@ pub fn create_test_temp_dir() -> TempDir {
 /// # Returns
 ///
 /// `true` if condition became true, `false` if timeout
-pub async fn wait_for_condition<F>(
-    timeout: Duration,
-    interval: Duration,
-    mut condition: F,
-) -> bool
+pub async fn wait_for_condition<F>(timeout: Duration, interval: Duration, mut condition: F) -> bool
 where
     F: FnMut() -> bool,
 {
@@ -218,8 +214,11 @@ sys.exit(0)
 "#;
 
     fs::write(&script_path, script_content).expect("Failed to write test script");
-    fs::set_permissions(&script_path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
-        .ok(); // Ignore error on non-Unix systems
+    fs::set_permissions(
+        &script_path,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .ok(); // Ignore error on non-Unix systems
 
     script_path
 }
@@ -288,4 +287,3 @@ pub fn assert_command_failure(output: &Output, expected_error: Option<&str>) {
         );
     }
 }
-

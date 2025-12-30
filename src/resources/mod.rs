@@ -11,7 +11,7 @@ mod local;
 mod runpod;
 mod summary;
 mod types;
-pub mod utils;  // Public for re-export
+pub mod utils; // Public for re-export
 mod watch;
 
 // Types are used internally via `types::` path.
@@ -168,11 +168,7 @@ pub async fn handle_command(
     }
 }
 
-pub async fn show_quick_status(
-    detailed: bool,
-    config: &Config,
-    output_format: &str,
-) -> Result<()> {
+pub async fn show_quick_status(detailed: bool, config: &Config, output_format: &str) -> Result<()> {
     use crate::checkpoint;
     use console::Style;
 
@@ -284,4 +280,3 @@ pub async fn show_quick_status(
 
     Ok(())
 }
-

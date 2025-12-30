@@ -6,7 +6,7 @@
 use chrono::{Duration, Utc};
 use runctl::provider::{ResourceState, ResourceStatus};
 use runctl::resource_tracking::ResourceTracker;
-use runctl::safe_cleanup::{safe_cleanup, CleanupResult, CleanupSafety};
+use runctl::safe_cleanup::{safe_cleanup, CleanupSafety};
 
 #[tokio::test]
 async fn test_cleanup_safety_creation() {

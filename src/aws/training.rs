@@ -30,17 +30,18 @@ pub async fn train_on_instance(
         .await
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
-    let instance = crate::aws::helpers::find_instance_in_response(&instance_response, &options.instance_id)
-        .ok_or_else(|| {
-            TrainctlError::Aws(format!(
-                "Instance {} not found.\n\n\
+    let instance =
+        crate::aws::helpers::find_instance_in_response(&instance_response, &options.instance_id)
+            .ok_or_else(|| {
+                TrainctlError::Aws(format!(
+                    "Instance {} not found.\n\n\
             To resolve:\n\
               1. Verify instance ID: runctl resources list --platform aws\n\
               2. Check if instance was terminated: aws ec2 describe-instances --instance-ids {}\n\
               3. Verify you're using the correct AWS region/account",
-                options.instance_id, options.instance_id
-            ))
-        })?;
+                    options.instance_id, options.instance_id
+                ))
+            })?;
 
     let public_ip = instance.public_ip_address().ok_or_else(|| {
         TrainctlError::Aws(format!(

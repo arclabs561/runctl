@@ -9,7 +9,6 @@ use crate::resources::types::{AwsInstance, LocalProcess, ResourceSummary, RunPod
 use chrono::Utc;
 use serde_json;
 
-
 /// Get complete resource summary as JSON
 pub async fn get_resource_summary_json(config: &Config) -> Result<serde_json::Value> {
     let aws_instances_json = list_aws_instances_json(config).await?;
@@ -18,23 +17,17 @@ pub async fn get_resource_summary_json(config: &Config) -> Result<serde_json::Va
 
     let aws_instances: Vec<AwsInstance> = aws_instances_json
         .iter()
-        .filter_map(|inst| {
-            serde_json::from_value(inst.clone()).ok()
-        })
+        .filter_map(|inst| serde_json::from_value(inst.clone()).ok())
         .collect();
 
     let runpod_pods: Vec<RunPodPod> = runpod_pods_json
         .iter()
-        .filter_map(|pod| {
-            serde_json::from_value(pod.clone()).ok()
-        })
+        .filter_map(|pod| serde_json::from_value(pod.clone()).ok())
         .collect();
 
     let local_processes: Vec<LocalProcess> = local_processes_json
         .iter()
-        .filter_map(|proc| {
-            serde_json::from_value(proc.clone()).ok()
-        })
+        .filter_map(|proc| serde_json::from_value(proc.clone()).ok())
         .collect();
 
     let total_cost: f64 = aws_instances.iter().map(|i| i.cost_per_hour).sum::<f64>()
@@ -53,9 +46,9 @@ pub async fn get_resource_summary_json(config: &Config) -> Result<serde_json::Va
 
 /// List AWS instances as JSON
 pub async fn list_aws_instances_json(_config: &Config) -> Result<Vec<serde_json::Value>> {
+    use crate::error::TrainctlError;
     use aws_config::BehaviorVersion;
     use aws_sdk_ec2::Client as Ec2Client;
-    use crate::error::TrainctlError;
 
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let client = Ec2Client::new(&aws_config);
@@ -82,12 +75,10 @@ pub async fn list_aws_instances_json(_config: &Config) -> Result<Vec<serde_json:
                     .map(|s| s.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
 
-                let launch_time = instance
-                    .launch_time()
-                    .map(|lt| {
-                        chrono::DateTime::<chrono::Utc>::from_timestamp(lt.secs(), 0)
-                            .unwrap_or_else(chrono::Utc::now)
-                    });
+                let launch_time = instance.launch_time().map(|lt| {
+                    chrono::DateTime::<chrono::Utc>::from_timestamp(lt.secs(), 0)
+                        .unwrap_or_else(chrono::Utc::now)
+                });
 
                 let tags: Vec<(String, String)> = instance
                     .tags()
@@ -120,9 +111,9 @@ pub async fn list_aws_instances_json(_config: &Config) -> Result<Vec<serde_json:
 
 /// List RunPod pods as JSON
 pub async fn list_runpod_pods_json(_config: &Config) -> Result<Vec<serde_json::Value>> {
-    use std::process::Command;
     use crate::error::TrainctlError;
-    
+    use std::process::Command;
+
     let mut pods = Vec::new();
 
     if which::which("runpodctl").is_err() {
@@ -187,7 +178,7 @@ pub async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
         if name.contains("python") || name.contains("train") {
             let cpu_percent = process.cpu_usage();
             let memory_mb = process.memory() as f32 / 1024.0 / 1024.0;
-            
+
             let cmd_str: String = process
                 .cmd()
                 .iter()
@@ -209,4 +200,3 @@ pub async fn list_local_processes_json() -> Result<Vec<serde_json::Value>> {
 
     Ok(processes)
 }
-

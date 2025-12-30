@@ -66,19 +66,20 @@ pub(crate) async fn sync_resource_tracker_with_aws(
                             } else {
                                 info!("Synced resource {} to ResourceTracker", instance_id);
                             }
-                        } else {
-                            if let Err(e) = tracker.register(resource_status).await {
-                                // Ignore errors for resources that already exist (race condition)
-                                if !e.to_string().contains("already exists") {
-                                    info!("Failed to sync resource {}: {}", instance_id, e);
-                                }
-                            } else {
-                                info!("Synced resource {} to ResourceTracker", instance_id);
+                        } else if let Err(e) = tracker.register(resource_status).await {
+                            // Ignore errors for resources that already exist (race condition)
+                            if !e.to_string().contains("already exists") {
+                                info!("Failed to sync resource {}: {}", instance_id, e);
                             }
+                        } else {
+                            info!("Synced resource {} to ResourceTracker", instance_id);
                         }
                     }
                     Err(e) => {
-                        info!("Failed to convert instance {} to ResourceStatus: {}", instance_id, e);
+                        info!(
+                            "Failed to convert instance {} to ResourceStatus: {}",
+                            instance_id, e
+                        );
                     }
                 }
             }

@@ -73,4 +73,3 @@ pub async fn list_local_processes(detailed: bool) -> Result<()> {
 
     Ok(())
 }
-

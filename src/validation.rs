@@ -205,7 +205,7 @@ pub fn validate_path(path: &str) -> Result<()> {
 pub fn validate_path_path(path: &std::path::Path) -> Result<()> {
     // Convert to string for pattern checking
     let path_str = path.to_string_lossy();
-    
+
     if path_str.contains("..") {
         return Err(TrainctlError::Validation {
             field: "path".to_string(),

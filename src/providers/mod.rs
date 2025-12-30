@@ -27,9 +27,9 @@ mod runpod_provider;
 #[allow(unused_imports)]
 pub use aws_provider::AwsProvider;
 #[allow(unused_imports)]
-pub use runpod_provider::RunpodProvider;
-#[allow(unused_imports)]
 pub use lyceum_provider::LyceumProvider;
+#[allow(unused_imports)]
+pub use runpod_provider::RunpodProvider;
 
 use crate::error::{Result, TrainctlError};
 use crate::provider::TrainingProvider;
