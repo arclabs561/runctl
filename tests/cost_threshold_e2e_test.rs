@@ -77,7 +77,7 @@ async fn test_cost_threshold_warnings() {
 
     if total_hourly_cost > hourly_threshold {
         info!(
-            "⚠️  WARNING: Hourly cost (${:.2}/hr) exceeds threshold (${}/hr)",
+            "WARNING: Hourly cost (${:.2}/hr) exceeds threshold (${}/hr)",
             total_hourly_cost, hourly_threshold
         );
     }
@@ -85,7 +85,7 @@ async fn test_cost_threshold_warnings() {
     let daily_cost = total_hourly_cost * 24.0;
     if daily_cost > daily_threshold {
         info!(
-            "⚠️  WARNING: Daily projection (${:.2}/day) exceeds threshold (${}/day)",
+            "WARNING: Daily projection (${:.2}/day) exceeds threshold (${}/day)",
             daily_cost, daily_threshold
         );
     }

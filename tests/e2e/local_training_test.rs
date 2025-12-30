@@ -51,9 +51,9 @@ fn test_uv_detection() {
     assert!(true);
     
     if has_uv {
-        println!("✓ uv is available");
+        println!("uv is available");
     } else {
-        println!("⚠ uv is not available (optional)");
+        println!("WARNING: uv is not available (optional)");
     }
 }
 

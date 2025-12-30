@@ -438,7 +438,7 @@ pub async fn handle_command(
                         });
                         println!("{}", serde_json::to_string_pretty(&result)?);
                     } else {
-                        println!("✓ Configuration is valid");
+                        println!("Configuration is valid");
                         if let Some(path) = config_path {
                             println!("  Loaded from: {}", path.display());
                         } else {

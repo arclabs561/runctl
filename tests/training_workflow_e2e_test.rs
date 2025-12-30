@@ -312,5 +312,5 @@ echo "TRAINING_COMPLETE" > training.status
     info!("Step 9: Cleaning up...");
     cleanup().await;
 
-    info!("✅ Full training workflow test passed!");
+    info!("Full training workflow test passed!");
 }

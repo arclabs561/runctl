@@ -194,8 +194,11 @@ pub fn validate_path(path: &str) -> Result<()> {
 /// use runctl::validation::validate_path_path;
 /// use std::path::PathBuf;
 ///
-/// validate_path_path(PathBuf::from("/path/to/file").as_path())?;
-/// validate_path_path(&pathbuf)?;
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+/// let pathbuf = PathBuf::from("/path/to/file");
+/// validate_path_path(pathbuf.as_path())?;
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Note

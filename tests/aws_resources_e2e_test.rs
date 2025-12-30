@@ -187,12 +187,12 @@ async fn test_zombie_detection() {
 
     if !zombies.is_empty() {
         eprintln!(
-            "⚠️  WARNING: Found {} potential zombie instances",
+            "WARNING: Found {} potential zombie instances",
             zombies.len()
         );
         eprintln!("   Review these: {:?}", zombies);
     } else {
-        info!("✅ No zombie instances detected");
+        info!("No zombie instances detected");
     }
 
     // Test passes (just reports, doesn't fail)

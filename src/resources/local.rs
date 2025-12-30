@@ -5,7 +5,7 @@ use sysinfo::{Pid, System};
 
 /// List local training processes
 pub async fn list_local_processes(detailed: bool) -> Result<()> {
-    println!("\n💻 Local Training Processes:");
+    println!("\nLocal Training Processes:");
     println!("{}", "-".repeat(80));
 
     // Use sysinfo for native Rust process listing

@@ -314,7 +314,7 @@ if __name__ == "__main__":
         panic!("Training complete marker was not created");
     }
 
-    info!("✅ Full training workflow test passed!");
+    info!("Full training workflow test passed!");
 
     // Cleanup
     cleanup().await;

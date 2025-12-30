@@ -73,14 +73,14 @@ async fn test_cleanup_orphaned_resources() {
 
     if orphaned_count > 0 {
         eprintln!(
-            "⚠️  WARNING: Found {} potential orphaned test instances",
+            "WARNING: Found {} potential orphaned test instances",
             orphaned_count
         );
         eprintln!("   Instance IDs: {:?}", test_instances);
         eprintln!("   Review these manually before deleting!");
         eprintln!("   Use: runctl resources cleanup --dry-run");
     } else {
-        info!("✅ No orphaned test instances found");
+        info!("No orphaned test instances found");
     }
 
     // Don't fail the test, just warn

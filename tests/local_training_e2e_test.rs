@@ -58,9 +58,9 @@ fn test_uv_detection() {
 
     // Log the result (test passes regardless since uv is optional)
     if has_uv {
-        println!("✓ uv is available");
+        println!("uv is available");
     } else {
-        println!("⚠ uv is not available (optional)");
+        println!("WARNING: uv is not available (optional)");
     }
 }
 

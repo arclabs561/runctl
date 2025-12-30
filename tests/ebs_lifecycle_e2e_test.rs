@@ -205,7 +205,7 @@ async fn test_ebs_complete_lifecycle() {
         .expect("Failed to delete volume");
     info!("Deleted volume: {}", volume_id);
 
-    info!("✅ Complete lifecycle test passed");
+    info!("Complete lifecycle test passed");
 }
 
 #[tokio::test]
@@ -327,5 +327,5 @@ async fn test_persistent_vs_ephemeral_behavior() {
         .await
         .expect("Failed to delete ephemeral volume");
 
-    info!("✅ Persistent vs ephemeral test passed");
+    info!("Persistent vs ephemeral test passed");
 }

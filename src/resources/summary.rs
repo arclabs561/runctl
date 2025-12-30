@@ -329,7 +329,7 @@ pub async fn show_insights(config: &Config, output_format: &str) -> Result<()> {
     println!("  Stopped instances: {}", stopped);
     println!("  Estimated hourly cost: ${:.2}", total_cost);
 
-    println!("\n💡 Recommendations:");
+    println!("\nRecommendations:");
 
     if old_instances > 0 {
         println!(
@@ -356,7 +356,7 @@ pub async fn show_insights(config: &Config, output_format: &str) -> Result<()> {
         println!("No running instances");
     }
 
-    println!("\n🔧 Actions:");
+    println!("\nActions:");
     println!("  runctl resources list --detailed    # See all resources");
     println!("  runctl resources cleanup --dry-run  # Preview cleanup");
     println!("  runctl resources cleanup --force    # Cleanup zombies");
