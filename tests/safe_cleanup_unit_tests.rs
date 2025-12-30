@@ -296,7 +296,7 @@ async fn test_safe_cleanup_mixed_resources() {
     // Verify results - protected should be skipped, others should be deleted
     // (with min_age=0, both unprotected and new_resource can be deleted)
     // Protected is skipped due to explicit protection + tag
-    let deleted_ids: Vec<_> = result.deleted.iter().cloned().collect();
+    let deleted_ids: Vec<_> = result.deleted.to_vec();
     let skipped_ids: Vec<_> = result.skipped.iter().map(|(id, _)| id).cloned().collect();
 
     // Protected should be in skipped (explicit protection)

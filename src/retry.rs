@@ -150,7 +150,7 @@ impl RetryPolicy for ExponentialBackoffPolicy {
                     // Store error for potential return
                     last_error = Some(e);
                     // Safe: we just set last_error above, so unwrap is safe
-                    let err = last_error.as_ref().expect("last_error should be Some here");
+                    let err = last_error.as_ref().unwrap();
 
                     // Calculate and wait for backoff
                     let backoff = self.calculate_backoff(attempt);

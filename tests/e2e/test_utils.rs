@@ -4,7 +4,7 @@
 //! the runctl CLI and AWS resources.
 
 use std::env;
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, Output};
 use std::time::Duration;
 use tempfile::TempDir;
 

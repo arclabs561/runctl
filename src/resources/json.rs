@@ -7,7 +7,6 @@ use crate::config::Config;
 use crate::error::Result;
 use crate::resources::types::{AwsInstance, LocalProcess, ResourceSummary, RunPodPod};
 use chrono::Utc;
-use serde_json;
 
 /// Get complete resource summary as JSON
 pub async fn get_resource_summary_json(config: &Config) -> Result<serde_json::Value> {

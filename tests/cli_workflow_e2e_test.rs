@@ -9,6 +9,7 @@
 //! Most tests use `--dry-run` to avoid creating actual AWS resources.
 
 use std::env;
+use std::process::Command;
 use tempfile::TempDir;
 
 // Import test utilities from e2e subdirectory
@@ -65,8 +66,8 @@ async fn test_config_validation() {
     assert_command_success(&output, &["config", "validate"]);
 
     // Test: Validate with JSON output
-    let json =
-        run_runctl_json(&["config", "validate"]).expect("Failed to run config validate with JSON");
+    let json = run_runctl_json(&["config", "validate"], None)
+        .expect("Failed to run config validate with JSON");
 
     verify_json_structure(&json, &["success"]).expect("Invalid JSON structure");
 }
@@ -105,8 +106,11 @@ async fn test_checkpoint_workflow() {
     assert_output_contains(&stdout, "checkpoint_epoch_3.pt");
 
     // Test: List checkpoints with JSON output
-    let json = run_runctl_json(&["checkpoint", "list", checkpoint_dir.to_str().unwrap()])
-        .expect("Failed to run checkpoint list with JSON");
+    let json = run_runctl_json(
+        &["checkpoint", "list", checkpoint_dir.to_str().unwrap()],
+        None,
+    )
+    .expect("Failed to run checkpoint list with JSON");
 
     verify_json_structure(&json, &["success"]).expect("Invalid JSON structure");
 }
@@ -191,7 +195,7 @@ async fn test_aws_create_json_output() {
     }
 
     // Test: Create instance with JSON output
-    let json = run_runctl_json(&["aws", "create", "t3.micro", "--dry-run"]);
+    let json = run_runctl_json(&["aws", "create", "t3.micro", "--dry-run"], None);
 
     match json {
         Ok(json_value) => {
@@ -239,7 +243,7 @@ async fn test_resources_list_json() {
         return;
     }
 
-    let json = run_runctl_json(&["resources", "list"]);
+    let json = run_runctl_json(&["resources", "list"], None);
 
     match json {
         Ok(json_value) => {
@@ -276,7 +280,7 @@ async fn test_status_json_output() {
         return;
     }
 
-    let json = run_runctl_json(&["status"]).expect("Failed to run status with JSON");
+    let json = run_runctl_json(&["status"], None).expect("Failed to run status with JSON");
 
     verify_json_structure(&json, &["success"]).expect("Invalid JSON structure");
 }
@@ -305,7 +309,8 @@ async fn test_help_text_completeness() {
     ];
 
     for cmd in commands {
-        let output = run_runctl_command(&cmd, None).expect(&format!("Failed to run {:?}", cmd));
+        let output =
+            run_runctl_command(&cmd, None).unwrap_or_else(|_| panic!("Failed to run {:?}", cmd));
 
         assert_command_success(&output, &cmd);
         let stdout = String::from_utf8_lossy(&output.stdout);

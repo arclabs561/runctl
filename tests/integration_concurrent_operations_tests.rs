@@ -4,8 +4,7 @@
 //! and that operations are thread-safe.
 
 use chrono::Utc;
-use runctl::error::Result;
-use runctl::provider::{ResourceId, ResourceState, ResourceStatus};
+use runctl::provider::{ResourceState, ResourceStatus};
 use runctl::resource_tracking::ResourceTracker;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};

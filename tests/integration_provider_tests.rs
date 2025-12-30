@@ -96,7 +96,7 @@ async fn test_error_conversion_at_boundary() {
     }
 
     // Convert to anyhow at boundary
-    let result: anyhow::Result<()> = library_function().map_err(|e| anyhow::Error::from(e));
+    let result: anyhow::Result<()> = library_function().map_err(anyhow::Error::from);
 
     assert!(result.is_err());
     let err = result.unwrap_err();
