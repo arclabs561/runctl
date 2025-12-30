@@ -1,5 +1,8 @@
 # runctl
 
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![Rust](https://github.com/arclabs561/runctl/actions/workflows/ci.yml/badge.svg)](https://github.com/arclabs561/runctl/actions/workflows/ci.yml)
+
 Modern training orchestration CLI for ML workloads. Supports local, RunPod, and AWS EC2 training with unified checkpoint management and monitoring.
 
 ## Features
@@ -261,7 +264,32 @@ just fmt
 just dev
 ```
 
+## Troubleshooting
+
+**Instance creation fails:**
+- Check AWS credentials: `aws sts get-caller-identity`
+- Verify IAM permissions for EC2, SSM, S3
+- Check region availability for instance type
+
+**SSM connection fails:**
+- Ensure SSM agent is running on instance
+- Verify IAM instance profile has `AmazonSSMManagedInstanceCore`
+- Check security group allows outbound HTTPS
+
+**Training script not found:**
+- Use absolute paths or paths relative to project root
+- Check `--sync-code` is working: `runctl aws processes <instance-id>`
+
+**Cost concerns:**
+- Use `--spot` for instances (50-90% savings)
+- Monitor with `runctl resources summary`
+- Set up cleanup: `runctl resources cleanup --dry-run`
+
+See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed troubleshooting.
+
 ## License
 
 MIT OR Apache-2.0
+
+See [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE) for details.
 
