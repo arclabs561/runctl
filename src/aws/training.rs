@@ -226,16 +226,28 @@ pub async fn train_on_instance(
         .unwrap_or("train.py");
     let script_path = format!("{}/{}", project_dir, script_name);
 
+    // Build training command with proper error handling
+    // Use nohup to run in background and capture output
     let mut command = format!(
-        "cd {} && nohup python3 {} > training.log 2>&1 & echo $! > training.pid",
-        project_dir, script_path
+        "cd {} && \
+        export PATH=\"$HOME/.local/bin:$PATH\" && \
+        nohup python3 {} {} > training.log 2>&1 & \
+        echo $! > training.pid && \
+        sleep 2 && \
+        if ps -p $(cat training.pid 2>/dev/null) > /dev/null 2>&1; then \
+            echo 'Training started successfully (PID: $(cat training.pid))'; \
+        else \
+            echo 'WARNING: Training process may have failed - check training.log'; \
+        fi",
+        project_dir, script_path,
+        if options.script_args.is_empty() {
+            "".to_string()
+        } else {
+            options.script_args.join(" ")
+        }
     );
 
-    // Add script arguments if provided
-    if !options.script_args.is_empty() {
-        let args_str = options.script_args.join(" ");
-        command = format!("{} {}", command, args_str);
-    }
+    // Script arguments are now included in the command above
 
     // Try SSM first (more secure, no SSH keys needed)
     let use_ssm = instance.iam_instance_profile().is_some();
