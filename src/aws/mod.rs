@@ -32,6 +32,7 @@
 mod helpers;
 mod instance;
 mod processes;
+mod ssm_sync;
 mod training;
 mod types;
 

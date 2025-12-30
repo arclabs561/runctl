@@ -103,11 +103,63 @@ The infrastructure works correctly:
 - SSM setup is functional
 - Instance creation with SSM works
 - SSM command execution works
+- **SSM-based code syncing is now implemented and working!**
 
-The main gap is **code syncing via SSM**. This is a known limitation that should be addressed to fully support SSM-only workflows (no SSH keys required).
+## Update: SSM Code Sync Implementation
 
-For now, users can:
-1. Use SSH keys (traditional approach)
-2. Use S3 for code transfer (workaround)
-3. Wait for SSM-based code syncing implementation
+**Status: COMPLETE** ✅
+
+SSM-based code syncing has been implemented using S3 as intermediate storage:
+
+1. **Implementation**: Created `src/aws/ssm_sync.rs` module
+2. **Strategy**: 
+   - Create tar.gz archive of project code
+   - Upload to S3 temporary location
+   - Use SSM to download and extract on instance
+   - Clean up S3 temporary file
+3. **Integration**: Automatically used when:
+   - Instance has IAM instance profile (SSM enabled)
+   - `s3_bucket` is configured in `.runctl.toml`
+4. **Testing**: Successfully tested with real instance
+
+### Required IAM Permissions
+
+The IAM role needs:
+- `AmazonSSMManagedInstanceCore` (for SSM)
+- S3 access to the configured bucket (for code transfer)
+
+Example policy:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::your-bucket/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket"],
+      "Resource": "arn:aws:s3:::your-bucket"
+    }
+  ]
+}
+```
+
+### Usage
+
+```bash
+# 1. Configure S3 bucket in .runctl.toml
+[aws]
+s3_bucket = "your-bucket"
+
+# 2. Create instance with SSM
+runctl aws create g4dn.xlarge --iam-instance-profile runctl-ssm-profile
+
+# 3. Train with automatic SSM code sync
+runctl aws train <instance-id> training/train.py --sync-code
+```
+
+The system automatically detects SSM availability and uses it instead of SSH.
 
