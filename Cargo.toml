@@ -9,7 +9,8 @@ homepage = "https://github.com/arclabs561/runctl"
 readme = "README.md"
 keywords = ["ml", "training", "aws", "ec2", "orchestration"]
 categories = ["command-line-utilities", "development-tools"]
-publish = false  # Remove when ready for crates.io
+# Not yet published to crates.io - keeping private for now
+publish = false
 
 [[bin]]
 name = "runctl"

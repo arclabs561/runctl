@@ -145,17 +145,17 @@ pub async fn train_on_instance(
 
         if use_ssm_for_sync {
             // Use SSM-based sync (via S3)
-            if let Err(e) = sync_code_via_ssm(
+            if let Err(e) = sync_code_via_ssm(crate::aws::ssm_sync::SsmSyncOptions {
                 project_root,
-                &options.instance_id,
-                &project_dir,
-                &options.script,
-                &options.include_patterns,
-                &s3_client,
-                &ssm_client,
+                instance_id: &options.instance_id,
+                project_dir: &project_dir,
+                script_path: &options.script,
+                include_patterns: &options.include_patterns,
+                s3_client: &s3_client,
+                ssm_client: &ssm_client,
                 config,
                 output_format,
-            )
+            })
             .await
             {
                 if output_format != "json" {

@@ -5,6 +5,16 @@ All notable changes to runctl will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- LICENSE files (MIT OR Apache-2.0)
+- GitHub Actions CI workflow (test, fmt, clippy)
+- SECURITY.md for vulnerability reporting
+- README badges and troubleshooting section
+
+### Fixed
+- Clippy error: refactored `sync_code_via_ssm` to use struct for parameters (fixes too_many_arguments)
+- Replaced `unwrap()` with proper error handling in progress bar template
+
+### Added
 - Resource management commands (`resources list`, `resources summary`, `resources insights`, `resources cleanup`)
 - S3 operations module (upload, download, sync, list, cleanup, watch, review)
 - Checkpoint cleanup command

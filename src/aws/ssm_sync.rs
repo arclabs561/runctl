@@ -93,6 +93,20 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
     Ok(files)
 }
 
+/// Options for SSM-based code synchronization
+#[derive(Debug)]
+pub struct SsmSyncOptions<'a> {
+    pub project_root: &'a Path,
+    pub instance_id: &'a str,
+    pub project_dir: &'a str,
+    pub script_path: &'a Path,
+    pub include_patterns: &'a [String],
+    pub s3_client: &'a S3Client,
+    pub ssm_client: &'a SsmClient,
+    pub config: &'a Config,
+    pub output_format: &'a str,
+}
+
 /// Sync code to instance via SSM using S3 as intermediate storage
 ///
 /// Strategy:
@@ -100,17 +114,18 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
 /// 2. Upload to S3 temporary location
 /// 3. Use SSM to download and extract on instance
 /// 4. Clean up S3 temporary file
-pub async fn sync_code_via_ssm(
-    project_root: &Path,
-    instance_id: &str,
-    project_dir: &str,
-    _script_path: &Path,
-    include_patterns: &[String],
-    s3_client: &S3Client,
-    ssm_client: &SsmClient,
-    config: &Config,
-    output_format: &str,
-) -> Result<()> {
+pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
+    let SsmSyncOptions {
+        project_root,
+        instance_id,
+        project_dir,
+        script_path: _script_path,
+        include_patterns,
+        s3_client,
+        ssm_client,
+        config,
+        output_format,
+    } = options;
     // Get S3 bucket from config
     let s3_bucket = config
         .aws
@@ -127,7 +142,7 @@ pub async fn sync_code_via_ssm(
         pb.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} [{elapsed_precise}] {msg}")
-                .expect("Progress bar template should be valid"),
+                .map_err(|e| TrainctlError::Io(std::io::Error::other(format!("Invalid progress bar template: {}", e))))?,
         );
         pb.set_message("Creating code archive...");
         Some(pb)

@@ -159,8 +159,10 @@ pub enum ExecutionStatus {
 /// # }
 /// ```
 #[async_trait]
+#[allow(dead_code)] // Reserved for future provider trait integration
 pub trait TrainingProvider: Send + Sync {
     /// Provider name (e.g., "aws", "runpod", "lyceum")
+    #[allow(dead_code)] // Reserved for future provider trait integration
     fn name(&self) -> &'static str;
 
     /// Create a new compute resource (instance, pod, etc.)
