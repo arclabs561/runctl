@@ -48,7 +48,11 @@ pub async fn train_on_instance(
 
     // Determine if we should use SSM (check before requiring SSH key)
     let use_ssm_for_sync = instance.iam_instance_profile().is_some()
-        && config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()).is_some();
+        && config
+            .aws
+            .as_ref()
+            .and_then(|c| c.s3_bucket.as_ref())
+            .is_some();
 
     // Only require public IP and SSH key if not using SSM
     let (public_ip, key_path) = if !use_ssm_for_sync {
@@ -184,7 +188,7 @@ pub async fn train_on_instance(
             let ip = public_ip.as_ref().ok_or_else(|| {
                 TrainctlError::Aws("Public IP required for SSH-based code sync".to_string())
             })?;
-            
+
             if let Err(e) = sync_code_to_instance(
                 kp,
                 ip,
@@ -281,10 +285,10 @@ pub async fn train_on_instance(
         let kp = key_path.as_ref().ok_or_else(|| {
             TrainctlError::Aws("SSH key required when SSM is not available".to_string())
         })?;
-        let ip = public_ip.as_ref().ok_or_else(|| {
-            TrainctlError::Aws("Public IP required for SSH".to_string())
-        })?;
-        
+        let ip = public_ip
+            .as_ref()
+            .ok_or_else(|| TrainctlError::Aws("Public IP required for SSH".to_string()))?;
+
         execute_via_ssh(kp, ip, user, &command).await?;
         TrainingInfo {
             success: true,

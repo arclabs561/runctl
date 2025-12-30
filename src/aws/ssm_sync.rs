@@ -22,7 +22,7 @@ use tracing::info;
 fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Result<Vec<PathBuf>> {
     // Build gitignore matcher
     let mut builder = GitignoreBuilder::new(project_root);
-    
+
     // Add .gitignore if it exists
     let gitignore_path = project_root.join(".gitignore");
     if gitignore_path.exists() {
@@ -32,7 +32,7 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
             }
         }
     }
-    
+
     // Add negations for include patterns (override gitignore)
     for pattern in include_patterns {
         let normalized_pattern = if pattern.ends_with('/') {
@@ -42,9 +42,12 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
         };
         let _ = builder.add_line(None, &normalized_pattern);
     }
-    
+
     let gitignore = builder.build().map_err(|e| {
-        TrainctlError::Io(std::io::Error::other(format!("Failed to build gitignore: {}", e)))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to build gitignore: {}",
+            e
+        )))
     })?;
 
     // Walk all files
@@ -67,16 +70,14 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
             };
 
             // Check if matches include pattern
-            let matches_include = include_patterns
-                .iter()
-                .any(|pattern| {
-                    let pattern_path = Path::new(pattern);
-                    rel_path.starts_with(pattern_path)
-                        || rel_path
-                            .parent()
-                            .map(|p| p == pattern_path || p.starts_with(pattern_path))
-                            .unwrap_or(false)
-                });
+            let matches_include = include_patterns.iter().any(|pattern| {
+                let pattern_path = Path::new(pattern);
+                rel_path.starts_with(pattern_path)
+                    || rel_path
+                        .parent()
+                        .map(|p| p == pattern_path || p.starts_with(pattern_path))
+                        .unwrap_or(false)
+            });
 
             // Check gitignore
             let matched = gitignore.matched(rel_path, false);
@@ -142,7 +143,12 @@ pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
         pb.set_style(
             ProgressStyle::default_spinner()
                 .template("{spinner:.green} [{elapsed_precise}] {msg}")
-                .map_err(|e| TrainctlError::Io(std::io::Error::other(format!("Invalid progress bar template: {}", e))))?,
+                .map_err(|e| {
+                    TrainctlError::Io(std::io::Error::other(format!(
+                        "Invalid progress bar template: {}",
+                        e
+                    )))
+                })?,
         );
         pb.set_message("Creating code archive...");
         Some(pb)
@@ -158,11 +164,16 @@ pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
     let files_to_sync = collect_files_to_sync(project_root, include_patterns)?;
     info!("Syncing {} files via SSM", files_to_sync.len());
 
-    let temp_archive = std::env::temp_dir().join(format!("runctl-code-{}.tar.gz", uuid::Uuid::new_v4()));
-    
+    let temp_archive =
+        std::env::temp_dir().join(format!("runctl-code-{}.tar.gz", uuid::Uuid::new_v4()));
+
     {
-        let file = File::create(&temp_archive)
-            .map_err(|e| TrainctlError::Io(std::io::Error::other(format!("Failed to create archive: {}", e))))?;
+        let file = File::create(&temp_archive).map_err(|e| {
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to create archive: {}",
+                e
+            )))
+        })?;
         let encoder = GzEncoder::new(file, Compression::default());
         let mut tar = Builder::new(encoder);
 
@@ -174,22 +185,37 @@ pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
                 ))
             })?;
 
-            tar.append_path_with_name(file_path, relative_path).map_err(|e| {
-                TrainctlError::Io(std::io::Error::other(format!("Failed to add file to archive: {}", e)))
-            })?;
+            tar.append_path_with_name(file_path, relative_path)
+                .map_err(|e| {
+                    TrainctlError::Io(std::io::Error::other(format!(
+                        "Failed to add file to archive: {}",
+                        e
+                    )))
+                })?;
         }
 
         tar.finish().map_err(|e| {
-            TrainctlError::Io(std::io::Error::other(format!("Failed to finalize archive: {}", e)))
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to finalize archive: {}",
+                e
+            )))
         })?;
     }
 
     let archive_size = std::fs::metadata(&temp_archive)
-        .map_err(|e| TrainctlError::Io(std::io::Error::other(format!("Failed to get archive size: {}", e))))?
+        .map_err(|e| {
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to get archive size: {}",
+                e
+            )))
+        })?
         .len();
 
     if let Some(ref p) = pb {
-        p.set_message(format!("Archive created: {:.1} MB", archive_size as f64 / 1_000_000.0));
+        p.set_message(format!(
+            "Archive created: {:.1} MB",
+            archive_size as f64 / 1_000_000.0
+        ));
     }
 
     // Step 2: Upload to S3
@@ -197,7 +223,11 @@ pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
         p.set_message("Uploading to S3...");
     }
 
-    let s3_key = format!("runctl-temp/{}/{}.tar.gz", instance_id, uuid::Uuid::new_v4());
+    let s3_key = format!(
+        "runctl-temp/{}/{}.tar.gz",
+        instance_id,
+        uuid::Uuid::new_v4()
+    );
     let s3_path = format!("s3://{}/{}", s3_bucket, s3_key);
 
     let body = aws_sdk_s3::primitives::ByteStream::from_path(&temp_archive)
@@ -232,9 +262,9 @@ pub async fn sync_code_via_ssm(options: SsmSyncOptions<'_>) -> Result<()> {
         "cd {} && aws s3 cp {} code.tar.gz && tar -xzf code.tar.gz && rm code.tar.gz && echo 'Code sync complete'",
         project_dir, s3_path
     );
-    
+
     let output = execute_ssm_command(ssm_client, instance_id, &download_cmd).await?;
-    
+
     info!("Code sync completed: {}", output.trim());
 
     // Step 4: Clean up S3 temporary file

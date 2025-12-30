@@ -84,6 +84,7 @@ pub enum TrainctlError {
     },
 
     #[error("Retryable error (attempt {attempt}/{max_attempts}): {reason}")]
+    // Note: Used in IsRetryable trait implementation, but not yet constructed in code
     #[allow(dead_code)] // Reserved for future retry logic
     Retryable {
         attempt: u32,
