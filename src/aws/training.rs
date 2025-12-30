@@ -235,6 +235,9 @@ pub async fn train_on_instance(
     };
     
     // Check if requirements.txt exists and install dependencies
+    // Determine if we should use SSM for command execution
+    let use_ssm = instance.iam_instance_profile().is_some();
+    
     let setup_cmd = format!(
         "cd {} && \
         export PATH=\"$HOME/.local/bin:$PATH\" && \
@@ -266,8 +269,7 @@ pub async fn train_on_instance(
         project_dir, script_path, script_args_str
     );
 
-    // Try SSM first (more secure, no SSH keys needed)
-    let use_ssm = instance.iam_instance_profile().is_some();
+    // use_ssm already determined above for dependency installation
 
     let training_info = if use_ssm {
         match execute_ssm_command(&ssm_client, &options.instance_id, &command).await {
