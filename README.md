@@ -35,7 +35,7 @@ runctl init
 INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
 
 # Train with automatic code sync
-runctl aws train $INSTANCE_ID training/train.py --sync-code
+runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code
 
 # Monitor training
 runctl aws monitor $INSTANCE_ID --follow
@@ -49,6 +49,23 @@ runctl aws stop $INSTANCE_ID
 # Restart a stopped instance
 runctl aws start $INSTANCE_ID --wait
 ```
+
+### Example Training Script
+
+We include a working MNIST training example in `training/train_mnist.py`:
+
+```bash
+# Test locally (requires PyTorch: pip install torch torchvision)
+python training/train_mnist.py --epochs 5
+
+# Or use runctl local
+runctl local training/train_mnist.py --epochs 5
+
+# Train on AWS
+runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code --epochs 10
+```
+
+See [training/README.md](training/README.md) for full documentation.
 
 ## Testing with Temporary Credentials
 
