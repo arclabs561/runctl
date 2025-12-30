@@ -66,7 +66,7 @@ If your `admin` IAM user credentials are compromised:
 
 1. Go to **IAM → Users → admin**
 2. Click **Security credentials** tab
-3. Find access key: `AKIAXXXXXXXXXXXXXXXX` (created 2024-02-15)
+3. Find access key: `AKIAXXXXXXXXXXXXXXXX` (created 2024-02-15) [REDACTED]
 4. Click **Delete**
 5. Confirm deletion
 

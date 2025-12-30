@@ -10,7 +10,7 @@ Based on the analysis of your AWS configuration, here are the prioritized securi
 
 ### Critical (Do Immediately)
 1. 🔴 **Enable MFA** - **CRITICAL**: Admin user with AdministratorAccess has NO MFA enabled
-2. 🔴 **Delete unused access key** - Key `AKIAXXXXXXXXXXXXXXXX` from 2024 is not in use, delete it
+2. 🔴 **Delete unused access key** - Key `AKIAXXXXXXXXXXXXXXXX` from 2024 is not in use, delete it [REDACTED]
 3. 🔴 **Create limited-permission user** - Admin user has FULL AdministratorAccess, create runctl-specific user
 
 ### High Priority (Do This Week)
@@ -31,9 +31,9 @@ Based on the analysis of your AWS configuration, here are the prioritized securi
 **Type**: IAM User (not root - good!)  
 **Group**: `admingroup`  
 **Permissions**: 🔴 **AdministratorAccess** (FULL admin access - unlimited permissions)  
-**Access Keys**: 2 keys configured
-  - `AKIAXXXXXXXXXXXXXXXX` (2025-12-02) - **CURRENTLY IN USE**
-  - `AKIAXXXXXXXXXXXXXXXX` (2024-02-15) - **UNUSED - CAN BE DELETED**  
+**Access Keys**: 2 keys configured [REDACTED]
+  - `AKIAXXXXXXXXXXXXXXXX` (2025-12-02) - **CURRENTLY IN USE** [REDACTED]
+  - `AKIAXXXXXXXXXXXXXXXX` (2024-02-15) - **UNUSED - CAN BE DELETED** [REDACTED]  
 **MFA**: ❌ **NOT ENABLED** (CRITICAL - admin user with no MFA)
 
 ### Permission Analysis
@@ -152,16 +152,16 @@ aws sts get-caller-identity
 
 ### 4. Delete Unused Access Key
 
-**Current**: 2 access keys for admin user
-- `AKIAXXXXXXXXXXXXXXXX` (2025-12-02) - **IN USE** (configured in ~/.aws/credentials)
-- `AKIAXXXXXXXXXXXXXXXX` (2024-02-15) - **UNUSED** (can be deleted)
+**Current**: 2 access keys for admin user [REDACTED]
+- `AKIAXXXXXXXXXXXXXXXX` (2025-12-02) - **IN USE** (configured in ~/.aws/credentials) [REDACTED]
+- `AKIAXXXXXXXXXXXXXXXX` (2024-02-15) - **UNUSED** (can be deleted) [REDACTED]
 
 **Action**:
 ```bash
 # Delete the unused 2024 key
 aws iam delete-access-key \
   --user-name admin \
-  --access-key-id AKIAXXXXXXXXXXXXXXXX
+  --access-key-id <ACCESS_KEY_ID>  # [REDACTED - use actual key ID]
 ```
 
 **Why**: Having unused access keys increases attack surface. If the old key was ever compromised, it could still be used.

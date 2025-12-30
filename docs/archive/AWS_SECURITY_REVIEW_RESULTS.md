@@ -19,7 +19,7 @@ You've made significant security improvements:
 2. **✅ Access Keys Reduced**
    - **Before**: 2 access keys (one unused from 2024)
    - **After**: 1 access key (only the active one)
-   - **Current Key**: `AKIAXXXXXXXXXXXXXXXX` (created 2025-12-02)
+   - **Current Key**: `AKIAXXXXXXXXXXXXXXXX` (created 2025-12-02) [REDACTED]
    - **Impact**: Reduced attack surface
 
 ### Current Status
