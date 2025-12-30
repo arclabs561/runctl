@@ -16,7 +16,7 @@ fn test_normalize_state_conversions() {
     assert_eq!(normalize_state("pending"), ResourceState::Starting); // pending -> starting
     assert_eq!(normalize_state("terminated"), ResourceState::Terminated);
     assert_eq!(normalize_state("shutting-down"), ResourceState::Terminating);
-
+    
     // Unknown states map to Unknown
     assert_eq!(normalize_state("unknown"), ResourceState::Unknown);
     assert_eq!(normalize_state("invalid-state"), ResourceState::Unknown);
@@ -41,7 +41,7 @@ fn test_resource_state_variants() {
         ResourceState::Terminated,
         ResourceState::Unknown,
     ];
-
+    
     // States are distinct
     for (i, state1) in states.iter().enumerate() {
         for (j, state2) in states.iter().enumerate() {
@@ -62,9 +62,9 @@ fn test_config_aws_section() {
 #[test]
 fn test_resource_status_serialization() {
     // ResourceStatus structure
-    use chrono::Utc;
     use runctl::provider::ResourceStatus;
-
+    use chrono::Utc;
+    
     let status = ResourceStatus {
         id: "i-1234567890abcdef0".to_string(),
         name: Some("Test Instance".to_string()),
@@ -78,7 +78,7 @@ fn test_resource_status_serialization() {
             ("Environment".to_string(), "dev".to_string()),
         ],
     };
-
+    
     // Fields set correctly
     assert_eq!(status.id, "i-1234567890abcdef0");
     assert_eq!(status.state, ResourceState::Running);
@@ -90,7 +90,7 @@ fn test_resource_status_serialization() {
 fn test_resource_status_with_minimal_fields() {
     // ResourceStatus with minimal fields
     use runctl::provider::ResourceStatus;
-
+    
     let status = ResourceStatus {
         id: "i-minimal".to_string(),
         name: None,
@@ -101,7 +101,7 @@ fn test_resource_status_with_minimal_fields() {
         public_ip: None,
         tags: vec![],
     };
-
+    
     assert_eq!(status.id, "i-minimal");
     assert_eq!(status.state, ResourceState::Unknown);
     assert!(status.tags.is_empty());
@@ -111,11 +111,11 @@ fn test_resource_status_with_minimal_fields() {
 fn test_instance_id_validation() {
     // Instance ID format validation
     use runctl::validation::validate_instance_id;
-
+    
     // Valid instance IDs
     assert!(validate_instance_id("i-1234567890abcdef0").is_ok());
     assert!(validate_instance_id("i-0123456789abcdef").is_ok());
-
+    
     // Invalid instance IDs
     assert!(validate_instance_id("invalid").is_err());
     assert!(validate_instance_id("i-").is_err());
@@ -126,12 +126,12 @@ fn test_instance_id_validation() {
 #[test]
 fn test_project_name_validation() {
     use runctl::validation::validate_project_name;
-
+    
     // Valid project names
     assert!(validate_project_name("my-project").is_ok());
     assert!(validate_project_name("project123").is_ok());
     assert!(validate_project_name("a").is_ok());
-
+    
     // Invalid project names
     assert!(validate_project_name("").is_err());
     assert!(validate_project_name("project with spaces").is_err());
@@ -140,16 +140,16 @@ fn test_project_name_validation() {
 
 #[test]
 fn test_cost_calculation_consistency() {
-    use runctl::resources::estimate_instance_cost;
     use runctl::utils::get_instance_cost;
-
+    use runctl::resources::estimate_instance_cost;
+    
     // Cost functions return consistent values
     let instance_types = ["t3.micro", "t3.medium", "g4dn.xlarge", "p3.2xlarge"];
-
+    
     for instance_type in instance_types {
         let cost1 = get_instance_cost(instance_type);
         let cost2 = estimate_instance_cost(instance_type);
-
+        
         assert!(cost1 > 0.0, "Cost positive for {}", instance_type);
         assert!(cost2 > 0.0, "Cost positive for {}", instance_type);
         assert!(cost1 < 10.0, "Cost reasonable for {}", instance_type);
@@ -167,16 +167,16 @@ fn test_tag_extraction() {
         ("runctl:user".to_string(), "testuser".to_string()),
         ("runctl:project".to_string(), "test-project".to_string()),
     ];
-
+    
     // Find specific tag
     let name_tag = tags.iter().find(|(k, _)| k == "Name");
     assert!(name_tag.is_some());
     assert_eq!(name_tag.unwrap().1, "Test Instance");
-
+    
     // Filter runctl tags
-    let runctl_tags: Vec<_> = tags
-        .iter()
+    let runctl_tags: Vec<_> = tags.iter()
         .filter(|(k, _)| k.starts_with("runctl:"))
         .collect();
     assert_eq!(runctl_tags.len(), 2);
 }
+

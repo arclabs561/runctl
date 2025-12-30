@@ -48,55 +48,51 @@ pub async fn train_on_instance(
 
     // Determine if we should use SSM (check before requiring SSH key)
     let use_ssm_for_sync = instance.iam_instance_profile().is_some()
-        && config
-            .aws
-            .as_ref()
-            .and_then(|c| c.s3_bucket.as_ref())
-            .is_some();
+        && config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()).is_some();
 
     // Only require public IP and SSH key if not using SSM
     let (public_ip, key_path) = if !use_ssm_for_sync {
         let ip = instance.public_ip_address().ok_or_else(|| {
-            TrainctlError::Aws(format!(
-                "Instance {} has no public IP address.\n\n\
-                To resolve:\n\
-                  1. Check if instance is in a public subnet with internet gateway\n\
-                  2. Verify security groups allow SSH (port 22)\n\
-                  3. Check instance state: runctl aws processes {}\n\
+        TrainctlError::Aws(format!(
+            "Instance {} has no public IP address.\n\n\
+            To resolve:\n\
+              1. Check if instance is in a public subnet with internet gateway\n\
+              2. Verify security groups allow SSH (port 22)\n\
+              3. Check instance state: runctl aws processes {}\n\
                   4. Use SSM instead: Create instance with --iam-instance-profile and configure s3_bucket in config",
                 options.instance_id, options.instance_id
-            ))
-        })?;
+        ))
+    })?;
 
-        let key_name = instance.key_name();
+    let key_name = instance.key_name();
         let key = key_name
-            .and_then(|k| {
-                let paths = [
-                    format!("~/.ssh/{}.pem", k),
-                    format!("~/.ssh/{}", k),
-                    "~/.ssh/id_rsa".to_string(),
-                ];
-                paths.iter().find_map(|p| {
-                    let expanded = shellexpand::tilde(p).to_string();
-                    if std::path::Path::new(&expanded).exists() {
-                        Some(expanded)
-                    } else {
-                        None
-                    }
-                })
+        .and_then(|k| {
+            let paths = [
+                format!("~/.ssh/{}.pem", k),
+                format!("~/.ssh/{}", k),
+                "~/.ssh/id_rsa".to_string(),
+            ];
+            paths.iter().find_map(|p| {
+                let expanded = shellexpand::tilde(p).to_string();
+                if std::path::Path::new(&expanded).exists() {
+                    Some(expanded)
+                } else {
+                    None
+                }
             })
-            .ok_or_else(|| {
-                let key_name_str = key_name.unwrap_or("unknown");
-                TrainctlError::Aws(format!(
-                    "Could not find SSH key for key pair '{}'.\n\n\
-                    To resolve:\n\
-                      1. Set SSH_KEY_PATH environment variable: export SSH_KEY_PATH=~/.ssh/{}.pem\n\
-                      2. Place key in standard location: ~/.ssh/{}.pem or ~/.ssh/{}\n\
-                      3. Set correct permissions: chmod 600 ~/.ssh/{}.pem\n\
+        })
+        .ok_or_else(|| {
+            let key_name_str = key_name.unwrap_or("unknown");
+            TrainctlError::Aws(format!(
+                "Could not find SSH key for key pair '{}'.\n\n\
+                To resolve:\n\
+                  1. Set SSH_KEY_PATH environment variable: export SSH_KEY_PATH=~/.ssh/{}.pem\n\
+                  2. Place key in standard location: ~/.ssh/{}.pem or ~/.ssh/{}\n\
+                  3. Set correct permissions: chmod 600 ~/.ssh/{}.pem\n\
                       4. Use SSM instead: Create instance with --iam-instance-profile and configure s3_bucket in config",
                     key_name_str, key_name_str, key_name_str, key_name_str, key_name_str
-                ))
-            })?;
+            ))
+        })?;
         (Some(ip), Some(key))
     } else {
         (instance.public_ip_address(), None)
@@ -149,17 +145,17 @@ pub async fn train_on_instance(
 
         if use_ssm_for_sync {
             // Use SSM-based sync (via S3)
-            if let Err(e) = sync_code_via_ssm(crate::aws::ssm_sync::SsmSyncOptions {
+            if let Err(e) = sync_code_via_ssm(
                 project_root,
-                instance_id: &options.instance_id,
-                project_dir: &project_dir,
-                script_path: &options.script,
-                include_patterns: &options.include_patterns,
-                s3_client: &s3_client,
-                ssm_client: &ssm_client,
+                &options.instance_id,
+                &project_dir,
+                &options.script,
+                &options.include_patterns,
+                &s3_client,
+                &ssm_client,
                 config,
                 output_format,
-            })
+            )
             .await
             {
                 if output_format != "json" {
@@ -188,35 +184,35 @@ pub async fn train_on_instance(
             let ip = public_ip.as_ref().ok_or_else(|| {
                 TrainctlError::Aws("Public IP required for SSH-based code sync".to_string())
             })?;
-
-            if let Err(e) = sync_code_to_instance(
+            
+        if let Err(e) = sync_code_to_instance(
                 kp,
                 ip,
-                user,
-                &project_dir,
-                &options.script,
-                output_format,
-                &options.include_patterns,
-            )
-            .await
-            {
-                if output_format != "json" {
-                    return Err(TrainctlError::CloudProvider {
-                        provider: "aws".to_string(),
-                        message: format!(
-                            "Code sync failed: {}\n\n\
-                            To resolve:\n\
-                              1. Check SSH key permissions: chmod 600 {}\n\
-                              2. Verify instance is accessible: ssh -i {} {}@{}\n\
-                              3. Check network connectivity and security groups\n\
+            user,
+            &project_dir,
+            &options.script,
+            output_format,
+            &options.include_patterns,
+        )
+        .await
+        {
+            if output_format != "json" {
+                return Err(TrainctlError::CloudProvider {
+                    provider: "aws".to_string(),
+                    message: format!(
+                        "Code sync failed: {}\n\n\
+                        To resolve:\n\
+                          1. Check SSH key permissions: chmod 600 {}\n\
+                          2. Verify instance is accessible: ssh -i {} {}@{}\n\
+                          3. Check network connectivity and security groups\n\
                               4. Ensure instance has sufficient disk space\n\
                               5. Use SSM instead: Create instance with --iam-instance-profile and configure s3_bucket in config",
                             e, kp, kp, user, ip
-                        ),
-                        source: None,
-                    });
-                } else {
-                    return Err(e);
+                    ),
+                    source: None,
+                });
+            } else {
+                return Err(e);
                 }
             }
         }
@@ -260,12 +256,12 @@ pub async fn train_on_instance(
                 // Fallback to SSH (if available)
                 if let (Some(kp), Some(ip)) = (&key_path, &public_ip) {
                     execute_via_ssh(kp, ip, user, &command).await?;
-                    TrainingInfo {
-                        success: true,
-                        method: "ssh".to_string(),
-                        instance_id: options.instance_id.clone(),
-                        log_path: format!("{}/training.log", project_dir),
-                        monitor_command: format!("runctl aws monitor {}", options.instance_id),
+                TrainingInfo {
+                    success: true,
+                    method: "ssh".to_string(),
+                    instance_id: options.instance_id.clone(),
+                    log_path: format!("{}/training.log", project_dir),
+                    monitor_command: format!("runctl aws monitor {}", options.instance_id),
                     }
                 } else {
                     return Err(TrainctlError::Aws(format!(
@@ -285,10 +281,10 @@ pub async fn train_on_instance(
         let kp = key_path.as_ref().ok_or_else(|| {
             TrainctlError::Aws("SSH key required when SSM is not available".to_string())
         })?;
-        let ip = public_ip
-            .as_ref()
-            .ok_or_else(|| TrainctlError::Aws("Public IP required for SSH".to_string()))?;
-
+        let ip = public_ip.as_ref().ok_or_else(|| {
+            TrainctlError::Aws("Public IP required for SSH".to_string())
+        })?;
+        
         execute_via_ssh(kp, ip, user, &command).await?;
         TrainingInfo {
             success: true,
@@ -304,10 +300,10 @@ pub async fn train_on_instance(
     } else {
         println!("Training started");
         if let (Some(kp), Some(ip)) = (key_path, public_ip) {
-            println!(
-                "   Monitor: ssh -i {} {}@{} 'tail -f {}/training.log'",
+        println!(
+            "   Monitor: ssh -i {} {}@{} 'tail -f {}/training.log'",
                 kp, user, ip, project_dir
-            );
+        );
         }
         println!("   Or: runctl aws monitor {}", options.instance_id);
     }
