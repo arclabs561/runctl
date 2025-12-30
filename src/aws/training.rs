@@ -234,6 +234,24 @@ pub async fn train_on_instance(
         format!(" {}", options.script_args.join(" "))
     };
     
+    // Check if requirements.txt exists and install dependencies
+    let setup_cmd = format!(
+        "cd {} && \
+        export PATH=\"$HOME/.local/bin:$PATH\" && \
+        if [ -f requirements.txt ]; then \
+            echo 'Installing dependencies from requirements.txt...' && \
+            (uv pip install -r requirements.txt 2>&1 || pip3 install --user -r requirements.txt 2>&1) || echo 'WARNING: Dependency installation may have failed'; \
+        fi",
+        project_dir
+    );
+    
+    // Run setup first (best effort - don't fail if it doesn't work)
+    if use_ssm {
+        let _ = execute_ssm_command(&ssm_client, &options.instance_id, &setup_cmd).await;
+    } else if let (Some(kp), Some(ip)) = (key_path.as_ref(), public_ip.as_ref()) {
+        let _ = execute_via_ssh(kp, ip, user, &setup_cmd).await;
+    }
+    
     let command = format!(
         "cd {} && \
         export PATH=\"$HOME/.local/bin:$PATH\" && \
