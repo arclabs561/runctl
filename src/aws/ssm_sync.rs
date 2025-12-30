@@ -216,41 +216,19 @@ pub async fn sync_code_via_ssm(
     let s3_key = format!("runctl-temp/{}/{}.tar.gz", instance_id, uuid::Uuid::new_v4());
     let s3_path = format!("s3://{}/{}", s3_bucket, s3_key);
 
-    // Upload to S3 with retry logic for transient failures
-    let retry_policy = ExponentialBackoffPolicy::for_cloud_api();
-    let s3_bucket_clone = s3_bucket.to_string();
-    let s3_key_clone = s3_key.clone();
-    let temp_archive_clone = temp_archive.clone();
-    
-    let body = retry_policy
-        .execute_with_retry(|| {
-            let archive = temp_archive_clone.clone();
-            async move {
-                aws_sdk_s3::primitives::ByteStream::from_path(&archive)
-                    .await
-                    .map_err(|e| TrainctlError::S3(format!("Failed to read archive: {}", e)))
-            }
-        })
-        .await?;
+    // Upload to S3 (S3 uploads are generally reliable)
+    let body = aws_sdk_s3::primitives::ByteStream::from_path(&temp_archive)
+        .await
+        .map_err(|e| TrainctlError::S3(format!("Failed to read archive: {}", e)))?;
 
-    retry_policy
-        .execute_with_retry(|| {
-            let bucket = s3_bucket_clone.clone();
-            let key = s3_key_clone.clone();
-            let body_clone = body.clone();
-            let client = s3_client.clone();
-            async move {
-                client
-                    .put_object()
-                    .bucket(&bucket)
-                    .key(&key)
-                    .body(body_clone)
-                    .send()
-                    .await
-                    .map_err(|e| TrainctlError::S3(format!("Failed to upload to S3: {}", e)))
-            }
-        })
-        .await?;
+    s3_client
+        .put_object()
+        .bucket(s3_bucket)
+        .key(&s3_key)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| TrainctlError::S3(format!("Failed to upload to S3: {}", e)))?;
 
     info!("Uploaded code archive to {}", s3_path);
 
