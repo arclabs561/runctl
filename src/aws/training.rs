@@ -219,12 +219,40 @@ pub async fn train_on_instance(
     }
 
     // Build training command
-    let script_name = options
+    // Calculate relative path from project root to script (preserve subdirectory structure)
+    // We already found project_root during sync, but need to recalculate here for consistency
+    let script_dir = options
         .script
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("train.py");
-    let script_path = format!("{}/{}", project_dir, script_name);
+        .parent()
+        .ok_or_else(|| TrainctlError::Aws("Script has no parent directory".to_string()))?;
+
+    let mut current = script_dir;
+    let project_root_for_script = loop {
+        let markers = [
+            "requirements.txt",
+            "setup.py",
+            "pyproject.toml",
+            "Cargo.toml",
+            ".git",
+        ];
+        if markers.iter().any(|m| current.join(m).exists()) {
+            break current;
+        }
+        match current.parent() {
+            Some(p) => current = p,
+            None => break script_dir,
+        }
+    };
+
+    // Get relative path from project root to script
+    let script_relative = options.script
+        .strip_prefix(&project_root_for_script)
+        .map_err(|_| TrainctlError::Aws(format!(
+            "Script {:?} is not under project root {:?}",
+            options.script, project_root_for_script
+        )))?;
+    
+    let script_path = format!("{}/{}", project_dir, script_relative.display());
 
     // Build training command with proper error handling
     // Use nohup to run in background and capture output
@@ -243,7 +271,12 @@ pub async fn train_on_instance(
         export PATH=\"$HOME/.local/bin:$PATH\" && \
         if [ -f requirements.txt ]; then \
             echo 'Installing dependencies from requirements.txt...' && \
-            (uv pip install -r requirements.txt 2>&1 || pip3 install --user -r requirements.txt 2>&1) || echo 'WARNING: Dependency installation may have failed'; \
+            if command -v uv >/dev/null 2>&1; then \
+                uv pip install -r requirements.txt 2>&1 || (echo 'uv failed, trying python3 -m pip...' && python3 -m pip install --user -r requirements.txt 2>&1); \
+            else \
+                echo 'uv not found, using python3 -m pip...' && python3 -m pip install --user -r requirements.txt 2>&1; \
+            fi && \
+            echo 'Dependency installation completed' || echo 'WARNING: Dependency installation may have failed'; \
         fi",
         project_dir
     );
