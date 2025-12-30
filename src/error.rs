@@ -1,7 +1,48 @@
 //! Error types for runctl
 //!
-//! This module provides structured error handling with retry awareness
-//! and clear error categorization.
+//! This module defines the error handling strategy for runctl. There are two
+//! error types: `TrainctlError` (main error enum) and `ConfigError` (configuration-specific).
+//!
+//! ## Error Handling Philosophy
+//!
+//! Library code uses `crate::error::Result<T>` which returns `TrainctlError`.
+//! CLI code uses `anyhow::Result<T>` for top-level error handling. The conversion
+//! happens at the CLI boundary using `anyhow::Error::from` to preserve error chains.
+//!
+//! This split exists because:
+//! - Library code benefits from structured error types for programmatic handling
+//! - CLI code benefits from `anyhow`'s context chains and user-friendly display
+//! - Conversion preserves full error information (not just strings)
+//!
+//! ## Retry Awareness
+//!
+//! Errors implement `IsRetryable` to indicate whether an operation should be retried.
+//! The `RetryPolicy` in `src/retry.rs` uses this to determine retry behavior.
+//! Only `CloudProvider`, `Io`, and `Retryable` variants are retryable by default.
+//!
+//! Non-retryable errors (e.g., `Validation`, `Config`) fail immediately to avoid
+//! wasting time on operations that cannot succeed.
+//!
+//! ## When to Use Which Error
+//!
+//! - `ConfigError`: Configuration parsing and validation issues
+//!   - Automatically converted to `TrainctlError::Config` via `#[from]`
+//!
+//! - `CloudProvider`: Generic cloud API failures (provider-agnostic)
+//!   - Use for provider-agnostic errors that could occur with any cloud
+//!   - Retryable by default
+//!
+//! - `Aws`/`S3`/`Ssm`: AWS-specific errors
+//!   - Use when AWS-specific context matters for debugging
+//!   - `Aws` is retryable (wrapped in `CloudProvider` internally)
+//!
+//! - `ResourceNotFound`/`ResourceExists`: Resource lifecycle errors
+//!   - Use when resources don't exist or already exist
+//!   - Not retryable (idempotency issues, not transient failures)
+//!
+//! - `Validation`: Input validation failures
+//!   - Use for user input validation (instance IDs, paths, etc.)
+//!   - Not retryable (invalid input won't become valid)
 
 use crate::provider::ResourceId;
 use thiserror::Error;
@@ -110,6 +151,8 @@ pub type Result<T> = std::result::Result<T, TrainctlError>;
 ///
 /// Used by `RetryPolicy` implementations to determine whether an error
 /// should trigger a retry attempt.
+///
+/// This trait is actively used by `src/retry.rs` - do not mark as dead_code.
 pub trait IsRetryable {
     fn is_retryable(&self) -> bool;
 }

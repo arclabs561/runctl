@@ -1,3 +1,13 @@
+//! Training session tracking
+//!
+//! Manages training session metadata and state tracking.
+//! Provides functionality for creating, updating, and querying training sessions.
+
+//! Training session tracking
+//!
+//! Manages training session metadata and state tracking.
+//! Provides functionality for creating, updating, and querying training sessions.
+
 use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

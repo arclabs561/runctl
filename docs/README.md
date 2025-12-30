@@ -30,10 +30,18 @@
 
 ## Development
 
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Complete architecture overview
+- **[MODULE_OVERVIEW.md](MODULE_OVERVIEW.md)** - Quick module reference
+- **[CODEBASE_STATUS.md](CODEBASE_STATUS.md)** - Current codebase status
+- **[DOCUMENTATION_INDEX.md](DOCUMENTATION_INDEX.md)** - Complete documentation index
+- **[DOCUMENTATION_SYNC.md](DOCUMENTATION_SYNC.md)** - Documentation synchronization status
 - **[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)** - Implementation roadmap
 - **[PROVIDER_ARCHITECTURE.md](PROVIDER_ARCHITECTURE.md)** - Provider abstraction design
-- **[TESTING.md](TESTING.md)** - Testing guide
+- **[PROVIDER_TRAIT_DECISION.md](PROVIDER_TRAIT_DECISION.md)** - Provider trait integration status
+- **[TESTING.md](TESTING.md)** - Comprehensive testing guide
 - **[E2E_TESTS.md](E2E_TESTS.md)** - End-to-end testing
+- **[FILE_SPLIT_PROGRESS.md](FILE_SPLIT_PROGRESS.md)** - Module organization status
+- **[RESOURCES_SPLIT_COMPLETE.md](RESOURCES_SPLIT_COMPLETE.md)** - Resources module structure
 
 ## Python Integration
 

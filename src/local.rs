@@ -1,3 +1,8 @@
+//! Local training execution
+//!
+//! Provides functionality for running training scripts locally.
+//! Automatically detects and uses `uv` for Python scripts when available.
+
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
 use crate::training::TrainingSession;
@@ -7,7 +12,7 @@ use std::process::Command;
 use tracing::info;
 
 pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Result<()> {
-    crate::validation::validate_path(&script.display().to_string())?;
+    crate::validation::validate_path_path(&script)?;
 
     if !script.exists() {
         let mut err = format!("Script not found: {}", script.display());

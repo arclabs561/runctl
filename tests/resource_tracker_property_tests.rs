@@ -36,7 +36,8 @@ proptest! {
             // Cost should always be non-negative
             prop_assert!(tracked.accumulated_cost >= 0.0);
             prop_assert!(tracked.status.cost_per_hour >= 0.0);
-        });
+            Ok(())
+        })?;
     }
 
     #[test]
@@ -80,7 +81,8 @@ proptest! {
 
                 // Longer running should have higher or equal cost
                 prop_assert!(tracked2.accumulated_cost >= tracked1.accumulated_cost);
-            });
+                Ok(())
+            })?;
         }
     }
 
@@ -101,7 +103,7 @@ proptest! {
             tags: vec![],
         };
 
-        run_async(|| async {
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
             tracker.register(status.clone()).await.unwrap();
             let tracked = tracker.get_by_id(&status.id).await.unwrap();
 
@@ -188,7 +190,8 @@ proptest! {
             let tracked = tracker.get_by_id(&resource_id).await.unwrap();
             prop_assert!(tracked.usage_history.len() <= 1000);
             prop_assert_eq!(tracked.usage_history.len(), 1000);
-        });
+            Ok(())
+        })?;
     }
 
     #[test]
@@ -227,6 +230,7 @@ proptest! {
             let total = tracker.get_total_cost().await;
             // Allow small floating point differences
             prop_assert!((total - expected_sum).abs() < 0.0001);
-        });
+            Ok(())
+        })?;
     }
 }

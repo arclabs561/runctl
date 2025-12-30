@@ -1,3 +1,11 @@
+//! RunPod integration
+//!
+//! Provides functionality for managing RunPod GPU pods:
+//! - Create and manage pods
+//! - Execute training on pods
+//! - Monitor pod status
+//! - Download results from pods
+
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
 use clap::Subcommand;

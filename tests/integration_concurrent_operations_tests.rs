@@ -72,11 +72,13 @@ async fn test_concurrent_read_write() {
     let mut handles = vec![];
 
     // 10 concurrent readers
+    let resource_id = "test-concurrent".to_string();
     for _ in 0..10 {
         let tracker_clone = Arc::clone(&tracker);
+        let resource_id_clone = resource_id.clone();
         let handle = tokio::spawn(async move {
             for _ in 0..100 {
-                let _ = tracker_clone.get_by_id("test-concurrent").await;
+                let _ = tracker_clone.get_by_id(&resource_id_clone).await;
                 sleep(Duration::from_millis(1)).await;
             }
         });
@@ -86,6 +88,7 @@ async fn test_concurrent_read_write() {
     // 2 concurrent state updaters
     for i in 0..2 {
         let tracker_clone = Arc::clone(&tracker);
+        let resource_id_clone = resource_id.clone();
         let handle = tokio::spawn(async move {
             for _ in 0..10 {
                 let new_state = if i % 2 == 0 {
@@ -94,7 +97,7 @@ async fn test_concurrent_read_write() {
                     ResourceState::Stopped
                 };
                 let _ = tracker_clone
-                    .update_state("test-concurrent", new_state)
+                    .update_state(&resource_id_clone, new_state)
                     .await;
                 sleep(Duration::from_millis(10)).await;
             }
@@ -108,7 +111,8 @@ async fn test_concurrent_read_write() {
     }
 
     // Resource should still exist and be accessible
-    let resource = tracker.get_by_id("test-concurrent").await;
+    let resource_id = "test-concurrent".to_string();
+    let resource = tracker.get_by_id(&resource_id).await;
     assert!(resource.is_some());
 }
 

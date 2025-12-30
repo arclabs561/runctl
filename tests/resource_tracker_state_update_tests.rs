@@ -34,10 +34,12 @@ async fn test_update_state_running_to_stopped() {
         .await
         .unwrap();
 
-    // After stopping, cost should be 0 (stopped resources don't accrue costs)
+    // After stopping, cost should be preserved (stopped resources don't accrue new costs,
+    // but the cost incurred while running should be preserved)
+    let cost_before_stop = tracked.accumulated_cost;
     let tracked = tracker.get_by_id(&status.id).await.unwrap();
     assert_eq!(tracked.status.state, ResourceState::Stopped);
-    assert_eq!(tracked.accumulated_cost, 0.0);
+    assert_eq!(tracked.accumulated_cost, cost_before_stop);
 }
 
 #[tokio::test]
@@ -57,10 +59,10 @@ async fn test_update_state_stopped_to_running() {
 
     tracker.register(status.clone()).await.unwrap();
 
-    // Initially stopped, should have 0 cost
+    // Initially stopped, should have 0 cost (was never running, so no cost accumulated)
     let tracked = tracker.get_by_id(&status.id).await.unwrap();
     assert_eq!(tracked.status.state, ResourceState::Stopped);
-    assert_eq!(tracked.accumulated_cost, 0.0);
+    assert_eq!(tracked.accumulated_cost, 0.0); // Never ran, so 0 cost
 
     // Update to running
     tracker

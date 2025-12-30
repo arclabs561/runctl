@@ -1,7 +1,32 @@
 //! Resource tracking and cost awareness
 //!
-//! Tracks what resources exist, what's running, and resource usage
-//! to enable cost awareness and safe cleanup.
+//! Tracks resource lifecycle and usage to enable cost awareness and safe cleanup.
+//!
+//! ## Design
+//!
+//! `ResourceTracker` maintains an in-memory map of resources. It's designed for
+//! single-process use (CLI tool). Resources are registered when created and
+//! updated as their state changes.
+//!
+//! ## Cost Calculation
+//!
+//! Accumulated cost is calculated on-demand when accessing resources via
+//! `get_running()`, `get_by_id()`, etc. This ensures costs are always current
+//! based on `launch_time` and `cost_per_hour`, without requiring periodic
+//! background tasks.
+//!
+//! ## Resource Lifecycle
+//!
+//! - `ResourceStatus`: Provider-agnostic resource state (from `provider` module)
+//! - `TrackedResource`: Internal tracking with usage history and accumulated cost
+//! - Resources are registered via `register()` when created
+//! - State updates via `update_state()` as resources transition
+//! - Usage metrics added via `update_usage()` for monitoring
+//!
+//! ## Thread Safety
+//!
+//! Uses `Arc<Mutex<HashMap>>` for thread-safe access. All methods are async
+//! to avoid blocking on the mutex.
 
 use crate::error::{Result, TrainctlError};
 use crate::provider::{ResourceId, ResourceState, ResourceStatus};
@@ -59,6 +84,10 @@ impl ResourceTracker {
         }
 
         // Convert tags from Vec<(String, String)> to HashMap
+        // Note: We clone here because status.tags is needed for ResourceStatus.
+        // The optimization to use into_iter() would require restructuring to extract
+        // tags first, which adds complexity. Cloning is acceptable here since tags
+        // are typically small (<15 items based on research).
         let tags: HashMap<String, String> = status.tags.iter().cloned().collect();
 
         resources.insert(
@@ -135,15 +164,22 @@ impl ResourceTracker {
     }
 
     /// Calculate accumulated cost for a resource based on launch time
+    ///
+    /// For running resources, calculates cost from launch_time to now.
+    /// For stopped/terminated resources, preserves the existing accumulated_cost
+    /// (doesn't reset to 0.0) since those costs were already incurred.
     fn calculate_accumulated_cost_for_resource(resource: &TrackedResource) -> f64 {
         use crate::utils::calculate_accumulated_cost;
         if matches!(
             resource.status.state,
             ResourceState::Running | ResourceState::Starting
         ) {
+            // Running: calculate cost from launch_time to now
             calculate_accumulated_cost(resource.status.cost_per_hour, resource.status.launch_time)
         } else {
-            0.0
+            // Stopped/Terminated: preserve existing accumulated cost
+            // (don't reset to 0.0 - those costs were already incurred)
+            resource.accumulated_cost
         }
     }
 

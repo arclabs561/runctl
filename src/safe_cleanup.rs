@@ -1,14 +1,23 @@
 //! Safe cleanup and teardown operations
 //!
-//! Provides careful resource cleanup with confirmation, dry-run,
-//! and safety checks to prevent accidental deletion.
+//! Provides careful resource cleanup with confirmation, dry-run, and safety checks.
 //!
-//! ## Protection Mechanisms
+//! ## Design Rationale
 //!
-//! Resources can be protected from deletion through:
-//! - **Explicit protection**: Call `safety.protect(resource_id)` to mark a resource as protected
-//! - **Tag-based protection**: Resources with `runctl:protected=true` tag are automatically protected
-//! - **Time-based protection**: Resources newer than `min_age_minutes` require `--force` to delete
+//! Accidental resource deletion is costly and disruptive. This module implements
+//! multiple protection layers:
+//!
+//! 1. **Time-based protection**: Prevents deletion of resources < 5 minutes old
+//!    (catches immediate mistakes, requires `--force` to override)
+//! 2. **Tag-based protection**: Resources tagged `runctl:protected=true` cannot be deleted
+//!    (explicit opt-in protection for important resources)
+//! 3. **Explicit protection**: Programmatic protection via `safety.protect()`
+//!    (for resources that should never be deleted)
+//!
+//! ## Protection Precedence
+//!
+//! All protections are checked unless `force=true`. If any protection applies,
+//! the resource is skipped. The `--force` flag bypasses all protections (use with caution).
 //!
 //! ## Usage
 //!
@@ -16,6 +25,7 @@
 //! use runctl::safe_cleanup::{safe_cleanup, CleanupSafety};
 //! use runctl::resource_tracking::ResourceTracker;
 //!
+//! # async fn example() -> runctl::error::Result<()> {
 //! let tracker = ResourceTracker::new();
 //! let safety = CleanupSafety::new();
 //!
@@ -36,6 +46,8 @@
 //!     false, // dry_run
 //!     false, // force
 //! ).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::error::Result;
@@ -69,6 +81,7 @@ impl CleanupSafety {
     }
 
     /// Create with custom minimum age
+    #[allow(dead_code)] // Reserved for future use
     pub fn with_min_age(minutes: u64) -> Self {
         Self {
             min_age_minutes: minutes,
@@ -77,6 +90,7 @@ impl CleanupSafety {
     }
 
     /// Mark a resource as protected
+    #[allow(dead_code)] // Reserved for future use
     pub fn protect(&mut self, resource_id: ResourceId) {
         self.protected_resources.insert(resource_id);
     }
@@ -116,6 +130,7 @@ impl CleanupSafety {
     }
 
     /// Get list of resources safe to delete
+    #[allow(dead_code)] // Reserved for future use
     pub async fn get_safe_to_delete(
         &self,
         tracker: &ResourceTracker,

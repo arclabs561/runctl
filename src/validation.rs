@@ -1,7 +1,31 @@
 //! Input validation utilities
 //!
-//! Provides validation functions for user inputs to prevent
-//! invalid data from causing runtime errors.
+//! Provides validation functions for user inputs to prevent invalid data from
+//! causing runtime errors or security issues.
+//!
+//! ## Design Philosophy
+//!
+//! Validation happens at function boundaries (CLI args, API inputs) before
+//! operations are performed. This provides early error detection and clear
+//! error messages.
+//!
+//! ## Security Considerations
+//!
+//! - `validate_path()` prevents path traversal attacks (`..` patterns)
+//! - `validate_s3_path()` ensures S3 paths are properly formatted
+//! - All validators return `TrainctlError::Validation` with clear field/reason
+//!
+//! ## When to Validate
+//!
+//! Validate inputs:
+//! - At CLI argument parsing boundaries
+//! - Before making cloud API calls
+//! - Before file system operations
+//! - Before constructing resource identifiers
+//!
+//! Don't validate:
+//! - Internal function parameters (trusted callers)
+//! - Already-validated data (avoid redundant checks)
 
 use crate::error::{Result, TrainctlError};
 
@@ -144,21 +168,63 @@ pub fn validate_project_name(name: &str) -> Result<()> {
 /// Validate path for security (prevent path traversal)
 ///
 /// Checks that path doesn't contain ".." or other dangerous patterns.
+///
+/// # Note
+///
+/// This function accepts `&str` for compatibility with existing code that converts
+/// `PathBuf` to string. For new code, consider using `validate_path_path()` which
+/// accepts `&Path` directly and avoids unnecessary string allocations.
 pub fn validate_path(path: &str) -> Result<()> {
-    if path.contains("..") {
+    use std::path::Path;
+    validate_path_path(Path::new(path))
+}
+
+/// Validate a file or directory path (Path version)
+///
+/// Checks that the path doesn't contain dangerous patterns (path traversal, null bytes).
+/// This is a security validation function, not an existence check.
+///
+/// # Arguments
+///
+/// * `path` - Path reference (accepts `&Path`, `&PathBuf`, or any `AsRef<Path>`)
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use runctl::validation::validate_path_path;
+/// use std::path::PathBuf;
+///
+/// validate_path_path(PathBuf::from("/path/to/file").as_path())?;
+/// validate_path_path(&pathbuf)?;
+/// ```
+///
+/// # Note
+///
+/// This function validates path patterns for security (preventing `..` traversal attacks),
+/// but does NOT check if the path exists. Callers should check existence separately if needed.
+pub fn validate_path_path(path: &std::path::Path) -> Result<()> {
+    // Convert to string for pattern checking
+    let path_str = path.to_string_lossy();
+    
+    if path_str.contains("..") {
         return Err(TrainctlError::Validation {
             field: "path".to_string(),
             reason: "Path cannot contain '..' (path traversal not allowed)".to_string(),
         });
     }
 
-    // Check for null bytes
-    if path.contains('\0') {
+    // Check for null bytes (shouldn't happen with Path, but be safe)
+    if path_str.contains('\0') {
         return Err(TrainctlError::Validation {
             field: "path".to_string(),
             reason: "Path cannot contain null bytes".to_string(),
         });
     }
+
+    // Note: We don't check existence here because validate_path() is used
+    // for security validation (preventing path traversal), not for checking
+    // if files exist. Existence checks should be done separately by callers.
+    // This matches the original behavior of validate_path(&str).
 
     Ok(())
 }

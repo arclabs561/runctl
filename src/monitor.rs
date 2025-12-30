@@ -1,3 +1,8 @@
+//! Training monitoring
+//!
+//! Provides log file monitoring and checkpoint progress tracking.
+//! Supports following log files in real-time and detecting checkpoint saves.
+
 use crate::error::{Result, TrainctlError};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::fs;
@@ -14,12 +19,12 @@ pub async fn monitor(
     let has_checkpoint = checkpoint.is_some();
 
     if let Some(log_path) = &log {
-        crate::validation::validate_path(&log_path.display().to_string())?;
+        crate::validation::validate_path_path(log_path)?;
         monitor_log(log_path, follow).await?;
     }
 
     if let Some(checkpoint_dir) = &checkpoint {
-        crate::validation::validate_path(&checkpoint_dir.display().to_string())?;
+        crate::validation::validate_path_path(checkpoint_dir)?;
         monitor_checkpoint(checkpoint_dir).await?;
     }
 

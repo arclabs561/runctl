@@ -1,3 +1,33 @@
+//! Configuration management
+//!
+//! Handles loading and parsing of `.runctl.toml` configuration files.
+//!
+//! ## Configuration Philosophy
+//!
+//! All configuration is optional - runctl works with sensible defaults.
+//! Configuration files are discovered automatically (current directory → home directory).
+//! Environment variables can override config values (see individual field docs).
+//!
+//! ## Config Structure
+//!
+//! - `[aws]`: AWS-specific settings (region, instance types, spot pricing)
+//! - `[runpod]`: RunPod API configuration
+//! - `[local]`: Local execution settings
+//! - `[checkpoint]`: Checkpoint management defaults
+//! - `[monitoring]`: Logging and monitoring configuration
+//!
+//! ## Defaults
+//!
+//! If a config file doesn't exist, `Config::load()` returns defaults suitable
+//! for basic usage. AWS defaults to `us-east-1`, `t3.medium` instances.
+//! RunPod defaults to RTX 4080 SUPER with 30GB disk.
+//!
+//! ## Validation
+//!
+//! Validation happens on load. Invalid values return `ConfigError::InvalidValue`
+//! with a reason. Missing required fields return `ConfigError::MissingField`.
+//! The config file path is included in error messages for debugging.
+
 use crate::error::{ConfigError, Result, TrainctlError};
 use crate::resource_tracking::ResourceTracker;
 use clap::Subcommand;

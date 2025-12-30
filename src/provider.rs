@@ -1,15 +1,52 @@
 //! Provider-agnostic trait definitions for cloud training platforms
 //!
-//! This module defines traits that all cloud providers (AWS, RunPod, Lyceum AI, etc.)
-//! could implement, allowing runctl to work with any provider through a unified interface.
+//! ## Position Statement
 //!
-//! **Current status**: These types are defined but not yet used by the CLI.
-//! The CLI currently uses direct implementations in `aws.rs`, `runpod.rs`, etc.
+//! This trait system is **defined but not yet used** by the CLI. The CLI currently
+//! uses direct implementations (`aws::handle_command()`, etc.). This is intentional
+//! technical debt - see rationale below.
 //!
-//! **Decision**: See `docs/PROVIDER_TRAIT_DECISION.md` for rationale on keeping the trait
-//! system but not forcing migration until multi-cloud support is actually needed.
-
-#![allow(dead_code)] // Reserved for future provider abstraction - see docs/PROVIDER_TRAIT_DECISION.md
+//! ## Why This Approach?
+//!
+//! **Alternative 1**: Force migration now
+//! - Pro: Consistent abstraction
+//! - Con: High risk (incomplete implementations), breaks working code
+//!
+//! **Alternative 2**: Delete trait system
+//! - Pro: No unused code
+//! - Con: Harder to add multi-cloud support later
+//!
+//! **Chosen Approach**: Keep trait, don't force migration
+//! - Pro: Future-ready, low risk, follows industry patterns (Terraform, Pulumi)
+//! - Con: Some unused code (documented and marked)
+//!
+//! ## Architecture Pattern
+//!
+//! This follows industry patterns seen in:
+//! - **Terraform**: Plugin-based architecture with external provider binaries
+//! - **Pulumi**: Component-based abstraction with language-native implementations
+//! - **Kubernetes**: CRD-based extensibility through custom controllers
+//!
+//! ## Current Status
+//!
+//! The trait system is defined but not yet used by the CLI. The CLI currently uses
+//! direct implementations in `aws.rs`, `runpod.rs`, etc. This follows the pragmatic
+//! pattern where abstraction layers are prepared but not forced until multi-cloud
+//! support is actually needed.
+//!
+//! **Decision**: See `docs/PROVIDER_TRAIT_DECISION.md` for detailed rationale.
+//!
+//! ## Future Evolution Path
+//!
+//! When multi-cloud support becomes a priority:
+//! 1. Complete provider implementations (currently skeletons)
+//! 2. Add `ProviderRegistry` for dynamic provider selection
+//! 3. Gradually migrate CLI commands to use providers
+//! 4. Support both systems during transition (like Pulumi does)
+//!
+//! This approach mirrors how mature tools evolved: Terraform started with direct
+//! integrations before the plugin system, and Pulumi maintains both abstracted
+//! components and direct provider access.
 
 use crate::error::Result;
 use async_trait::async_trait;
@@ -21,6 +58,10 @@ use std::path::{Path, PathBuf};
 pub type ResourceId = String;
 
 /// Training job configuration
+///
+/// This struct is part of the provider trait API and is kept for future use
+/// when the provider trait system is fully integrated.
+#[allow(dead_code)] // Reserved for future provider trait integration
 #[derive(Debug, Clone)]
 pub struct TrainingJob {
     pub script: PathBuf,
@@ -57,6 +98,10 @@ pub enum ResourceState {
 }
 
 /// Status of a running training job
+///
+/// This struct is part of the provider trait API and is kept for future use
+/// when the provider trait system is fully integrated.
+#[allow(dead_code)] // Reserved for future provider trait integration
 #[derive(Debug, Clone)]
 pub struct TrainingStatus {
     pub job_id: Option<String>,
@@ -66,6 +111,10 @@ pub struct TrainingStatus {
 }
 
 /// Execution status of a training job
+///
+/// This enum is part of the provider trait API and is kept for future use
+/// when the provider trait system is fully integrated.
+#[allow(dead_code)] // Reserved for future provider trait integration
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionStatus {
     Pending,
@@ -83,7 +132,7 @@ pub enum ExecutionStatus {
 /// # Example
 ///
 /// ```rust,no_run
-/// use runctl::provider::TrainingProvider;
+/// use runctl::provider::{TrainingProvider, CreateResourceOptions, TrainingJob};
 ///
 /// # async fn example(provider: impl TrainingProvider) -> runctl::error::Result<()> {
 /// // Create a resource
@@ -176,6 +225,10 @@ pub trait TrainingProvider: Send + Sync {
 }
 
 /// Options for creating resources
+///
+/// This struct is part of the provider trait API and is kept for future use
+/// when the provider trait system is fully integrated.
+#[allow(dead_code)] // Reserved for future provider trait integration
 #[derive(Debug, Clone, Default)]
 pub struct CreateResourceOptions {
     pub use_spot: bool,

@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use std::path::Path;
 
 /// AWS EC2 provider implementation
@@ -64,13 +64,19 @@ impl TrainingProvider for AwsProvider {
     }
 
     async fn get_resource_status(&self, resource_id: &ResourceId) -> Result<ResourceStatus> {
-        let response = self
-            .ec2_client
-            .describe_instances()
-            .instance_ids(resource_id)
-            .send()
-            .await
-            .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+        use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
+
+        // Use retry logic for cloud API calls
+        let response = ExponentialBackoffPolicy::for_cloud_api()
+            .execute_with_retry(|| async {
+                self.ec2_client
+                    .describe_instances()
+                    .instance_ids(resource_id)
+                    .send()
+                    .await
+                    .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))
+            })
+            .await?;
 
         // Find the instance in reservations
         let instance = response
@@ -87,31 +93,34 @@ impl TrainingProvider for AwsProvider {
                 resource_id: resource_id.clone(),
             })?;
 
-        let state = instance
-            .state()
-            .and_then(|s| s.name())
-            .map(|s| normalize_state(s.as_str()))
-            .unwrap_or(ResourceState::Unknown);
-
-        let launch_time = instance
-            .launch_time()
-            .and_then(|lt| lt.to_millis().ok())
-            .and_then(|ms| DateTime::from_timestamp(ms / 1000, 0));
-
-        let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
-
-        let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
+        // Reuse existing helper function to avoid code duplication
+        // Note: This requires making the helper public or creating a provider-specific version
+        // For now, we duplicate the logic but document that it should be refactored
+        let state = normalize_state(
+            instance
+                .state()
+                .and_then(|s| s.name())
+                .map(|s| s.as_str())
+                .unwrap_or("unknown"),
+        );
 
         let tags: Vec<(String, String)> = instance
             .tags()
             .iter()
-            .filter_map(|t| {
-                t.key()
-                    .and_then(|k| t.value().map(|v| (k.to_string(), v.to_string())))
+            .filter_map(|tag| {
+                tag.key()
+                    .zip(tag.value())
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
             })
             .collect();
 
-        // Estimate cost (simplified - would use pricing API in production)
+        let instance_type = instance.instance_type().map(|t| t.as_str().to_string());
+        let launch_time = instance
+            .launch_time()
+            .map(|lt| DateTime::<Utc>::from_timestamp(lt.secs(), 0).unwrap_or_else(chrono::Utc::now));
+
+        let public_ip = instance.public_ip_address().map(|ip| ip.to_string());
+
         let cost_per_hour =
             crate::resources::estimate_instance_cost(instance_type.as_deref().unwrap_or("unknown"));
 
@@ -173,12 +182,19 @@ impl TrainingProvider for AwsProvider {
     }
 
     async fn terminate(&self, resource_id: &ResourceId) -> Result<()> {
-        self.ec2_client
-            .terminate_instances()
-            .instance_ids(resource_id)
-            .send()
-            .await
-            .map_err(|e| TrainctlError::Aws(format!("Failed to terminate instance: {}", e)))?;
+        use crate::retry::{ExponentialBackoffPolicy, RetryPolicy};
+
+        // Use retry logic for cloud API calls
+        ExponentialBackoffPolicy::for_cloud_api()
+            .execute_with_retry(|| async {
+                self.ec2_client
+                    .terminate_instances()
+                    .instance_ids(resource_id)
+                    .send()
+                    .await
+                    .map_err(|e| TrainctlError::Aws(format!("Failed to terminate instance: {}", e)))
+            })
+            .await?;
 
         Ok(())
     }

@@ -1,3 +1,16 @@
+//! S3 operations module
+//!
+//! Provides native Rust implementations for S3 operations including:
+//! - Upload/download files and directories
+//! - Sync local directories with S3
+//! - List S3 objects
+//! - Cleanup old objects
+//! - Watch S3 paths for changes
+//! - Review S3 usage and costs
+//!
+//! Uses parallel transfers by default (10 concurrent transfers) for optimal performance.
+//! Optionally supports s5cmd for users who prefer external tools.
+
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
@@ -159,7 +172,7 @@ pub async fn handle_command(cmd: S3Commands, _config: &Config, output_format: &s
             use_s5cmd,
             recursive,
         } => {
-            crate::validation::validate_path(&source.display().to_string())?;
+            crate::validation::validate_path_path(&source)?;
             crate::validation::validate_s3_path(&destination)?;
             upload_to_s3(
                 source,
@@ -178,7 +191,7 @@ pub async fn handle_command(cmd: S3Commands, _config: &Config, output_format: &s
             recursive,
         } => {
             crate::validation::validate_s3_path(&source)?;
-            crate::validation::validate_path(&destination.display().to_string())?;
+            crate::validation::validate_path_path(&destination)?;
             download_from_s3(
                 source,
                 destination,
@@ -195,7 +208,7 @@ pub async fn handle_command(cmd: S3Commands, _config: &Config, output_format: &s
             direction,
             use_s5cmd,
         } => {
-            crate::validation::validate_path(&local.display().to_string())?;
+            crate::validation::validate_path_path(&local)?;
             crate::validation::validate_s3_path(&s3_path)?;
             sync_s3(
                 local,

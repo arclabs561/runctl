@@ -1,3 +1,26 @@
+//! Checkpoint management
+//!
+//! Provides functionality for managing training checkpoints.
+//!
+//! ## Design Philosophy
+//!
+//! Checkpoints are treated as files on disk. This module provides operations
+//! for listing, inspecting, cleaning up, and resuming from checkpoints.
+//!
+//! ## Checkpoint Format
+//!
+//! Checkpoints are typically PyTorch `.pt` files or similar model serialization
+//! formats. Metadata (epoch, loss) may be embedded in the file or stored separately.
+//! This module focuses on file-level operations; metadata parsing is left to
+//! the training framework.
+//!
+//! ## Operations
+//!
+//! - **List**: Enumerate checkpoints in a directory (sorted by modification time)
+//! - **Info**: Display checkpoint metadata (size, modification time, embedded data)
+//! - **Resume**: Run training script with checkpoint path as argument
+//! - **Cleanup**: Remove old checkpoints (keeps last N, removes others)
+
 use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};
 use clap::Subcommand;
@@ -95,16 +118,16 @@ pub enum CheckpointCommands {
 pub async fn handle_command(cmd: CheckpointCommands, output_format: &str) -> Result<()> {
     match cmd {
         CheckpointCommands::List { dir } => {
-            crate::validation::validate_path(&dir.display().to_string())?;
+            crate::validation::validate_path_path(&dir)?;
             list_checkpoints(&dir, output_format).await
         }
         CheckpointCommands::Info { path } => {
-            crate::validation::validate_path(&path.display().to_string())?;
+            crate::validation::validate_path_path(&path)?;
             show_info(&path, output_format).await
         }
         CheckpointCommands::Resume { path, script } => {
-            crate::validation::validate_path(&path.display().to_string())?;
-            crate::validation::validate_path(&script.display().to_string())?;
+            crate::validation::validate_path_path(&path)?;
+            crate::validation::validate_path_path(&script)?;
             resume_from(&path, &script, output_format).await
         }
         CheckpointCommands::Cleanup {
@@ -112,7 +135,7 @@ pub async fn handle_command(cmd: CheckpointCommands, output_format: &str) -> Res
             keep_last_n,
             dry_run,
         } => {
-            crate::validation::validate_path(&dir.display().to_string())?;
+            crate::validation::validate_path_path(&dir)?;
             cleanup_checkpoints(&dir, keep_last_n, dry_run, output_format).await
         }
     }

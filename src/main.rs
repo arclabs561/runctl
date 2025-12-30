@@ -1,3 +1,8 @@
+//! runctl CLI entry point
+//!
+//! This is the main binary for the runctl command-line interface.
+//! It parses command-line arguments and dispatches to appropriate modules.
+
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -243,7 +248,7 @@ async fn main() -> Result<()> {
     let config = Config::load(cli.config.as_deref())?;
 
     // Execute command with error handling for JSON output
-    // Preserve error context by using anyhow::Error::from instead of string conversion
+    // Preserve error context by using anyhow::Error::from which preserves the error chain
     let result: anyhow::Result<()> = match cli.command {
         Commands::Local { script, args } => local::train(script, args, &config)
             .await

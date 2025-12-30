@@ -1,29 +1,46 @@
 //! Retry logic with exponential backoff
 //!
-//! Provides retry policies for handling transient failures
-//! in cloud API calls and other operations.
+//! Provides retry policies for handling transient failures in cloud API calls.
+//!
+//! ## Design Rationale
+//!
+//! Cloud APIs can fail transiently due to rate limiting, network issues, or
+//! temporary service unavailability. Exponential backoff with jitter prevents
+//! thundering herd problems when multiple clients retry simultaneously.
+//!
+//! The default policy uses:
+//! - 5 attempts for cloud APIs (higher than default 3 due to cloud API volatility)
+//! - Exponential backoff: 100ms → 200ms → 400ms → 800ms → 1600ms (capped at 30s)
+//! - 10% jitter to randomize retry timing across clients
+//!
+//! ## When to Retry
+//!
+//! Only errors implementing `IsRetryable` are retried. Non-retryable errors
+//! (e.g., validation errors, authentication failures) fail immediately.
 //!
 //! ## Usage
 //!
 //! ```rust,no_run
 //! use runctl::retry::{ExponentialBackoffPolicy, RetryPolicy};
+//! use runctl::error::TrainctlError;
 //!
+//! # async fn example() -> runctl::error::Result<()> {
 //! let policy = ExponentialBackoffPolicy::for_cloud_api();
 //!
 //! let result = policy.execute_with_retry(|| async {
 //!     // Your operation that might fail
-//!     cloud_client.describe_instances().send().await
-//!         .map_err(|e| TrainctlError::Aws(e.to_string()))
+//!     // Example: cloud_client.describe_instances().send().await
+//!     Ok::<(), TrainctlError>(())
 //! }).await?;
+//! # Ok(())
+//! # }
 //! ```
 //!
-//! ## Retry Policies
+//! ## Policy Selection
 //!
-//! - `ExponentialBackoffPolicy::for_cloud_api()` - 5 attempts, optimized for cloud APIs
-//! - `ExponentialBackoffPolicy::new(n)` - Custom number of attempts
-//! - `NoRetryPolicy` - No retries (for operations that shouldn't be retried)
-//!
-//! Only retryable errors (as determined by `IsRetryable` trait) are retried.
+//! - `for_cloud_api()`: Use for AWS EC2, S3, SSM calls (5 attempts)
+//! - `new(n)`: Custom attempts for specific use cases
+//! - `NoRetryPolicy`: For operations that must not be retried (e.g., resource deletion)
 
 use crate::error::{IsRetryable, Result, TrainctlError};
 use std::future::Future;
@@ -34,6 +51,7 @@ use tracing::{info, warn};
 const DEFAULT_INITIAL_RETRY_DELAY_MS: u64 = 100;
 const DEFAULT_MAX_RETRY_DELAY_SECS: u64 = 30;
 const DEFAULT_JITTER_FACTOR: f64 = 0.1;
+#[allow(dead_code)] // Reserved for future default policy
 const DEFAULT_MAX_ATTEMPTS: u32 = 3;
 const CLOUD_API_MAX_ATTEMPTS: u32 = 5;
 
@@ -74,6 +92,7 @@ impl ExponentialBackoffPolicy {
     ///
     /// Note: This is not the `Default` trait implementation to avoid
     /// confusion with the standard library's `Default::default()`.
+    #[allow(dead_code)] // Reserved for future use
     pub fn default_policy() -> Self {
         Self::new(DEFAULT_MAX_ATTEMPTS)
     }
@@ -158,6 +177,7 @@ impl RetryPolicy for ExponentialBackoffPolicy {
 }
 
 /// No retry policy (for operations that shouldn't be retried)
+#[allow(dead_code)] // Reserved for future use
 pub struct NoRetryPolicy;
 
 impl RetryPolicy for NoRetryPolicy {

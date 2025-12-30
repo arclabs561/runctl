@@ -4,8 +4,7 @@
 //! even though it's not yet used by the CLI (see docs/PROVIDER_TRAIT_DECISION.md).
 
 use chrono::Utc;
-use runctl::error::Result;
-use runctl::provider::{ResourceId, ResourceState, ResourceStatus, TrainingProvider};
+use runctl::provider::{ResourceState, ResourceStatus, TrainingProvider};
 use runctl::providers::AwsProvider;
 
 #[tokio::test]

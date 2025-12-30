@@ -1,6 +1,22 @@
 //! Common utility functions for runctl
 //!
 //! Provides helpers for path management, time formatting, and cost calculations.
+//!
+//! ## Design Philosophy
+//!
+//! These utilities are pure functions with no side effects (except `ensure_dir`).
+//! They're designed to be composable and reusable across the codebase.
+//!
+//! ## Cost Calculation
+//!
+//! Cost calculations use approximate 2024-2025 AWS pricing. Actual costs may vary
+//! by region, spot pricing, and discounts. The `get_instance_cost()` function
+//! provides a fallback estimate for unknown instance types based on naming patterns.
+//!
+//! ## Time Formatting
+//!
+//! Duration and runtime formatting uses human-readable strings (e.g., "1h 23m 45s").
+//! This is optimized for CLI output readability, not precision.
 
 use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};

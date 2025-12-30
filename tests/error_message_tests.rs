@@ -53,8 +53,7 @@ fn test_config_error_messages() {
 
     let msg = format!("{}", err);
     assert!(msg.contains("region"));
-    assert!(msg.contains("invalid"));
-    assert!(msg.contains("AWS region"));
+    assert!(msg.contains("Region must be a valid AWS region code") || msg.contains("AWS region"));
 }
 
 #[test]

@@ -18,10 +18,12 @@ src/
 ├── provider.rs          # Trait definitions and common types
 └── providers/
     ├── mod.rs          # Provider registry
-    ├── aws_provider.rs # AWS EC2 implementation
-    ├── runpod_provider.rs # RunPod implementation
-    └── lyceum_provider.rs # Lyceum AI implementation
+    ├── aws_provider.rs # AWS EC2 implementation (skeleton, not yet used)
+    ├── runpod_provider.rs # RunPod implementation (skeleton, not yet used)
+    └── lyceum_provider.rs # Lyceum AI implementation (skeleton, not yet used)
 ```
+
+**Note**: The provider trait system is defined but not yet fully integrated. The CLI currently uses direct AWS implementation in `src/aws/`. See `docs/PROVIDER_TRAIT_DECISION.md` for details.
 
 ## Core Traits
 

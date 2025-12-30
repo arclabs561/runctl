@@ -2,11 +2,16 @@
 //!
 //! Provides utilities to create error messages with suggestions
 //! and actionable guidance for users.
+//!
+//! Note: These functions are currently unused but reserved for future
+//! error message improvements. They provide a consistent API for
+//! creating rich error messages with suggestions.
 
 use crate::error::{ConfigError, TrainctlError};
 use crate::provider::ResourceId;
 
 /// Create a ResourceNotFound error with helpful suggestions
+#[allow(dead_code)] // Reserved for future use
 pub fn resource_not_found_with_suggestions(
     resource_type: impl Into<String>,
     resource_id: impl Into<ResourceId>,
@@ -31,6 +36,7 @@ pub fn resource_not_found_with_suggestions(
 }
 
 /// Create a validation error with format examples
+#[allow(dead_code)] // Reserved for future use
 pub fn validation_error_with_examples(
     field: impl Into<String>,
     reason: impl Into<String>,
@@ -48,6 +54,7 @@ pub fn validation_error_with_examples(
 }
 
 /// Create a cloud provider error with troubleshooting steps
+#[allow(dead_code)] // Reserved for future use
 pub fn cloud_provider_error_with_troubleshooting(
     provider: impl Into<String>,
     message: impl Into<String>,
@@ -69,6 +76,7 @@ pub fn cloud_provider_error_with_troubleshooting(
 }
 
 /// Create a config error with fix suggestions
+#[allow(dead_code)] // Reserved for future use
 pub fn config_error_with_fix(
     field: impl Into<String>,
     reason: impl Into<String>,
