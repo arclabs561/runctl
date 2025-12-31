@@ -197,23 +197,48 @@ fi
             // Step 2: Upload checkpoint to S3 if configured
             let checkpoint_s3_path = if let (Some(bucket), Some(path)) = (s3_bucket, checkpoint_path.as_ref()) {
                 if let Some(_client) = s3_client {
+                    // Extract filename from path (handle both absolute and relative paths)
+                    // Also handle paths with spaces or special characters
+                    let filename = std::path::Path::new(path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or_else(|| {
+                            // Fallback: use last component of path
+                            path.split('/').last().unwrap_or("checkpoint")
+                        });
+                    
                     // Upload checkpoint to S3
                     let s3_key = if let Some(p) = s3_prefix {
-                        format!("{}/{}/{}", p, instance_id, path)
+                        format!("{}/{}/{}", p, instance_id, filename)
                     } else {
-                        format!("checkpoints/{}/{}", instance_id, path)
+                        format!("checkpoints/{}/{}", instance_id, filename)
                     };
 
                     // Use SSM to execute AWS CLI command on instance to upload
+                    // Validate checkpoint file exists and is readable before upload
                     let upload_cmd = format!(
                         r#"
 if command -v aws >/dev/null 2>&1; then
-    aws s3 cp "{}" "s3://{}/{}" 2>&1 && echo "UPLOAD_SUCCESS:s3://{}/{}" || echo "UPLOAD_FAILED"
+    # Validate checkpoint file exists and is readable before upload
+    if [ ! -f "{}" ]; then
+        echo "UPLOAD_FAILED:Checkpoint file not found: {}"
+        exit 1
+    fi
+    if [ ! -r "{}" ]; then
+        echo "UPLOAD_FAILED:Checkpoint file not readable: {}"
+        exit 1
+    fi
+    # Upload with error handling
+    if aws s3 cp "{}" "s3://{}/{}" 2>&1; then
+        echo "UPLOAD_SUCCESS:s3://{}/{}"
+    else
+        echo "UPLOAD_FAILED"
+    fi
 else
     echo "AWS_CLI_NOT_AVAILABLE"
 fi
 "#,
-                        path, bucket, s3_key, bucket, s3_key
+                        path, path, path, path, path, bucket, s3_key, bucket, s3_key
                     );
 
                     match execute_ssm_command(ssm_client, instance_id, &upload_cmd).await {
@@ -240,13 +265,56 @@ fi
             };
 
             // Update training metadata with checkpoint location if we found one
+            // Prefer S3 path over local path (more reliable for resume)
             if let Some(checkpoint_location) = checkpoint_s3_path.as_ref().or(checkpoint_path.as_ref()) {
-                if let Ok(Some(mut metadata)) = get_training_metadata(instance_id, ec2_client).await {
-                    metadata.last_checkpoint = Some(PathBuf::from(checkpoint_location));
-                    if let Err(e) = store_training_metadata(instance_id, &metadata, ec2_client).await {
-                        warn!("Failed to update training metadata with checkpoint location: {}", e);
-                    } else {
-                        info!("Updated training metadata with checkpoint: {}", checkpoint_location);
+                // Use a retry mechanism to handle potential race conditions
+                let mut retries = 3;
+                while retries > 0 {
+                    match get_training_metadata(instance_id, ec2_client).await {
+                        Ok(Some(mut metadata)) => {
+                            // Only update if we have a better checkpoint (S3 > local)
+                            let should_update = match (&checkpoint_s3_path, &metadata.last_checkpoint) {
+                                (Some(s3_path), Some(existing)) => {
+                                    // Prefer S3 paths over local paths
+                                    let existing_str = existing.to_string_lossy();
+                                    s3_path.starts_with("s3://") && !existing_str.starts_with("s3://")
+                                        || checkpoint_s3_path.is_some()
+                                }
+                                (Some(_), None) => true, // No existing checkpoint
+                                (None, _) => checkpoint_path.is_some() && metadata.last_checkpoint.is_none(),
+                            };
+                            
+                            if should_update {
+                                metadata.last_checkpoint = Some(PathBuf::from(checkpoint_location));
+                                match store_training_metadata(instance_id, &metadata, ec2_client).await {
+                                    Ok(_) => {
+                                        info!("Updated training metadata with checkpoint: {}", checkpoint_location);
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to update training metadata with checkpoint location: {}", e);
+                                        retries -= 1;
+                                        if retries > 0 {
+                                            tokio::time::sleep(Duration::from_millis(100)).await;
+                                        }
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                        Ok(None) => {
+                            // No existing metadata, skip update (would lose other info)
+                            warn!("No existing training metadata found, skipping checkpoint update");
+                            break;
+                        }
+                        Err(e) => {
+                            warn!("Failed to retrieve training metadata for update: {}", e);
+                            retries -= 1;
+                            if retries > 0 {
+                                tokio::time::sleep(Duration::from_millis(100)).await;
+                            }
+                        }
                     }
                 }
             }
@@ -296,15 +364,55 @@ pub async fn store_training_metadata(
             .map_err(|e| TrainctlError::Aws(format!("Failed to store training metadata: {}", e)))?;
     } else {
         // Split across multiple tags
+        // IMPORTANT: Split by character, not bytes, to avoid splitting UTF-8 sequences
         let chunks: Vec<String> = encoded
-            .as_bytes()
+            .chars()
+            .collect::<Vec<_>>()
             .chunks(TAG_VALUE_LIMIT)
-            .map(|chunk| {
-                std::str::from_utf8(chunk)
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|_| String::new())
-            })
+            .map(|chunk| chunk.iter().collect())
             .collect();
+        
+        // First, delete old metadata tags to avoid orphaned chunks
+        // Get existing tags to find old metadata tags
+        let response = ec2_client
+            .describe_instances()
+            .instance_ids(instance_id)
+            .send()
+            .await
+            .ok();
+        
+        if let Some(resp) = response {
+            if let Some(instance) = crate::aws::helpers::find_instance_in_response(&resp, instance_id) {
+                let old_tags: Vec<String> = instance
+                    .tags()
+                    .iter()
+                    .filter_map(|t| {
+                        t.key().and_then(|k| {
+                            if k == "runctl:training_metadata" 
+                                || k.starts_with("runctl:training_metadata:") {
+                                Some(k.to_string())
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect();
+                
+                // Delete old tags if any exist
+                if !old_tags.is_empty() {
+                    let _ = ec2_client
+                        .delete_tags()
+                        .resources(instance_id)
+                        .tags(old_tags.iter().map(|k| {
+                            aws_sdk_ec2::types::Tag::builder()
+                                .key(k)
+                                .build()
+                        }))
+                        .send()
+                        .await;
+                }
+            }
+        }
         
         let mut tag_builder = ec2_client
             .create_tags()
@@ -471,37 +579,57 @@ pub async fn get_resume_checkpoint(
 }
 
 /// Find latest checkpoint in S3
+/// 
+/// Handles pagination to find checkpoints across all pages (S3 list_objects_v2
+/// returns max 1000 objects per page).
 async fn find_latest_checkpoint_in_s3(
     s3_client: &S3Client,
     bucket: &str,
     prefix: &str,
 ) -> Result<Option<String>> {
-    let response = s3_client
-        .list_objects_v2()
-        .bucket(bucket)
-        .prefix(prefix)
-        .send()
-        .await
-        .map_err(|e| TrainctlError::Aws(format!("Failed to list S3 objects: {}", e)))?;
-
     let mut checkpoints: Vec<(String, chrono::DateTime<chrono::Utc>)> = Vec::new();
+    let mut continuation_token: Option<String> = None;
 
-    for obj in response.contents() {
-        if let Some(key) = obj.key() {
-            // Check for checkpoint file extensions (including safetensors)
-            if key.ends_with(".pt") || key.ends_with(".ckpt") || key.ends_with(".pth") 
-                || key.ends_with(".pkl") || key.ends_with(".json") || key.ends_with(".safetensors") {
-                if let Some(last_modified) = obj.last_modified() {
-                    let dt = chrono::DateTime::from_timestamp(
-                        last_modified.secs(),
-                        last_modified.subsec_nanos(),
-                    )
-                    .ok_or_else(|| {
-                        TrainctlError::Aws("Invalid timestamp in S3 object".to_string())
-                    })?;
-                    checkpoints.push((format!("s3://{}/{}", bucket, key), dt));
+    loop {
+        let mut request = s3_client
+            .list_objects_v2()
+            .bucket(bucket)
+            .prefix(prefix);
+        
+        if let Some(token) = continuation_token.as_ref() {
+            request = request.continuation_token(token);
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| TrainctlError::Aws(format!("Failed to list S3 objects: {}", e)))?;
+
+        // Process objects in this page
+        if let Some(contents) = response.contents() {
+            for obj in contents {
+                if let Some(key) = obj.key() {
+                    // Check for checkpoint file extensions (including safetensors)
+                    if key.ends_with(".pt") || key.ends_with(".ckpt") || key.ends_with(".pth") 
+                        || key.ends_with(".pkl") || key.ends_with(".json") || key.ends_with(".safetensors") {
+                        if let Some(last_modified) = obj.last_modified() {
+                            if let Some(dt) = chrono::DateTime::from_timestamp(
+                                last_modified.secs(),
+                                last_modified.subsec_nanos(),
+                            ) {
+                                checkpoints.push((format!("s3://{}/{}", bucket, key), dt));
+                            }
+                        }
+                    }
                 }
             }
+        }
+
+        // Check if there are more pages
+        if response.is_truncated() {
+            continuation_token = response.next_continuation_token().map(|s| s.to_string());
+        } else {
+            break;
         }
     }
 

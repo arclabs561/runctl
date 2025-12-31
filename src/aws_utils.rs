@@ -46,7 +46,23 @@ pub async fn execute_ssm_command(
         .parameters("commands", vec![command.to_string()])
         .send()
         .await
-        .map_err(|e| TrainctlError::Ssm(format!("Failed to send SSM command: {}", e)))?;
+        .map_err(|e| {
+            let error_msg = format!("{}", e);
+            let mut detailed_msg = format!("Failed to send SSM command: {}", error_msg);
+
+            // Provide specific guidance based on error type
+            if error_msg.contains("does not exist") || error_msg.contains("not found") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Verify instance has IAM instance profile: aws ec2 describe-instances --instance-ids <id> --query 'Reservations[0].Instances[0].IamInstanceProfile'\n  2. Create IAM instance profile: ./scripts/setup-ssm-role.sh\n  3. Attach profile to instance: runctl aws create ... --iam-instance-profile runctl-ssm-profile\n  4. Wait 60-90 seconds after instance start for SSM agent to register");
+            } else if error_msg.contains("not authorized") || error_msg.contains("AccessDenied") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Verify IAM instance profile has AmazonSSMManagedInstanceCore policy\n  2. Check IAM role trust policy allows ec2.amazonaws.com\n  3. Verify instance profile is attached: aws ec2 describe-instances --instance-ids <id>");
+            } else if error_msg.contains("not registered") || error_msg.contains("not online") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Wait 60-90 seconds after instance start for SSM agent to register\n  2. Check SSM agent status: aws ssm describe-instance-information --filters 'Key=InstanceIds,Values=<id>'\n  3. Verify instance has internet connectivity to SSM endpoints\n  4. Check SSM agent is running on instance (if you have SSH access)");
+            } else if error_msg.contains("service error") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Verify instance has IAM instance profile with SSM permissions\n  2. Check instance is running: runctl resources list --platform aws\n  3. Wait 60-90 seconds after instance start for SSM to be ready\n  4. Verify SSM agent is installed (Amazon Linux has it by default, Ubuntu may need: snap install amazon-ssm-agent --classic)\n  5. Check network connectivity: instance needs access to SSM endpoints\n                  6. Setup SSM: ./scripts/setup-ssm-role.sh then use --iam-instance-profile runctl-ssm-profile");
+            }
+
+            TrainctlError::Ssm(detailed_msg)
+        })?;
 
     let command_id = response
         .command()
@@ -119,6 +135,7 @@ pub async fn execute_ssm_command(
         };
 
         let status = invocation.status().map(|s| s.as_str()).unwrap_or("Unknown");
+        let instance_id_for_error = instance_id.to_string();
 
         match status {
             "Success" => {
@@ -145,7 +162,12 @@ pub async fn execute_ssm_command(
                     .standard_error_content()
                     .unwrap_or("Unknown error")
                     .to_string();
-                return Err(TrainctlError::Ssm(format!("SSM command failed: {}", error)));
+                let detailed_error = if error.is_empty() || error == "Unknown error" {
+                    format!("SSM command failed with status: {}\n\nTo resolve:\n  1. Check instance logs: aws ec2 get-console-output --instance-id {}\n  2. Verify SSM agent is running: aws ssm describe-instance-information --filters 'Key=InstanceIds,Values={}'\n  3. Try command manually via AWS Console SSM Session Manager", status, instance_id_for_error, instance_id_for_error)
+                } else {
+                    format!("SSM command failed: {}\n\nTo resolve:\n  1. Review error message above\n  2. Check instance logs: aws ec2 get-console-output --instance-id {}\n  3. Verify instance has required permissions and dependencies", error, instance_id_for_error)
+                };
+                return Err(TrainctlError::Ssm(detailed_error));
             }
             "InProgress" | "Pending" => {
                 pb.set_message(format!("Status: {}...", status));
@@ -159,8 +181,16 @@ pub async fn execute_ssm_command(
 
     pb.finish_with_message("Command timed out");
     Err(TrainctlError::Ssm(format!(
-        "SSM command timed out after {} attempts",
-        max_attempts
+        "SSM command timed out after {} attempts ({} seconds).\n\n\
+        To resolve:\n\
+          1. Check if instance is still running: runctl resources list --platform aws\n\
+          2. Verify SSM connectivity: aws ssm describe-instance-information --filters 'Key=InstanceIds,Values={}'\n\
+          3. Check instance logs: aws ec2 get-console-output --instance-id {}\n\
+          4. The command may still be running - check AWS Console SSM Run Command history",
+        max_attempts,
+        max_attempts as u64 * SSM_COMMAND_MAX_DELAY_SECS,
+        instance_id,
+        instance_id
     )))
 }
 

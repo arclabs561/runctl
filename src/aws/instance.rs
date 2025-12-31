@@ -173,6 +173,20 @@ pub async fn create_instance(
         options.instance_type, options.use_spot
     );
 
+    // Check if IAM instance profile is needed but not provided
+    // If no SSH key and no IAM profile, warn user
+    if options.iam_instance_profile.is_none()
+        && options.key_name.is_none()
+        && output_format != "json"
+    {
+        println!("⚠️  WARNING: No IAM instance profile or SSH key provided.");
+        println!("   Training commands will fail without SSM or SSH access.");
+        println!("   Recommended: Setup SSM (one-time): ./scripts/setup-ssm-role.sh");
+        println!("   Then use: --iam-instance-profile runctl-ssm-profile");
+        println!("   Or provide SSH key: --key-name <your-key-name>");
+        println!();
+    }
+
     // Auto-detect AMI if not provided
     let final_ami = if let Some(ami) = &options.ami_id {
         ami.clone()
@@ -810,7 +824,22 @@ async fn create_spot_instance(
     let response = spot_request
         .send()
         .await
-        .map_err(|e| TrainctlError::Aws(format!("Failed to request spot instance: {}", e)))?;
+        .map_err(|e| {
+            // Extract more detailed error information from AWS SDK error
+            let error_msg = format!("{}", e);
+            let mut detailed_msg = format!("Failed to request spot instance: {}", error_msg);
+
+            // Check for common error patterns and provide specific guidance
+            if error_msg.contains("InsufficientInstanceCapacity") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Try on-demand instance (remove --spot flag)\n  2. Try a different instance type\n  3. Try a different availability zone or region\n  4. Check AWS spot instance availability");
+            } else if error_msg.contains("SpotPrice") || error_msg.contains("price") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Increase --spot-max-price (current may be too low)\n  2. Try on-demand instance (remove --spot flag)\n  3. Check current spot prices: aws ec2 describe-spot-price-history");
+            } else if error_msg.contains("InvalidParameter") {
+                detailed_msg.push_str("\n\nTo resolve:\n  1. Verify instance type is valid for your region\n  2. Check IAM permissions for spot instance requests\n  3. Verify security group and key pair exist");
+            }
+
+            TrainctlError::Aws(detailed_msg)
+        })?;
 
     let spot_request_id = response
         .spot_instance_requests()

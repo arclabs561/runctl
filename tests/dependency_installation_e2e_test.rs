@@ -31,7 +31,7 @@ async fn execute_ssm_command(
     instance_id: &str,
     command: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    use aws_sdk_ssm::types::CommandStatus;
+    use aws_sdk_ssm::types::CommandInvocationStatus;
 
     let command_id = ssm_client
         .send_command()
@@ -55,7 +55,7 @@ async fn execute_ssm_command(
 
         let output = ssm_client
             .get_command_invocation()
-            .command_id(&command_id)
+            .command_id(command_id)
             .instance_id(instance_id)
             .send()
             .await?;
@@ -63,7 +63,7 @@ async fn execute_ssm_command(
         let status = output.status();
 
         match status {
-            Some(CommandStatus::Success) => {
+            Some(CommandInvocationStatus::Success) => {
                 return Ok(output.standard_output_content().unwrap_or("").to_string());
             }
             Some(CommandInvocationStatus::Failed)

@@ -194,8 +194,14 @@ pub enum AwsCommands {
 
         /// Additional arguments to pass to training script
         ///
-        /// Use '--' to separate runctl args from script args:
-        ///   runctl aws train i-123 -- --epochs 50 --batch-size 32
+        /// IMPORTANT: Use '--' (double dash) to separate runctl args from script args.
+        /// This tells runctl that everything after '--' should be passed to your script.
+        ///
+        /// Examples:
+        ///   runctl aws train i-123 train.py -- --epochs 50 --batch-size 32
+        ///   runctl aws train i-123 train.py -- --lr 0.001 --resume-from checkpoint.pt
+        ///
+        /// Without '--', runctl will try to parse script args as runctl flags and fail.
         #[arg(last = true, value_name = "ARGS")]
         script_args: Vec<String>,
 

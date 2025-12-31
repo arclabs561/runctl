@@ -149,11 +149,11 @@ enum Commands {
     ///
     /// Examples:
     ///   runctl init
-    ///   runctl init --output ~/.config/runctl/config.toml
+    ///   runctl init --config-path ~/.config/runctl/config.toml
     Init {
         /// Output path for config file
-        #[arg(short, long, default_value = ".runctl.toml")]
-        output: PathBuf,
+        #[arg(long, default_value = ".runctl.toml")]
+        config_path: PathBuf,
     },
     /// Quick status overview (resources summary + recent checkpoints)
     Status {
@@ -292,8 +292,8 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(anyhow::Error::from)
         }
-        Commands::Init { output } => {
-            config::init_config(&output).map_err(anyhow::Error::from)?;
+        Commands::Init { config_path } => {
+            config::init_config(&config_path).map_err(anyhow::Error::from)?;
             Ok(())
         }
         Commands::Status { detailed } => {

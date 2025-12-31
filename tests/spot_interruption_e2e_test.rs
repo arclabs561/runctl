@@ -87,7 +87,7 @@ async fn execute_ssm_command(
 
         let output = ssm_client
             .get_command_invocation()
-            .command_id(&command_id)
+            .command_id(command_id)
             .instance_id(instance_id)
             .send()
             .await?;

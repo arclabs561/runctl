@@ -98,12 +98,30 @@ pub async fn train_on_instance(
     }
 
     // Determine if we should use SSM (check before requiring SSH key)
-    let use_ssm_for_sync = instance.iam_instance_profile().is_some()
-        && config
-            .aws
-            .as_ref()
-            .and_then(|c| c.s3_bucket.as_ref())
-            .is_some();
+    let has_iam_profile = instance.iam_instance_profile().is_some();
+    let has_s3_bucket = config
+        .aws
+        .as_ref()
+        .and_then(|c| c.s3_bucket.as_ref())
+        .is_some();
+    let use_ssm_for_sync = has_iam_profile && has_s3_bucket;
+
+    // If instance has IAM profile but no S3 bucket configured, provide helpful error
+    if has_iam_profile && !has_s3_bucket {
+        return Err(TrainctlError::Aws(
+            "Instance has IAM profile (SSM available) but S3 bucket not configured.\n\n\
+            SSM-based code sync requires an S3 bucket for temporary storage.\n\n\
+            To resolve:\n\
+              1. Add S3 bucket to .runctl.toml:\n\
+                 [aws]\n\
+                 s3_bucket = \"your-bucket-name\"\n\n\
+              2. Or use SSH fallback:\n\
+                 Create instance with --key-name instead of --iam-instance-profile\n\n\
+            Note: You can use any existing S3 bucket. The bucket is only used for temporary\n\
+            code transfer during sync and files are automatically cleaned up."
+                .to_string(),
+        ));
+    }
 
     // Only require public IP and SSH key if not using SSM
     let (public_ip, key_path) = if !use_ssm_for_sync {
@@ -144,7 +162,10 @@ pub async fn train_on_instance(
                       1. Set SSH_KEY_PATH environment variable: export SSH_KEY_PATH=~/.ssh/{}.pem\n\
                       2. Place key in standard location: ~/.ssh/{}.pem or ~/.ssh/{}\n\
                       3. Set correct permissions: chmod 600 ~/.ssh/{}.pem\n\
-                      4. Use SSM instead: Create instance with --iam-instance-profile and configure s3_bucket in config",
+                      4. Use SSM instead (recommended):\n\
+                         a. Setup SSM (one-time): ./scripts/setup-ssm-role.sh\n\
+                         b. Create instance with: --iam-instance-profile runctl-ssm-profile\n\
+                         c. Configure S3 bucket in .runctl.toml: [aws] s3_bucket = \"your-bucket\"",
                     key_name_str, key_name_str, key_name_str, key_name_str, key_name_str
                 ))
             })?;
@@ -329,7 +350,9 @@ pub async fn train_on_instance(
     } else {
         // Quote each argument to handle spaces and special characters
         // Use single quotes and escape single quotes within arguments
-        let quoted_args: Vec<String> = options.script_args.iter()
+        let quoted_args: Vec<String> = options
+            .script_args
+            .iter()
             .map(|arg| {
                 // Escape single quotes by replacing ' with '\''
                 format!("'{}'", arg.replace('\'', "'\"'\"'"))
