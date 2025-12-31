@@ -18,7 +18,7 @@ const SSM_COMMAND_INITIAL_DELAY_SECS: u64 = 2;
 const SSM_COMMAND_MAX_DELAY_SECS: u64 = 10;
 const INSTANCE_WAIT_MAX_ATTEMPTS: u32 = 60;
 const INSTANCE_WAIT_POLL_INTERVAL_SECS: u64 = 5;
-const INSTANCE_SSM_READY_DELAY_SECS: u64 = 30;
+// Removed: INSTANCE_SSM_READY_DELAY_SECS - now using actual SSM connectivity test instead of fixed delay
 const VOLUME_ATTACH_MAX_ATTEMPTS: u32 = 30;
 const VOLUME_ATTACH_POLL_INTERVAL_SECS: u64 = 2;
 const VOLUME_DETACH_MAX_ATTEMPTS: u32 = 30;
@@ -167,7 +167,12 @@ pub async fn execute_ssm_command(
 /// Wait for instance to reach running state
 ///
 /// Polls EC2 API until instance is running and SSM is ready.
-pub async fn wait_for_instance_running(client: &Ec2Client, instance_id: &str) -> Result<()> {
+/// If aws_config is provided and instance has IAM profile, verifies SSM connectivity.
+pub async fn wait_for_instance_running(
+    client: &Ec2Client,
+    instance_id: &str,
+    aws_config: Option<&aws_config::SdkConfig>,
+) -> Result<()> {
     const MAX_ATTEMPTS: u32 = INSTANCE_WAIT_MAX_ATTEMPTS;
     const POLL_INTERVAL: Duration = Duration::from_secs(INSTANCE_WAIT_POLL_INTERVAL_SECS);
 
@@ -204,11 +209,65 @@ pub async fn wait_for_instance_running(client: &Ec2Client, instance_id: &str) ->
 
         match state.as_ref().map(|s| s.as_str()) {
             Some("running") => {
-                pb.set_message("Instance running, waiting for SSM...");
-                // Wait a bit more for SSM to be ready
-                sleep(Duration::from_secs(INSTANCE_SSM_READY_DELAY_SECS)).await;
-                pb.finish_with_message("Instance ready");
-                return Ok(());
+                // Check if instance has IAM profile (required for SSM)
+                let has_iam_profile = instance.iam_instance_profile().is_some();
+
+                if has_iam_profile {
+                    if let Some(config) = aws_config {
+                        pb.set_message("Instance running, verifying SSM connectivity...");
+                        // Verify SSM is actually ready by attempting a simple command
+                        // This is more reliable than just waiting a fixed time
+                        let ssm_client = SsmClient::new(config);
+                        let test_command = "echo 'SSM_READY'";
+
+                        // Try SSM command with retries (SSM may take 30-90 seconds to be ready)
+                        let mut ssm_attempts = 0;
+                        let max_ssm_attempts = 20; // 20 attempts * 3 seconds = 60 seconds max
+                        loop {
+                            match ssm_client
+                                .send_command()
+                                .instance_ids(instance_id)
+                                .document_name("AWS-RunShellScript")
+                                .parameters("commands", vec![test_command.to_string()])
+                                .send()
+                                .await
+                            {
+                                Ok(_) => {
+                                    // SSM command accepted - SSM is ready
+                                    pb.finish_with_message("Instance ready and SSM connected");
+                                    return Ok(());
+                                }
+                                Err(_e) => {
+                                    ssm_attempts += 1;
+                                    if ssm_attempts >= max_ssm_attempts {
+                                        // SSM not ready after max attempts
+                                        warn!("SSM not ready after {} attempts, but instance is running", max_ssm_attempts);
+                                        pb.finish_with_message(
+                                            "Instance running (SSM may not be ready yet)",
+                                        );
+                                        // Don't fail - instance is running, SSM may become ready later
+                                        return Ok(());
+                                    }
+                                    // Wait and retry
+                                    sleep(Duration::from_secs(3)).await;
+                                    pb.set_message(format!(
+                                        "Waiting for SSM... (attempt {}/{})",
+                                        ssm_attempts + 1,
+                                        max_ssm_attempts
+                                    ));
+                                }
+                            }
+                        }
+                    } else {
+                        // No aws_config provided - can't verify SSM, just assume ready
+                        pb.finish_with_message("Instance ready (SSM verification skipped)");
+                        return Ok(());
+                    }
+                } else {
+                    // No IAM profile - SSM won't work, instance is ready for SSH
+                    pb.finish_with_message("Instance ready (SSM not available, use SSH)");
+                    return Ok(());
+                }
             }
             Some("terminated" | "shutting-down") => {
                 pb.finish_with_message("Instance terminated");

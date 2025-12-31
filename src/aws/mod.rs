@@ -38,7 +38,11 @@ mod types;
 
 // Re-export helpers that are used by other modules (pub(crate) for crate-internal use)
 pub(crate) use helpers::ec2_instance_to_resource_status;
-pub use instance::{create_instance, start_instance, stop_instance, terminate_instance};
+pub use helpers::get_project_name;
+pub use instance::{
+    create_instance, create_instance_and_get_id, start_instance, stop_instance, terminate_instance,
+};
+// show_instance_status and wait_for_instance are used via instance:: prefix, no need to import
 pub use processes::show_processes;
 pub use training::{monitor_instance, train_on_instance};
 pub use types::{CreateInstanceOptions, TrainInstanceOptions};
@@ -130,6 +134,13 @@ pub enum AwsCommands {
         /// Example: runctl aws create t3.micro --iam-instance-profile runctl-ssm-profile
         #[arg(long, value_name = "PROFILE_NAME")]
         iam_instance_profile: Option<String>,
+
+        /// Wait for instance to be ready before returning
+        ///
+        /// Blocks until instance is running and SSM is connected (if IAM profile provided).
+        /// Without this flag, instance creation returns immediately after launch.
+        #[arg(long)]
+        wait: bool,
     },
     /// Start training job on an EC2 instance
     ///
@@ -187,6 +198,13 @@ pub enum AwsCommands {
         ///   runctl aws train i-123 -- --epochs 50 --batch-size 32
         #[arg(last = true, value_name = "ARGS")]
         script_args: Vec<String>,
+
+        /// Wait for training to complete before returning
+        ///
+        /// Blocks until training completes (checks for completion markers, checkpoints, or process status).
+        /// Without this flag, training starts in background and command returns immediately.
+        #[arg(long)]
+        wait: bool,
     },
     /// Monitor training progress on an instance
     ///
@@ -296,6 +314,29 @@ pub enum AwsCommands {
         #[command(subcommand)]
         subcommand: crate::ebs::EbsCommands,
     },
+    /// Show instance status and training state
+    ///
+    /// Displays current instance state, training status, and resource usage.
+    ///
+    /// Examples:
+    ///   runctl aws status i-1234567890abcdef0
+    ///   runctl aws status i-1234567890abcdef0 --json
+    Status {
+        /// EC2 instance ID
+        #[arg(value_name = "INSTANCE_ID")]
+        instance_id: String,
+    },
+    /// Wait for instance to be ready
+    ///
+    /// Blocks until instance is running and SSM is connected (if IAM profile configured).
+    ///
+    /// Examples:
+    ///   runctl aws wait i-1234567890abcdef0
+    Wait {
+        /// EC2 instance ID
+        #[arg(value_name = "INSTANCE_ID")]
+        instance_id: String,
+    },
 }
 
 pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &str) -> Result<()> {
@@ -314,6 +355,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             data_volume_size,
             project_name,
             iam_instance_profile,
+            wait,
         } => {
             let final_project_name = helpers::get_project_name(project_name, config);
             crate::validation::validate_project_name(&final_project_name)?;
@@ -329,6 +371,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
                 data_volume_size,
                 project_name: final_project_name,
                 iam_instance_profile,
+                wait,
             };
             create_instance(options, config, &aws_config, output_format).await
         }
@@ -341,6 +384,7 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             include_pattern,
             project_name,
             script_args,
+            wait,
         } => {
             crate::validation::validate_instance_id(&instance_id)?;
             let final_project_name = helpers::get_project_name(project_name, config);
@@ -353,8 +397,17 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
                 include_patterns: include_pattern,
                 project_name: final_project_name,
                 script_args,
+                wait,
             };
             train_on_instance(options, config, &aws_config, output_format).await
+        }
+        AwsCommands::Status { instance_id } => {
+            crate::validation::validate_instance_id(&instance_id)?;
+            instance::show_instance_status(instance_id, &aws_config, output_format).await
+        }
+        AwsCommands::Wait { instance_id } => {
+            crate::validation::validate_instance_id(&instance_id)?;
+            instance::wait_for_instance(instance_id, &aws_config, output_format).await
         }
         AwsCommands::Monitor {
             instance_id,

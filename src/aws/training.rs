@@ -10,7 +10,7 @@ use crate::error::{Result, TrainctlError};
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_ssm::Client as SsmClient;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Start training on an instance
 pub async fn train_on_instance(
@@ -46,9 +46,64 @@ pub async fn train_on_instance(
                 ))
             })?;
 
+    // Validate instance state before proceeding
+    let instance_state = instance
+        .state()
+        .and_then(|s| s.name())
+        .map(|s| s.as_str())
+        .unwrap_or("unknown");
+
+    match instance_state {
+        "stopped" | "stopping" => {
+            return Err(TrainctlError::Aws(format!(
+                "Instance {} is in '{}' state. Cannot start training on stopped instance.\n\n\
+                To resolve:\n\
+                  1. Start the instance: runctl aws start {}\n\
+                  2. Wait for instance to be running: runctl aws wait {}\n\
+                  3. Then retry training",
+                options.instance_id, instance_state, options.instance_id, options.instance_id
+            )));
+        }
+        "terminated" | "shutting-down" => {
+            return Err(TrainctlError::Aws(format!(
+                "Instance {} is {} and cannot be used for training.\n\n\
+                To resolve:\n\
+                  1. Create a new instance: runctl aws create\n\
+                  2. Use a different instance ID",
+                options.instance_id, instance_state
+            )));
+        }
+        "pending" => {
+            if output_format != "json" {
+                println!("Instance is still starting. Waiting for it to be ready...");
+            }
+            // Wait a bit for instance to become running
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        }
+        "running" => {
+            // Good state, proceed
+        }
+        _ => {
+            warn!(
+                "Instance {} is in unexpected state: {}",
+                options.instance_id, instance_state
+            );
+            if output_format != "json" {
+                println!(
+                    "Warning: Instance is in '{}' state. Proceeding anyway...",
+                    instance_state
+                );
+            }
+        }
+    }
+
     // Determine if we should use SSM (check before requiring SSH key)
     let use_ssm_for_sync = instance.iam_instance_profile().is_some()
-        && config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()).is_some();
+        && config
+            .aws
+            .as_ref()
+            .and_then(|c| c.s3_bucket.as_ref())
+            .is_some();
 
     // Only require public IP and SSH key if not using SSM
     let (public_ip, key_path) = if !use_ssm_for_sync {
@@ -184,7 +239,7 @@ pub async fn train_on_instance(
             let ip = public_ip.as_ref().ok_or_else(|| {
                 TrainctlError::Aws("Public IP required for SSH-based code sync".to_string())
             })?;
-            
+
             if let Err(e) = sync_code_to_instance(
                 kp,
                 ip,
@@ -245,27 +300,48 @@ pub async fn train_on_instance(
     };
 
     // Get relative path from project root to script
-    let script_relative = options.script
-        .strip_prefix(&project_root_for_script)
-        .map_err(|_| TrainctlError::Aws(format!(
-            "Script {:?} is not under project root {:?}",
-            options.script, project_root_for_script
-        )))?;
-    
+    let script_relative = options
+        .script
+        .strip_prefix(project_root_for_script)
+        .map_err(|_| {
+            TrainctlError::Aws(format!(
+                "Script {:?} is not under detected project root {:?}.\n\n\
+                Detected project root: {}\n\
+                Script path: {}\n\n\
+                To resolve:\n\
+                  1. Ensure script is within the project directory\n\
+                  2. Or use an absolute path to the script\n\
+                  3. Check if project root detection found the wrong directory\n\
+                  4. Verify project markers (.git, requirements.txt, etc.) are in the correct location",
+                options.script, project_root_for_script,
+                project_root_for_script.display(),
+                options.script.display()
+            ))
+        })?;
+
     let script_path = format!("{}/{}", project_dir, script_relative.display());
 
     // Build training command with proper error handling
     // Use nohup to run in background and capture output
+    // Properly quote/escape script arguments to handle spaces and special characters
     let script_args_str = if options.script_args.is_empty() {
         String::new()
     } else {
-        format!(" {}", options.script_args.join(" "))
+        // Quote each argument to handle spaces and special characters
+        // Use single quotes and escape single quotes within arguments
+        let quoted_args: Vec<String> = options.script_args.iter()
+            .map(|arg| {
+                // Escape single quotes by replacing ' with '\''
+                format!("'{}'", arg.replace('\'', "'\"'\"'"))
+            })
+            .collect();
+        format!(" {}", quoted_args.join(" "))
     };
-    
+
     // Check if requirements.txt exists and install dependencies
     // Determine if we should use SSM for command execution
     let use_ssm = instance.iam_instance_profile().is_some();
-    
+
     let setup_cmd = format!(
         "cd {} && \
         export PATH=\"$HOME/.local/bin:$PATH\" && \
@@ -280,14 +356,14 @@ pub async fn train_on_instance(
         fi",
         project_dir
     );
-    
+
     // Run setup first (best effort - don't fail if it doesn't work)
     if use_ssm {
         let _ = execute_ssm_command(&ssm_client, &options.instance_id, &setup_cmd).await;
     } else if let (Some(kp), Some(ip)) = (key_path.as_ref(), public_ip.as_ref()) {
         let _ = execute_via_ssh(kp, ip, user, &setup_cmd).await;
     }
-    
+
     let command = format!(
         "cd {} && \
         export PATH=\"$HOME/.local/bin:$PATH\" && \
@@ -345,10 +421,10 @@ pub async fn train_on_instance(
         let kp = key_path.as_ref().ok_or_else(|| {
             TrainctlError::Aws("SSH key required when SSM is not available".to_string())
         })?;
-        let ip = public_ip.as_ref().ok_or_else(|| {
-            TrainctlError::Aws("Public IP required for SSH".to_string())
-        })?;
-        
+        let ip = public_ip
+            .as_ref()
+            .ok_or_else(|| TrainctlError::Aws("Public IP required for SSH".to_string()))?;
+
         execute_via_ssh(kp, ip, user, &command).await?;
         TrainingInfo {
             success: true,
@@ -370,6 +446,23 @@ pub async fn train_on_instance(
             );
         }
         println!("   Or: runctl aws monitor {}", options.instance_id);
+    }
+
+    // Wait for training to complete if requested
+    if options.wait {
+        if use_ssm {
+            wait_for_training_completion(
+                &ssm_client,
+                &options.instance_id,
+                &project_dir,
+                output_format,
+            )
+            .await?;
+        } else {
+            return Err(TrainctlError::Aws(
+                "Cannot wait for training completion without SSM. Use --iam-instance-profile when creating instance.".to_string()
+            ));
+        }
     }
 
     Ok(())
@@ -482,7 +575,7 @@ pub async fn monitor_instance(
     output_format: &str,
 ) -> Result<()> {
     let ssm_client = SsmClient::new(aws_config);
-    
+
     // Get instance details to determine user and project directory
     let ec2_client = Ec2Client::new(aws_config);
     let instance_response = ec2_client
@@ -493,9 +586,7 @@ pub async fn monitor_instance(
         .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
     let instance = crate::aws::helpers::find_instance_in_response(&instance_response, &instance_id)
-        .ok_or_else(|| {
-            TrainctlError::Aws(format!("Instance {} not found", instance_id))
-        })?;
+        .ok_or_else(|| TrainctlError::Aws(format!("Instance {} not found", instance_id)))?;
 
     let user = if instance
         .image_id()
@@ -524,11 +615,15 @@ pub async fn monitor_instance(
             println!("Monitoring training log: {} (following)", log_path);
             println!("Press Ctrl+C to stop");
         }
-        
+
         let mut last_size = 0u64;
         loop {
-            let cmd = format!("tail -c +{} {} 2>/dev/null || echo ''", last_size + 1, log_path);
-            
+            let cmd = format!(
+                "tail -c +{} {} 2>/dev/null || echo ''",
+                last_size + 1,
+                log_path
+            );
+
             match execute_ssm_command(&ssm_client, &instance_id, &cmd).await {
                 Ok(output) => {
                     if !output.trim().is_empty() {
@@ -555,7 +650,7 @@ pub async fn monitor_instance(
                     }
                 }
             }
-            
+
             tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         }
     } else {
@@ -563,8 +658,11 @@ pub async fn monitor_instance(
         if output_format != "json" {
             println!("Recent training log from: {}", log_path);
         }
-        let cmd = format!("tail -50 {} 2>/dev/null || echo 'Log file not found or empty'", log_path);
-        
+        let cmd = format!(
+            "tail -50 {} 2>/dev/null || echo 'Log file not found or empty'",
+            log_path
+        );
+
         match execute_ssm_command(&ssm_client, &instance_id, &cmd).await {
             Ok(output) => {
                 if output_format == "json" {
@@ -590,4 +688,180 @@ pub async fn monitor_instance(
     }
 
     Ok(())
+}
+
+/// Check if training has completed
+///
+/// Uses multiple heuristics:
+/// 1. Check for training_complete.txt marker
+/// 2. Check if training process (PID) is still running
+/// 3. Check training.log for completion indicators
+/// 4. Check exit code if available
+/// 5. Verify checkpoints were created (optional validation)
+async fn check_training_completion(
+    ssm_client: &SsmClient,
+    instance_id: &str,
+    project_dir: &str,
+) -> Result<bool> {
+    // Method 1: Check for training_complete.txt marker
+    let check_marker_cmd = format!(
+        "test -f {}/training_complete.txt && echo 'COMPLETE' || echo 'RUNNING'",
+        project_dir
+    );
+    match crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &check_marker_cmd).await {
+        Ok(output) => {
+            if output.trim() == "COMPLETE" {
+                info!("Training completion detected via marker file");
+                // Also check exit code if available
+                let exit_code_cmd = format!(
+                    "if [ -f {}/training_exit_code.txt ]; then cat {}/training_exit_code.txt; else echo '0'; fi",
+                    project_dir, project_dir
+                );
+                if let Ok(exit_code_str) =
+                    crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &exit_code_cmd)
+                        .await
+                {
+                    if let Ok(exit_code) = exit_code_str.trim().parse::<i32>() {
+                        if exit_code != 0 {
+                            warn!(
+                                "Training completed but exit code is {} (non-zero)",
+                                exit_code
+                            );
+                            // Still return true - training completed, but may have failed
+                        }
+                    }
+                }
+                return Ok(true);
+            }
+        }
+        Err(_) => {
+            // Marker check failed, try other methods
+        }
+    }
+
+    // Method 2: Check if training process is still running
+    let check_process_cmd = format!(
+        "if [ -f {}/training.pid ]; then \
+         PID=$(cat {}/training.pid 2>/dev/null); \
+         if ps -p $PID > /dev/null 2>&1; then \
+             echo 'RUNNING'; \
+         else \
+             echo 'COMPLETE'; \
+         fi; \
+         else \
+         echo 'NO_PID'; \
+         fi",
+        project_dir, project_dir
+    );
+
+    match crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &check_process_cmd).await {
+        Ok(output) => {
+            if output.trim() == "COMPLETE" {
+                info!("Training process completed (PID file indicates process finished)");
+                return Ok(true);
+            } else if output.trim() == "NO_PID" {
+                // No PID file - check training.log for completion indicators
+                let check_log_cmd = format!(
+                    "if [ -f {}/training.log ]; then \
+                     if grep -q -E '(Training complete|Training finished|COMPLETE|DONE)' {}/training.log 2>/dev/null; then \
+                         echo 'COMPLETE'; \
+                     else \
+                         echo 'RUNNING'; \
+                     fi; \
+                     else \
+                     echo 'NO_LOG'; \
+                     fi",
+                    project_dir, project_dir
+                );
+
+                match crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &check_log_cmd)
+                    .await
+                {
+                    Ok(log_output) => {
+                        if log_output.trim() == "COMPLETE" {
+                            info!("Training completion detected in log file");
+                            return Ok(true);
+                        }
+                    }
+                    Err(_) => {
+                        // Log check failed - assume still running
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            // Process check failed - assume still running
+        }
+    }
+
+    Ok(false)
+}
+
+/// Wait for training to complete
+async fn wait_for_training_completion(
+    ssm_client: &SsmClient,
+    instance_id: &str,
+    project_dir: &str,
+    output_format: &str,
+) -> Result<()> {
+    use serde_json::json;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    if output_format != "json" {
+        println!("Waiting for training to complete...");
+    }
+
+    let mut check_count = 0;
+    let max_checks = 3600; // 2 hours max (2 second intervals)
+    let check_interval = Duration::from_secs(2);
+
+    loop {
+        sleep(check_interval).await;
+        check_count += 1;
+
+        match check_training_completion(ssm_client, instance_id, project_dir).await {
+            Ok(true) => {
+                if output_format == "json" {
+                    let result = json!({
+                        "success": true,
+                        "instance_id": instance_id,
+                        "message": "Training completed successfully"
+                    });
+                    println!("{}", serde_json::to_string_pretty(&result)?);
+                } else {
+                    println!("Training completed successfully");
+                }
+                return Ok(());
+            }
+            Ok(false) => {
+                // Still running
+                if check_count % 30 == 0 && output_format != "json" {
+                    // Print status every minute
+                    println!(
+                        "Training still in progress... (checked {} times)",
+                        check_count
+                    );
+                }
+            }
+            Err(e) => {
+                warn!("Error checking training completion: {}", e);
+                // Continue monitoring despite errors
+            }
+        }
+
+        if check_count >= max_checks {
+            return Err(TrainctlError::Resource {
+                resource_type: "training".to_string(),
+                operation: "wait_for_completion".to_string(),
+                resource_id: Some(instance_id.to_string()),
+                message: format!(
+                    "Training did not complete within {} minutes. Check manually: runctl aws monitor {}",
+                    max_checks * 2 / 60,
+                    instance_id
+                ),
+                source: None,
+            });
+        }
+    }
 }

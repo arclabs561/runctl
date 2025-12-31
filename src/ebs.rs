@@ -818,7 +818,8 @@ async fn pre_warm_volume(
         println!("Created temporary instance: {}", temp_instance);
 
         // Wait for instance to be running
-        wait_for_instance_running(client, &temp_instance).await?;
+        // Note: aws_config not available here, pass None (SSM verification skipped)
+        wait_for_instance_running(client, &temp_instance, None).await?;
 
         temp_instance
     };

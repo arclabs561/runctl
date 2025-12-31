@@ -22,6 +22,94 @@ use base64::Engine;
 use chrono::Utc;
 use tracing::{info, warn};
 
+/// Create an EC2 instance and return the instance ID
+///
+/// Internal helper that creates an instance and returns just the ID.
+/// Used by workflow commands that need the ID for subsequent operations.
+#[allow(dead_code)] // Used in workflow module (main.rs only, not in lib)
+pub async fn create_instance_and_get_id(
+    options: CreateInstanceOptions,
+    config: &Config,
+    aws_config: &aws_config::SdkConfig,
+) -> Result<String> {
+    // Call create_instance with instance-id output format to get just the ID
+    // We'll need to capture stdout, but that's complex. Instead, let's
+    // extract the instance creation logic and return the ID directly.
+
+    // For now, let's create a simplified version that does the core creation
+    // and returns the ID. We can refactor create_instance later.
+
+    let client = aws_sdk_ec2::Client::new(aws_config);
+    let aws_cfg = config.aws.as_ref().ok_or_else(|| {
+        TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string()))
+    })?;
+
+    // Safety check
+    let running_count = crate::aws_utils::count_running_instances(&client).await?;
+    if running_count >= 50 {
+        return Err(TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: format!("Too many instances running ({})", running_count),
+            source: None,
+        });
+    }
+
+    // Get AMI (simplified - reuse logic from create_instance)
+    let final_ami = if let Some(ami) = &options.ami_id {
+        ami.clone()
+    } else {
+        let is_gpu = options.instance_type.starts_with("g")
+            || options.instance_type.starts_with("p")
+            || options.instance_type.contains("gpu");
+        if is_gpu {
+            find_deep_learning_ami(&client, &aws_cfg.region).await?
+        } else {
+            // Use Amazon Linux 2023
+            "ami-0c55b159cbfafe1f0".to_string()
+        }
+    };
+
+    // Create instance (simplified)
+    let instance_id = if options.use_spot {
+        // Create spot instance
+        let spot_options = CreateSpotInstanceOptions {
+            instance_type: options.instance_type.clone(),
+            ami_id: final_ami,
+            user_data: String::new(), // Simplified
+            max_price: options.spot_max_price,
+            key_name: options.key_name.clone(),
+            security_group: options.security_group.clone(),
+            root_volume_size: options.root_volume_size.unwrap_or(30),
+            iam_instance_profile: options.iam_instance_profile.clone(),
+        };
+        create_spot_instance(&client, spot_options).await?
+    } else {
+        create_ondemand_instance(
+            &client,
+            &options.instance_type,
+            &final_ami,
+            "",
+            options.key_name.as_deref(),
+            options.security_group.as_deref(),
+            options.root_volume_size.unwrap_or(30),
+            options.iam_instance_profile.as_deref(),
+        )
+        .await?
+    };
+
+    // Tag instance
+    let _ = tag_instance(&client, &instance_id, &options.project_name, config).await;
+
+    // Wait if requested
+    if options.wait {
+        let _ =
+            crate::aws_utils::wait_for_instance_running(&client, &instance_id, Some(aws_config))
+                .await;
+    }
+
+    Ok(instance_id)
+}
+
 /// Create an EC2 instance with the specified options
 ///
 /// Creates a new EC2 instance for ML training with automatic configuration:
@@ -174,6 +262,28 @@ pub async fn create_instance(
                     }
                 }
 
+                // Wait for instance to be ready if requested
+                if options.wait {
+                    if output_format != "json" {
+                        println!("Waiting for instance to be ready...");
+                    }
+                    if let Err(e) = crate::aws_utils::wait_for_instance_running(
+                        &client,
+                        &instance_id,
+                        Some(aws_config),
+                    )
+                    .await
+                    {
+                        warn!("Failed to wait for instance ready: {}", e);
+                        if output_format != "json" {
+                            println!("WARNING: Instance created but may not be ready yet.");
+                            println!("  Check status: runctl aws wait {}", instance_id);
+                        }
+                    } else if output_format != "json" {
+                        println!("Instance ready and SSM connected (if IAM profile configured)");
+                    }
+                }
+
                 // Register resource with ResourceTracker
                 if let Some(tracker) = &config.resource_tracker {
                     // Get instance details for registration
@@ -203,6 +313,12 @@ pub async fn create_instance(
                             }
                         }
                     }
+                }
+
+                // Handle structured output formats
+                if output_format == "instance-id" {
+                    println!("{}", instance_id);
+                    return Ok(());
                 }
 
                 return Ok(());
@@ -276,6 +392,26 @@ pub async fn create_instance(
         }
     }
 
+    // Wait for instance to be ready if requested
+    if options.wait {
+        if output_format != "json" {
+            println!("Waiting for instance to be ready...");
+        }
+        if let Err(e) =
+            crate::aws_utils::wait_for_instance_running(&client, &instance_id, Some(aws_config))
+                .await
+        {
+            // Even if wait fails, instance was created - warn but don't fail
+            warn!("Failed to wait for instance ready: {}", e);
+            if output_format != "json" {
+                println!("WARNING: Instance created but may not be ready yet.");
+                println!("  Check status: runctl aws wait {}", instance_id);
+            }
+        } else if output_format != "json" {
+            println!("Instance ready and SSM connected (if IAM profile configured)");
+        }
+    }
+
     // Register resource with ResourceTracker
     if let Some(tracker) = &config.resource_tracker {
         // Get instance details for registration
@@ -297,6 +433,12 @@ pub async fn create_instance(
                 }
             }
         }
+    }
+
+    // Handle structured output formats
+    if output_format == "instance-id" {
+        println!("{}", instance_id);
+        return Ok(());
     }
 
     Ok(())
@@ -1363,4 +1505,145 @@ pub async fn start_instance(
     }
 
     Ok(())
+}
+
+/// Show instance status and training state
+pub async fn show_instance_status(
+    instance_id: String,
+    aws_config: &aws_config::SdkConfig,
+    output_format: &str,
+) -> Result<()> {
+    use aws_sdk_ssm::Client as SsmClient;
+    use serde_json::json;
+
+    let ec2_client = Ec2Client::new(aws_config);
+    let ssm_client = SsmClient::new(aws_config);
+
+    // Get instance details
+    let response = ec2_client
+        .describe_instances()
+        .instance_ids(&instance_id)
+        .send()
+        .await
+        .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
+
+    let instance = crate::aws::helpers::find_instance_in_response(&response, &instance_id)
+        .ok_or_else(|| TrainctlError::ResourceNotFound {
+            resource_type: "instance".to_string(),
+            resource_id: instance_id.clone(),
+        })?;
+
+    let state = instance
+        .state()
+        .and_then(|s| s.name())
+        .map(|s| s.as_str())
+        .unwrap_or("unknown");
+
+    let public_ip = instance.public_ip_address().map(|s| s.to_string());
+    let private_ip = instance.private_ip_address().map(|s| s.to_string());
+    let instance_type = instance
+        .instance_type()
+        .map(|s| s.as_str())
+        .unwrap_or("unknown");
+
+    // Check if SSM is available
+    let ssm_available = instance.iam_instance_profile().is_some();
+
+    // Try to get training status if instance is running and SSM is available
+    let training_status = if state == "running" && ssm_available {
+        // Check for training process
+        let check_cmd = "if [ -f ~/training.pid ]; then PID=$(cat ~/training.pid 2>/dev/null) && ps -p $PID > /dev/null 2>&1 && echo 'RUNNING' || echo 'COMPLETE'; else echo 'NO_TRAINING'; fi";
+        match crate::aws_utils::execute_ssm_command(&ssm_client, &instance_id, check_cmd).await {
+            Ok(output) => {
+                let trimmed = output.trim();
+                if trimmed == "RUNNING" {
+                    Some("running".to_string())
+                } else if trimmed == "COMPLETE" {
+                    Some("completed".to_string())
+                } else {
+                    Some("not_started".to_string())
+                }
+            }
+            Err(_) => None,
+        }
+    } else {
+        None
+    };
+
+    if output_format == "json" {
+        let status = json!({
+            "success": true,
+            "instance_id": instance_id,
+            "state": state,
+            "instance_type": instance_type,
+            "public_ip": public_ip,
+            "private_ip": private_ip,
+            "ssm_available": ssm_available,
+            "training_status": training_status,
+        });
+        println!("{}", serde_json::to_string_pretty(&status)?);
+    } else {
+        println!("Instance: {}", instance_id);
+        println!("  State: {}", state);
+        println!("  Type: {}", instance_type);
+        if let Some(ip) = public_ip {
+            println!("  Public IP: {}", ip);
+        }
+        if let Some(ip) = private_ip {
+            println!("  Private IP: {}", ip);
+        }
+        println!(
+            "  SSM Available: {}",
+            if ssm_available { "Yes" } else { "No" }
+        );
+        if let Some(status) = training_status {
+            println!("  Training Status: {}", status);
+        }
+    }
+
+    Ok(())
+}
+
+/// Wait for instance to be ready
+pub async fn wait_for_instance(
+    instance_id: String,
+    aws_config: &aws_config::SdkConfig,
+    output_format: &str,
+) -> Result<()> {
+    use serde_json::json;
+
+    let client = Ec2Client::new(aws_config);
+
+    if output_format != "json" {
+        println!("Waiting for instance {} to be ready...", instance_id);
+    }
+
+    match crate::aws_utils::wait_for_instance_running(&client, &instance_id, Some(aws_config)).await
+    {
+        Ok(_) => {
+            if output_format == "json" {
+                let result = json!({
+                    "success": true,
+                    "instance_id": instance_id,
+                    "state": "running",
+                    "message": "Instance is ready and SSM is connected (if IAM profile configured)"
+                });
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("Instance {} is ready", instance_id);
+            }
+            Ok(())
+        }
+        Err(e) => {
+            if output_format == "json" {
+                let result = json!({
+                    "success": false,
+                    "instance_id": instance_id,
+                    "error": e.to_string()
+                });
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            }
+            Err(e)
+        }
+    }
 }

@@ -45,7 +45,7 @@ fn test_estimate_instance_cost_gpu_instances() {
     assert_eq!(estimate_instance_cost("g4dn.xlarge"), 0.526);
     assert_eq!(estimate_instance_cost("g4dn.2xlarge"), 0.526);
     assert_eq!(estimate_instance_cost("g4dn.4xlarge"), 0.526);
-    
+
     assert_eq!(estimate_instance_cost("p3.2xlarge"), 3.06);
     assert_eq!(estimate_instance_cost("p3.8xlarge"), 3.06);
     assert_eq!(estimate_instance_cost("p3.16xlarge"), 3.06);
@@ -63,19 +63,31 @@ fn test_estimate_instance_cost_unknown_types() {
 fn test_estimate_instance_cost_all_positive() {
     // All cost estimates are positive
     let instance_types = [
-        "t3.micro", "t3.medium", "t3.large",
-        "t4g.micro", "t4g.medium",
-        "m5.large", "m5.xlarge",
-        "c5.large", "c5.xlarge",
-        "g4dn.xlarge", "g4dn.2xlarge",
-        "p3.2xlarge", "p3.8xlarge",
-        "unknown.type", "custom",
+        "t3.micro",
+        "t3.medium",
+        "t3.large",
+        "t4g.micro",
+        "t4g.medium",
+        "m5.large",
+        "m5.xlarge",
+        "c5.large",
+        "c5.xlarge",
+        "g4dn.xlarge",
+        "g4dn.2xlarge",
+        "p3.2xlarge",
+        "p3.8xlarge",
+        "unknown.type",
+        "custom",
     ];
-    
+
     for instance_type in instance_types {
         let cost = estimate_instance_cost(instance_type);
         assert!(cost > 0.0, "Cost should be positive for {}", instance_type);
-        assert!(cost < 100.0, "Cost should be reasonable for {}", instance_type);
+        assert!(
+            cost < 100.0,
+            "Cost should be reasonable for {}",
+            instance_type
+        );
     }
 }
 
@@ -84,11 +96,17 @@ fn test_estimate_instance_cost_gpu_more_expensive() {
     // GPU instances cost more than CPU
     let cpu_cost = estimate_instance_cost("t3.medium");
     let gpu_cost = estimate_instance_cost("g4dn.xlarge");
-    
-    assert!(gpu_cost > cpu_cost, "GPU instances should cost more than CPU");
-    
+
+    assert!(
+        gpu_cost > cpu_cost,
+        "GPU instances should cost more than CPU"
+    );
+
     let high_end_gpu = estimate_instance_cost("p3.2xlarge");
-    assert!(high_end_gpu > gpu_cost, "High-end GPU should cost more than mid-range");
+    assert!(
+        high_end_gpu > gpu_cost,
+        "High-end GPU should cost more than mid-range"
+    );
 }
 
 #[test]
@@ -104,8 +122,7 @@ fn test_estimate_instance_cost_with_prefix() {
     assert_eq!(estimate_instance_cost("t3.micro"), 0.0416);
     assert_eq!(estimate_instance_cost("t3.anything"), 0.0416);
     assert_eq!(estimate_instance_cost("t3"), 0.1); // No dot, falls back
-    
+
     assert_eq!(estimate_instance_cost("g4dn.xlarge"), 0.526);
     assert_eq!(estimate_instance_cost("g4dn.anything"), 0.526);
 }
-

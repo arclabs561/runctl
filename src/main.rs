@@ -33,6 +33,7 @@ mod ssh_sync;
 mod training;
 mod utils;
 mod validation;
+mod workflow;
 
 use crate::config::Config;
 
@@ -173,6 +174,15 @@ enum Commands {
         #[arg(short, long, default_value_t = 5)]
         interval: u64,
     },
+    /// Workflow commands (complete training workflows)
+    ///
+    /// High-level commands that orchestrate multiple operations.
+    /// Examples:
+    ///   runctl workflow train training/train.py --instance-type g4dn.xlarge
+    Workflow {
+        #[command(subcommand)]
+        subcommand: workflow::WorkflowCommands,
+    },
     /// Data transfer operations (local ↔ S3 ↔ training instances)
     ///
     /// Transfers data between local storage, S3, and training instances.
@@ -294,6 +304,11 @@ async fn main() -> Result<()> {
         Commands::Top { interval } => dashboard::run_dashboard(&config, interval)
             .await
             .map_err(anyhow::Error::from),
+        Commands::Workflow { subcommand } => {
+            workflow::handle_command(subcommand, &config, &cli.output)
+                .await
+                .map_err(anyhow::Error::from)
+        }
         Commands::Transfer {
             source,
             destination,

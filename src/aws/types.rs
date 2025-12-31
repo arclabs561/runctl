@@ -152,6 +152,7 @@ pub struct CreateInstanceOptions {
     pub data_volume_size: Option<i32>,
     pub project_name: String,
     pub iam_instance_profile: Option<String>,
+    pub wait: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -166,6 +167,7 @@ pub struct TrainInstanceOptions {
     pub include_patterns: Vec<String>,
     pub project_name: String,
     pub script_args: Vec<String>,
+    pub wait: bool,
 }
 
 #[derive(Debug, Clone)]

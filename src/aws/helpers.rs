@@ -163,7 +163,7 @@ pub(crate) async fn update_resource_status_in_tracker(
 }
 
 /// Get project name, deriving from current directory if not provided
-pub(crate) fn get_project_name(provided: Option<String>, config: &Config) -> String {
+pub fn get_project_name(provided: Option<String>, config: &Config) -> String {
     // Use provided value if given
     if let Some(name) = provided {
         return name;
