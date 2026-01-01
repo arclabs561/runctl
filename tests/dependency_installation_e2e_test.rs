@@ -35,13 +35,14 @@ async fn execute_ssm_command(
 
     let command_vec = vec![command.to_string()];
     let instance_id_vec = vec![instance_id.to_string()];
-    let command_id = ssm_client
+    let response = ssm_client
         .send_command()
         .instance_ids(instance_id_vec)
         .document_name("AWS-RunShellScript")
         .parameters("commands", command_vec)
         .send()
-        .await?
+        .await?;
+    let command_id = response
         .command()
         .and_then(|c| c.command_id())
         .ok_or("No command ID returned")?;
