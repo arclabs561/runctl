@@ -411,8 +411,17 @@ pub async fn train_on_instance(
     // Build training command
     // Calculate relative path from project root to script (preserve subdirectory structure)
     // We already found project_root during sync, but need to recalculate here for consistency
-    let script_dir = options
-        .script
+    // Use the project_root we found during sync, or detect it from the script path
+    let script_path_abs = if options.script.is_absolute() {
+        options.script.clone()
+    } else {
+        // Resolve relative path from current working directory
+        std::env::current_dir()
+            .map_err(|e| TrainctlError::Aws(format!("Failed to get current directory: {}", e)))?
+            .join(&options.script)
+    };
+
+    let script_dir = script_path_abs
         .parent()
         .ok_or_else(|| TrainctlError::Aws("Script has no parent directory".to_string()))?;
 
@@ -458,21 +467,23 @@ pub async fn train_on_instance(
     };
 
     // Get relative path from project root to script
-    let script_relative = options
-        .script
+    // Use the canonical script path for comparison
+    let script_relative = script_path_abs
         .strip_prefix(&project_root_for_script)
         .map_err(|_| {
             TrainctlError::Aws(format!(
                 "Script {:?} is not under detected project root {:?}.\n\n\
                 Detected project root: {}\n\
-                Script path: {}\n\n\
+                Script path (absolute): {}\n\
+                Script path (original): {}\n\n\
                 To resolve:\n\
                   1. Ensure script is within the project directory\n\
                   2. Or use an absolute path to the script\n\
                   3. Check if project root detection found the wrong directory\n\
                   4. Verify project markers (.git, requirements.txt, etc.) are in the correct location",
-                options.script, project_root_for_script,
+                script_path_abs, project_root_for_script,
                 project_root_for_script.display(),
+                script_path_abs.display(),
                 options.script.display()
             ))
         })?;

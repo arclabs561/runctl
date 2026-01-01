@@ -36,18 +36,30 @@ pub async fn sync_code_shell(
         println!("   Using shell-based sync (tar+ssh)...");
     }
 
-    // Build exclude patterns for tar
+    // Build exclude patterns for tar (aggressive exclusions for large repos)
     let mut exclude_args = Vec::new();
     exclude_args.push("--exclude=.git".to_string());
     exclude_args.push("--exclude=__pycache__".to_string());
     exclude_args.push("--exclude=*.pyc".to_string());
     exclude_args.push("--exclude=.venv".to_string());
     exclude_args.push("--exclude=node_modules".to_string());
-    exclude_args.push("--exclude=data/embeddings/*.wv".to_string());
-    exclude_args.push("--exclude=data/embeddings/*.json".to_string());
+    exclude_args.push("--exclude=data/embeddings".to_string()); // Exclude entire embeddings dir
+    exclude_args.push("--exclude=data/embeddings/**".to_string());
+    exclude_args.push("--exclude=*.wv".to_string()); // All Word2Vec files
+    exclude_args.push("--exclude=*.json".to_string()); // Large JSON files (except small configs)
     exclude_args.push("--exclude=*.log".to_string());
     exclude_args.push("--exclude=target".to_string());
     exclude_args.push("--exclude=.DS_Store".to_string());
+    exclude_args.push("--exclude=old-scraper-data".to_string());
+    exclude_args.push("--exclude=deploy".to_string());
+    exclude_args.push("--exclude=*.zst".to_string()); // Compressed data files
+    exclude_args.push("--exclude=*.parquet".to_string());
+    exclude_args.push("--exclude=*.csv".to_string()); // Large CSV files
+    // But include small config JSONs and essential files
+    exclude_args.push("--include=pyproject.toml".to_string());
+    exclude_args.push("--include=requirements.txt".to_string());
+    exclude_args.push("--include=justfile".to_string());
+    exclude_args.push("--include=.runctl.toml".to_string());
 
     // Build tar command arguments
     let mut tar_args = vec!["-czf".to_string(), "-".to_string()];
