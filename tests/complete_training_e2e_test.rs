@@ -34,11 +34,12 @@ async fn execute_ssm_command(
 ) -> Result<String, Box<dyn std::error::Error>> {
     use aws_sdk_ssm::types::CommandInvocationStatus;
 
+    let command_vec = vec![command.to_string()];
     let command_id = ssm_client
         .send_command()
         .instance_ids(instance_id)
         .document_name("AWS-RunShellScript")
-        .parameters("commands", vec![command.to_string()])
+        .parameters("commands", command_vec)
         .send()
         .await?
         .command()
