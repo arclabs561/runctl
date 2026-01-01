@@ -193,7 +193,10 @@ pub async fn create_instance(
         if output_format != "json" {
             info!("Using IAM instance profile: {}", profile_name);
             println!("   Note: Ensure profile has AmazonSSMManagedInstanceCore policy");
-            println!("   Verify: aws iam get-instance-profile --instance-profile-name {}", profile_name);
+            println!(
+                "   Verify: aws iam get-instance-profile --instance-profile-name {}",
+                profile_name
+            );
         }
     }
 
@@ -218,7 +221,7 @@ pub async fn create_instance(
             .as_ref()
             .and_then(|c| c.s3_bucket.as_ref())
             .is_some();
-        
+
         if !has_s3_bucket && output_format != "json" {
             println!("⚠️  WARNING: IAM instance profile provided but S3 bucket not configured.");
             println!("   SSM-based code sync requires an S3 bucket for temporary storage.");
@@ -230,20 +233,17 @@ pub async fn create_instance(
             println!("     2. Or use SSH instead:");
             println!("        Remove --iam-instance-profile and add --key-name <your-key-name>");
             println!();
-            println!("   Note: Training will fail if you try to use --sync-code without S3 bucket.");
+            println!(
+                "   Note: Training will fail if you try to use --sync-code without S3 bucket."
+            );
             println!();
         } else if has_s3_bucket {
             // Validate S3 bucket exists and is accessible
             if let Some(bucket_name) = config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()) {
                 let s3_client = S3Client::new(aws_config);
-                
+
                 // Check if bucket exists and is accessible
-                match s3_client
-                    .head_bucket()
-                    .bucket(bucket_name)
-                    .send()
-                    .await
-                {
+                match s3_client.head_bucket().bucket(bucket_name).send().await {
                     Ok(_) => {
                         // Bucket exists and is accessible
                         if output_format != "json" {
@@ -253,20 +253,35 @@ pub async fn create_instance(
                     Err(e) => {
                         let error_msg = format!("{}", e);
                         if output_format != "json" {
-                            println!("⚠️  WARNING: S3 bucket '{}' validation failed: {}", bucket_name, error_msg);
+                            println!(
+                                "⚠️  WARNING: S3 bucket '{}' validation failed: {}",
+                                bucket_name, error_msg
+                            );
                             println!("   SSM code sync may fail if bucket is not accessible.");
                             println!("   To resolve:");
-                            if error_msg.contains("NotFound") || error_msg.contains("NoSuchBucket") {
-                                println!("     1. Create the bucket: aws s3 mb s3://{}", bucket_name);
+                            if error_msg.contains("NotFound") || error_msg.contains("NoSuchBucket")
+                            {
+                                println!(
+                                    "     1. Create the bucket: aws s3 mb s3://{}",
+                                    bucket_name
+                                );
                                 println!("     2. Or use a different bucket name");
-                            } else if error_msg.contains("AccessDenied") || error_msg.contains("Forbidden") {
+                            } else if error_msg.contains("AccessDenied")
+                                || error_msg.contains("Forbidden")
+                            {
                                 println!("     1. Check IAM permissions for S3 access");
-                                println!("     2. Verify bucket exists: aws s3 ls s3://{}", bucket_name);
+                                println!(
+                                    "     2. Verify bucket exists: aws s3 ls s3://{}",
+                                    bucket_name
+                                );
                                 println!("     3. Check bucket policy allows your IAM user/role");
                             } else {
                                 println!("     1. Verify bucket name is correct");
                                 println!("     2. Check AWS credentials and permissions");
-                                println!("     3. Verify bucket exists: aws s3 ls s3://{}", bucket_name);
+                                println!(
+                                    "     3. Verify bucket exists: aws s3 ls s3://{}",
+                                    bucket_name
+                                );
                             }
                             println!();
                         } else {
@@ -297,7 +312,7 @@ pub async fn create_instance(
         let is_valid_format = instance_type_lower.matches('.').count() == 1
             && instance_type_lower.len() >= 5 // Minimum: "t3.x"
             && instance_type_lower.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false);
-        
+
         if !is_valid_format && output_format != "json" {
             warn!(
                 "Instance type '{}' may be invalid. Expected format: [family][generation].[size] (e.g., t3.micro)",
@@ -1000,7 +1015,7 @@ async fn create_spot_instance(
     // Wait for spot instance to be fulfilled
     const MAX_ATTEMPTS: u32 = 60; // 5 minutes (60 * 5 seconds)
     const POLL_INTERVAL: Duration = Duration::from_secs(5);
-    
+
     // Use progress bar for non-JSON output
     let pb = if output_format != "json" {
         let pb = ProgressBar::new(MAX_ATTEMPTS as u64);
@@ -1009,7 +1024,10 @@ async fn create_spot_instance(
                 .template("{spinner:.green} [{elapsed_precise}] {msg}")
                 .expect("Progress bar template should be valid"),
         );
-        pb.set_message(format!("Waiting for spot instance (request: {})...", spot_request_id));
+        pb.set_message(format!(
+            "Waiting for spot instance (request: {})...",
+            spot_request_id
+        ));
         Some(pb)
     } else {
         None

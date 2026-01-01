@@ -188,37 +188,49 @@ pub async fn train_on_instance(
         "ec2-user"
     };
 
-        let project_dir = format!("/home/{}/{}", user, options.project_name);
+    let project_dir = format!("/home/{}/{}", user, options.project_name);
 
-        // Validate script path exists before starting training
-        let script_path = options.script.as_path().to_string_lossy();
-        let validate_script_cmd = format!(
-            "if [ -f {}/{} ]; then echo 'SCRIPT_EXISTS'; else echo 'SCRIPT_NOT_FOUND'; fi",
-            project_dir, script_path
-        );
-        
-        if use_ssm_for_sync {
-            match crate::aws_utils::execute_ssm_command(&ssm_client, &options.instance_id, &validate_script_cmd).await {
-                Ok(output) => {
-                    if output.trim() == "SCRIPT_NOT_FOUND" {
-                        return Err(TrainctlError::Aws(format!(
-                            "Training script not found: {}/{}\n\n\
+    // Validate script path exists before starting training
+    let script_path = options.script.as_path().to_string_lossy();
+    let validate_script_cmd = format!(
+        "if [ -f {}/{} ]; then echo 'SCRIPT_EXISTS'; else echo 'SCRIPT_NOT_FOUND'; fi",
+        project_dir, script_path
+    );
+
+    if use_ssm_for_sync {
+        match crate::aws_utils::execute_ssm_command(
+            &ssm_client,
+            &options.instance_id,
+            &validate_script_cmd,
+        )
+        .await
+        {
+            Ok(output) => {
+                if output.trim() == "SCRIPT_NOT_FOUND" {
+                    return Err(TrainctlError::Aws(format!(
+                        "Training script not found: {}/{}\n\n\
                             The script may not have been synced to the instance yet.\n\
                             Try:\n\
                               1. Ensure --sync-code is enabled (default)\n\
                               2. Check script path: {}\n\
                               3. Verify project directory: {}",
-                            project_dir, script_path, options.script.display(), project_dir
-                        )));
-                    }
-                }
-                Err(e) => {
-                    warn!("Could not validate script path (SSM error): {}. Proceeding anyway.", e);
+                        project_dir,
+                        script_path,
+                        options.script.display(),
+                        project_dir
+                    )));
                 }
             }
+            Err(e) => {
+                warn!(
+                    "Could not validate script path (SSM error): {}. Proceeding anyway.",
+                    e
+                );
+            }
         }
+    }
 
-        // Check if training is already running on this instance (prevent concurrent training)
+    // Check if training is already running on this instance (prevent concurrent training)
     if use_ssm_for_sync {
         let check_training_cmd = format!(
             "if [ -f {}/training.pid ]; then \
@@ -234,7 +246,13 @@ pub async fn train_on_instance(
             project_dir, project_dir
         );
 
-        match crate::aws_utils::execute_ssm_command(&ssm_client, &options.instance_id, &check_training_cmd).await {
+        match crate::aws_utils::execute_ssm_command(
+            &ssm_client,
+            &options.instance_id,
+            &check_training_cmd,
+        )
+        .await
+        {
             Ok(output) => {
                 if output.contains("TRAINING_RUNNING") {
                     let pid = output
@@ -242,7 +260,7 @@ pub async fn train_on_instance(
                         .find(|l| l.starts_with("TRAINING_RUNNING:"))
                         .and_then(|l| l.strip_prefix("TRAINING_RUNNING:"))
                         .unwrap_or("unknown");
-                    
+
                     return Err(TrainctlError::Aws(format!(
                         "Training already running on instance {} (PID: {}).\n\n\
                         To start new training, either:\n\
@@ -277,9 +295,11 @@ pub async fn train_on_instance(
 
         // Resolve symlinks to get canonical path (handles symlinked directories)
         let mut current = script_dir;
-        let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+        let canonical_current = current
+            .canonicalize()
+            .unwrap_or_else(|_| current.to_path_buf());
         current = canonical_current.as_path();
-        
+
         let project_root = loop {
             let markers = [
                 "requirements.txt",
@@ -399,9 +419,11 @@ pub async fn train_on_instance(
     // Resolve symlinks to get canonical path (handles symlinked directories)
     let mut current = script_dir;
     // Try to canonicalize, but fall back to original if it fails (e.g., path doesn't exist yet)
-    let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+    let canonical_current = current
+        .canonicalize()
+        .unwrap_or_else(|_| current.to_path_buf());
     current = canonical_current.as_path();
-    
+
     let project_root_for_script = loop {
         let markers = [
             "requirements.txt",
@@ -514,7 +536,8 @@ pub async fn train_on_instance(
     if options.docker {
         if !use_ssm {
             return Err(TrainctlError::Aws(
-                "Docker training requires SSM. Use --iam-instance-profile when creating instance.".to_string()
+                "Docker training requires SSM. Use --iam-instance-profile when creating instance."
+                    .to_string(),
             ));
         }
 
@@ -524,7 +547,10 @@ pub async fn train_on_instance(
         } else {
             // Auto-detect: build and push from Dockerfile
             let project_root = std::env::current_dir().map_err(|e| {
-                TrainctlError::Io(std::io::Error::other(format!("Failed to get current directory: {}", e)))
+                TrainctlError::Io(std::io::Error::other(format!(
+                    "Failed to get current directory: {}",
+                    e
+                )))
             })?;
 
             let _dockerfile = detect_dockerfile(&project_root).ok_or_else(|| {
@@ -570,16 +596,17 @@ pub async fn train_on_instance(
         .await?;
 
         if output_format == "json" {
-            println!("{{\"success\": true, \"method\": \"docker\", \"ecr_image\": \"{}\"}}", ecr_image);
+            println!(
+                "{{\"success\": true, \"method\": \"docker\", \"ecr_image\": \"{}\"}}",
+                ecr_image
+            );
         } else {
             println!("✅ Training completed in Docker container: {}", ecr_image);
         }
 
         // Wait for completion if requested (Docker runs synchronously, so this is a no-op)
-        if options.wait {
-            if output_format != "json" {
-                println!("Training completed in Docker container");
-            }
+        if options.wait && output_format != "json" {
+            println!("Training completed in Docker container");
         }
 
         return Ok(());
@@ -673,7 +700,11 @@ pub async fn train_on_instance(
     let is_spot = instance.spot_instance_request_id().is_some();
     if is_spot && use_ssm {
         let checkpoint_dir = format!("{}/checkpoints", project_dir);
-        let s3_bucket = config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()).map(|s| s.clone());
+        let s3_bucket = config
+            .aws
+            .as_ref()
+            .and_then(|c| c.s3_bucket.as_ref())
+            .cloned();
         let s3_prefix = Some("checkpoints/spot-interruptions".to_string());
         let poll_interval = Duration::from_secs(30);
         let graceful_shutdown_timeout = Duration::from_secs(90);
@@ -681,7 +712,7 @@ pub async fn train_on_instance(
         // It uses process spawning to break circular dependency
         let auto_resume = std::env::var("TRAINCTL_AUTO_RESUME").is_ok();
         let script_path = Some(options.script.clone());
-        
+
         let instance_id = options.instance_id.clone();
         let ec2_client_clone = ec2_client.clone();
         let ssm_client_clone = ssm_client.clone();
@@ -689,11 +720,11 @@ pub async fn train_on_instance(
         // Clone configs for the spawned task (Config and SdkConfig implement Clone)
         let config_clone = config.clone();
         let aws_config_clone = aws_config.clone();
-        
+
         if output_format != "json" {
             println!("   Spot instance detected - starting automatic interruption monitoring...");
         }
-        
+
         // Spawn background task for spot monitoring
         // Auto-resume uses process spawning to break circular dependency
         tokio::spawn(async move {
@@ -711,7 +742,9 @@ pub async fn train_on_instance(
                 script_path,
                 Some(&config_clone),
                 Some(&aws_config_clone),
-            ).await {
+            )
+            .await
+            {
                 warn!("Spot monitoring failed for instance {}: {}", instance_id, e);
             }
         });
@@ -758,9 +791,11 @@ async fn sync_code_to_instance(
     // Find project root (look for requirements.txt, setup.py, pyproject.toml, etc.)
     // Resolve symlinks to get canonical path (handles symlinked directories)
     let mut current = script_dir;
-    let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+    let canonical_current = current
+        .canonicalize()
+        .unwrap_or_else(|_| current.to_path_buf());
     current = canonical_current.as_path();
-    
+
     let project_root = loop {
         let markers = [
             "requirements.txt",
@@ -1008,7 +1043,7 @@ async fn check_training_completion(
         Ok(output) => {
             if output.trim() == "COMPLETE" {
                 info!("Training completion detected via marker file");
-                
+
                 // Verify marker file is stable (not being written) by checking modification time
                 // If file was modified < 2 seconds ago, might still be writing
                 let verify_stable_cmd = format!(
@@ -1026,16 +1061,22 @@ async fn check_training_completion(
                      fi",
                     project_dir, project_dir, project_dir
                 );
-                
+
                 // Check if marker is stable (not being written)
-                if let Ok(stable_output) = crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &verify_stable_cmd).await {
+                if let Ok(stable_output) = crate::aws_utils::execute_ssm_command(
+                    ssm_client,
+                    instance_id,
+                    &verify_stable_cmd,
+                )
+                .await
+                {
                     if stable_output.trim() == "UNSTABLE" {
                         warn!("Marker file exists but was recently modified, waiting for stability...");
                         // Return false to continue checking - file might still be written
                         return Ok(false);
                     }
                 }
-                
+
                 // Also check exit code if available
                 let exit_code_cmd = format!(
                     "if [ -f {}/training_exit_code.txt ]; then cat {}/training_exit_code.txt; else echo '0'; fi",
@@ -1134,8 +1175,13 @@ async fn wait_for_training_completion(
     use tokio::time::sleep;
 
     if output_format != "json" {
-        println!("Waiting for training to complete (timeout: {} minutes)...", timeout_minutes);
-        println!("Note: Timeout only stops waiting - training continues running in the background.");
+        println!(
+            "Waiting for training to complete (timeout: {} minutes)...",
+            timeout_minutes
+        );
+        println!(
+            "Note: Timeout only stops waiting - training continues running in the background."
+        );
     }
 
     let mut check_count = 0;
@@ -1170,11 +1216,10 @@ async fn wait_for_training_completion(
                 // Still running
                 if check_count % 30 == 0 && output_format != "json" {
                     // Print status every minute (30 checks * 2 seconds = 60 seconds)
-                    let elapsed_minutes = (check_count as u64 * check_interval.as_secs()) / 60;
+                    let elapsed_minutes = (check_count * check_interval.as_secs()) / 60;
                     println!(
                         "Training still in progress... (checked {} times, ~{} minutes elapsed)",
-                        check_count,
-                        elapsed_minutes
+                        check_count, elapsed_minutes
                     );
                 }
             }

@@ -84,7 +84,10 @@ pub async fn handle_command(
 ) -> Result<()> {
     let aws_config = aws_config::load_defaults(BehaviorVersion::latest()).await;
     let project_root = std::env::current_dir().map_err(|e| {
-        TrainctlError::Io(std::io::Error::other(format!("Failed to get current directory: {}", e)))
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to get current directory: {}",
+            e
+        )))
     })?;
 
     let aws_cfg = config.aws.as_ref().ok_or_else(|| {
@@ -103,12 +106,10 @@ pub async fn handle_command(
             let dockerfile_path = if let Some(df) = dockerfile {
                 df
             } else {
-                detect_dockerfile(&project_root).ok_or_else(|| {
-                    TrainctlError::CloudProvider {
-                        provider: "docker".to_string(),
-                        message: "No Dockerfile found. Use --dockerfile to specify path.".to_string(),
-                        source: None,
-                    }
+                detect_dockerfile(&project_root).ok_or_else(|| TrainctlError::CloudProvider {
+                    provider: "docker".to_string(),
+                    message: "No Dockerfile found. Use --dockerfile to specify path.".to_string(),
+                    source: None,
                 })?
             };
 
@@ -120,7 +121,10 @@ pub async fn handle_command(
                     .unwrap_or_else(|| "runctl-training:latest".to_string())
             });
 
-            info!("Building Docker image: {} from {:?}", image_tag, dockerfile_path);
+            info!(
+                "Building Docker image: {} from {:?}",
+                image_tag, dockerfile_path
+            );
             build_image(&dockerfile_path, &image_tag, &project_root)?;
 
             if output_format != "json" {
@@ -128,15 +132,14 @@ pub async fn handle_command(
             }
 
             if push {
-                let repo = repository.ok_or_else(|| {
-                    TrainctlError::CloudProvider {
-                        provider: "docker".to_string(),
-                        message: "--repository required when using --push".to_string(),
-                        source: None,
-                    }
+                let repo = repository.ok_or_else(|| TrainctlError::CloudProvider {
+                    provider: "docker".to_string(),
+                    message: "--repository required when using --push".to_string(),
+                    source: None,
                 })?;
 
-                let ecr_image = push_to_ecr(&image_tag, &repo, "latest", region, &aws_config).await?;
+                let ecr_image =
+                    push_to_ecr(&image_tag, &repo, "latest", region, &aws_config).await?;
 
                 if output_format != "json" {
                     println!("✅ Pushed to ECR: {}", ecr_image);
@@ -168,16 +171,16 @@ pub async fn handle_command(
             let _dockerfile_path = if let Some(df) = dockerfile {
                 df
             } else {
-                detect_dockerfile(&project_root).ok_or_else(|| {
-                    TrainctlError::CloudProvider {
-                        provider: "docker".to_string(),
-                        message: "No Dockerfile found. Use --dockerfile to specify path.".to_string(),
-                        source: None,
-                    }
+                detect_dockerfile(&project_root).ok_or_else(|| TrainctlError::CloudProvider {
+                    provider: "docker".to_string(),
+                    message: "No Dockerfile found. Use --dockerfile to specify path.".to_string(),
+                    source: None,
                 })?
             };
 
-            let ecr_image = build_and_push_to_ecr(&project_root, &repository, &tag, region, &aws_config).await?;
+            let ecr_image =
+                build_and_push_to_ecr(&project_root, &repository, &tag, region, &aws_config)
+                    .await?;
 
             if output_format == "json" {
                 println!("{{\"ecr_image\": \"{}\"}}", ecr_image);
@@ -189,4 +192,3 @@ pub async fn handle_command(
 
     Ok(())
 }
-

@@ -80,6 +80,7 @@ pub struct TrainingMetadata {
 /// 3. Finds latest checkpoint
 /// 4. Uploads checkpoint to S3 (if configured)
 /// 5. Stores checkpoint location in instance tags
+#[allow(clippy::too_many_arguments)]
 pub async fn save_checkpoint_before_stop(
     instance_id: &str,
     checkpoint_dir: &str,

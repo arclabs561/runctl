@@ -16,7 +16,6 @@ use tracing::{info, warn};
 ///
 /// These constants control retry and timeout behavior for AWS operations.
 /// Timeouts are calculated as: max_attempts * poll_interval (or max_delay for exponential backoff).
-
 /// SSM command execution timeout: 60 attempts * 10s max delay = ~10 minutes max
 const SSM_COMMAND_MAX_ATTEMPTS: u32 = 60;
 const SSM_COMMAND_INITIAL_DELAY_SECS: u64 = 2;

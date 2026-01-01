@@ -33,6 +33,7 @@ use tracing::{error, info, warn};
 /// * `s3_prefix`: Optional S3 prefix for checkpoint upload
 /// * `poll_interval`: How often to check for interruptions (default: 30 seconds)
 /// * `graceful_shutdown_timeout`: Max time to wait for graceful shutdown (default: 90 seconds)
+#[allow(clippy::too_many_arguments)]
 pub async fn monitor_spot_interruption(
     instance_id: &str,
     checkpoint_dir: &str,
@@ -48,7 +49,10 @@ pub async fn monitor_spot_interruption(
     config: Option<&Config>,
     aws_config: Option<&SdkConfig>,
 ) -> Result<()> {
-    info!("Starting spot interruption monitoring for instance {}", instance_id);
+    info!(
+        "Starting spot interruption monitoring for instance {}",
+        instance_id
+    );
 
     // Verify instance is a spot instance
     let instance_response = ec2_client
@@ -63,11 +67,17 @@ pub async fn monitor_spot_interruption(
 
     let is_spot = instance.spot_instance_request_id().is_some();
     if !is_spot {
-        warn!("Instance {} is not a spot instance, monitoring not needed", instance_id);
+        warn!(
+            "Instance {} is not a spot instance, monitoring not needed",
+            instance_id
+        );
         return Ok(());
     }
 
-    info!("Instance {} is a spot instance, starting monitoring", instance_id);
+    info!(
+        "Instance {} is a spot instance, starting monitoring",
+        instance_id
+    );
 
     // Poll metadata service for interruption warnings
     loop {
@@ -81,13 +91,14 @@ pub async fn monitor_spot_interruption(
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
-        let instance = match crate::aws::helpers::find_instance_in_response(&instance_response, instance_id) {
-            Some(inst) => inst,
-            None => {
-                warn!("Instance {} not found, stopping monitoring", instance_id);
-                break;
-            }
-        };
+        let instance =
+            match crate::aws::helpers::find_instance_in_response(&instance_response, instance_id) {
+                Some(inst) => inst,
+                None => {
+                    warn!("Instance {} not found, stopping monitoring", instance_id);
+                    break;
+                }
+            };
         let state = instance
             .state()
             .and_then(|s| s.name())
@@ -95,7 +106,10 @@ pub async fn monitor_spot_interruption(
             .unwrap_or("unknown");
 
         if state != "running" {
-            info!("Instance {} is in state '{}', stopping monitoring", instance_id, state);
+            info!(
+                "Instance {} is in state '{}', stopping monitoring",
+                instance_id, state
+            );
             break;
         }
 
@@ -128,10 +142,10 @@ fi
             Ok(output) => {
                 if output.contains("SPOT_INTERRUPTION_DETECTED") {
                     warn!("Spot interruption detected for instance {}!", instance_id);
-                    
+
                     // Parse interruption details
                     let interruption_info = parse_interruption_info(&output);
-                    
+
                     // Handle interruption
                     if let Err(e) = handle_spot_interruption(
                         instance_id,
@@ -148,36 +162,37 @@ fi
                         error!("Failed to handle spot interruption: {}", e);
                         return Err(e);
                     }
-                    
+
                     // Spawn auto-resume using process spawning to completely break circular dependency
                     // The cycle: monitor_spot_interruption -> train_on_instance -> monitor_spot_interruption
                     // Solution: Use std::process::Command to spawn separate runctl process
                     if auto_resume {
-                        if let (Some(script), Some(_cfg), Some(_aws_cfg)) = (script_path, config, aws_config) {
+                        if let (Some(script), Some(_cfg), Some(_aws_cfg)) =
+                            (script_path, config, aws_config)
+                        {
                             let resume_instance_id = instance_id.to_string();
                             let resume_script_str = script.to_string_lossy().to_string();
-                            
+
                             // Construct checkpoint path from S3 prefix if available
-                            let resume_checkpoint_str: Option<String> = if let Some(prefix) = s3_prefix {
-                                Some(format!("{}/{}/checkpoints", prefix, instance_id))
-                            } else {
-                                None
-                            };
-                            
+                            let resume_checkpoint_str: Option<String> = s3_prefix
+                                .map(|prefix| format!("{}/{}/checkpoints", prefix, instance_id));
+
                             tokio::task::spawn(async move {
                                 use std::process::Command;
-                                
+
                                 // Build runctl command for auto-resume
-                                let mut cmd = Command::new(std::env::current_exe().unwrap_or_else(|_| "runctl".into()));
+                                let mut cmd = Command::new(
+                                    std::env::current_exe().unwrap_or_else(|_| "runctl".into()),
+                                );
                                 cmd.arg("aws")
                                     .arg("auto-resume")
                                     .arg(&resume_instance_id)
                                     .arg(&resume_script_str);
-                                
+
                                 if let Some(ref cp) = resume_checkpoint_str {
                                     cmd.arg("--checkpoint").arg(cp);
                                 }
-                                
+
                                 match cmd.output() {
                                     Ok(output) => {
                                         if output.status.success() {
@@ -190,10 +205,15 @@ fi
                                         }
                                     }
                                     Err(e) => {
-                                        warn!("Failed to spawn runctl process for auto-resume: {}", e);
+                                        warn!(
+                                            "Failed to spawn runctl process for auto-resume: {}",
+                                            e
+                                        );
                                         warn!("Auto-resume via process spawning failed. You can manually resume:");
                                         warn!("  1. Create new instance: runctl aws create <instance-type>");
-                                        let checkpoint_display = resume_checkpoint_str.as_ref().map(|s| s.as_str()).unwrap_or("<checkpoint-path>");
+                                        let checkpoint_display = resume_checkpoint_str
+                                            .as_deref()
+                                            .unwrap_or("<checkpoint-path>");
                                         warn!("  2. Resume training: runctl aws train <new-instance-id> {} -- --resume {}",
                                               resume_script_str, checkpoint_display);
                                     }
@@ -201,8 +221,11 @@ fi
                             });
                         }
                     }
-                    
-                    info!("Spot interruption handled successfully for instance {}", instance_id);
+
+                    info!(
+                        "Spot interruption handled successfully for instance {}",
+                        instance_id
+                    );
                     break;
                 }
                 // Continue monitoring if no interruption detected
@@ -308,7 +331,7 @@ fi
     match execute_ssm_command(ssm_client, instance_id, &save_checkpoint_cmd).await {
         Ok(output) => {
             info!("Graceful shutdown output: {}", output);
-            
+
             // Extract checkpoint path if saved
             let checkpoint_path = output
                 .lines()
@@ -325,15 +348,9 @@ fi
                         format!("{}/{}", instance_id, path)
                     };
                     let s3_path = format!("s3://{}/{}", bucket, s3_key);
-                    
-                    if let Err(e) = upload_checkpoint_to_s3(
-                        client,
-                        instance_id,
-                        path,
-                        bucket,
-                        s3_prefix,
-                    )
-                    .await
+
+                    if let Err(e) =
+                        upload_checkpoint_to_s3(client, instance_id, path, bucket, s3_prefix).await
                     {
                         warn!("Failed to upload checkpoint to S3: {}", e);
                     } else {
@@ -365,7 +382,7 @@ async fn upload_checkpoint_to_s3(
     // Use SSM to execute AWS CLI command on instance to upload checkpoint
     // This is a simplified approach - in production, you might want to use
     // S3 multipart upload for large checkpoints
-    
+
     let s3_key = if let Some(p) = prefix {
         format!("{}/{}/{}", p, instance_id, checkpoint_path)
     } else {
@@ -399,13 +416,13 @@ fn parse_interruption_info(output: &str) -> InterruptionInfo {
     // The metadata service returns JSON like:
     // {"action": "terminate", "time": "2024-01-01T12:00:00Z"}
     let mut action_time = None;
-    
+
     // Try to parse JSON response
     for line in output.lines() {
         if line.starts_with("SPOT_INTERRUPTION_DETECTED") || line.starts_with("NO_INTERRUPTION") {
             continue;
         }
-        
+
         if let Ok(json) = serde_json::from_str::<Value>(line) {
             if let Some(time_str) = json.get("time").and_then(|t| t.as_str()) {
                 if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(time_str) {
@@ -465,7 +482,7 @@ pub fn start_spot_monitoring(
         } else {
             None
         };
-        
+
         monitor_spot_interruption(
             &instance_id,
             &checkpoint_dir,
@@ -484,4 +501,3 @@ pub fn start_spot_monitoring(
         .await
     })
 }
-

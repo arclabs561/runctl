@@ -51,12 +51,11 @@ pub fn detect_dockerfile(project_root: &Path) -> Option<PathBuf> {
 /// * `dockerfile_path`: Path to Dockerfile
 /// * `image_name`: Name for the built image (e.g., "my-training:latest")
 /// * `project_root`: Project root directory (context for build)
-pub fn build_image(
-    dockerfile_path: &Path,
-    image_name: &str,
-    project_root: &Path,
-) -> Result<()> {
-    info!("Building Docker image: {} from {:?}", image_name, dockerfile_path);
+pub fn build_image(dockerfile_path: &Path, image_name: &str, project_root: &Path) -> Result<()> {
+    info!(
+        "Building Docker image: {} from {:?}",
+        image_name, dockerfile_path
+    );
 
     let output = Command::new("docker")
         .arg("build")
@@ -81,7 +80,7 @@ pub fn build_image(
         } else {
             format!("{}\n{}", stderr, stdout)
         };
-        
+
         return Err(TrainctlError::CloudProvider {
             provider: "docker".to_string(),
             message: format!(
@@ -92,7 +91,9 @@ pub fn build_image(
                   3. Check disk space: df -h\n\
                   4. Review build logs above for specific errors\n\
                   5. Test build locally: docker build -f {:?} -t test-image {}",
-                combined_error.trim(), dockerfile_path, project_root.display()
+                combined_error.trim(),
+                dockerfile_path,
+                project_root.display()
             ),
             source: None,
         });
@@ -129,7 +130,9 @@ async fn ecr_login(ecr_client: &EcrClient, _region: &str) -> Result<()> {
 
     let parts: Vec<&str> = credentials.split(':').collect();
     if parts.len() != 2 {
-        return Err(TrainctlError::Aws("Invalid ECR credentials format".to_string()));
+        return Err(TrainctlError::Aws(
+            "Invalid ECR credentials format".to_string(),
+        ));
     }
 
     let password = parts[1];
@@ -162,22 +165,20 @@ async fn ecr_login(ecr_client: &EcrClient, _region: &str) -> Result<()> {
     // Write password to stdin
     use std::io::Write;
     if let Some(ref mut stdin) = output.stdin {
-        stdin
-            .write_all(password.as_bytes())
-            .map_err(|e| TrainctlError::Io(std::io::Error::other(format!(
-                "Failed to write password to docker login: {}",
-                e
-            ))))?;
-    }
-
-    let result = output
-        .wait_with_output()
-        .map_err(|e| {
+        stdin.write_all(password.as_bytes()).map_err(|e| {
             TrainctlError::Io(std::io::Error::other(format!(
-                "Failed to wait for docker login: {}",
+                "Failed to write password to docker login: {}",
                 e
             )))
         })?;
+    }
+
+    let result = output.wait_with_output().map_err(|e| {
+        TrainctlError::Io(std::io::Error::other(format!(
+            "Failed to wait for docker login: {}",
+            e
+        )))
+    })?;
 
     if !result.status.success() {
         let stderr = String::from_utf8_lossy(&result.stderr);
@@ -217,7 +218,10 @@ pub async fn push_to_ecr(
     region: &str,
     aws_config: &SdkConfig,
 ) -> Result<String> {
-    info!("Pushing Docker image to ECR: {}/{}:{}", ecr_repository, tag, region);
+    info!(
+        "Pushing Docker image to ECR: {}/{}:{}",
+        ecr_repository, tag, region
+    );
 
     let ecr_client = EcrClient::new(aws_config);
 
@@ -303,10 +307,7 @@ async fn get_account_id(aws_config: &SdkConfig) -> Result<String> {
 }
 
 /// Create or get ECR repository
-async fn ensure_ecr_repository(
-    ecr_client: &EcrClient,
-    repository_name: &str,
-) -> Result<()> {
+async fn ensure_ecr_repository(ecr_client: &EcrClient, repository_name: &str) -> Result<()> {
     // Try to describe repository (will fail if doesn't exist)
     match ecr_client
         .describe_repositories()
@@ -350,13 +351,11 @@ pub async fn build_and_push_to_ecr(
     aws_config: &SdkConfig,
 ) -> Result<String> {
     // Detect Dockerfile
-    let dockerfile = detect_dockerfile(project_root)
-        .ok_or_else(|| {
-            TrainctlError::CloudProvider {
-                provider: "docker".to_string(),
-                message: "No Dockerfile found in project root".to_string(),
-                source: None,
-            }
+    let dockerfile =
+        detect_dockerfile(project_root).ok_or_else(|| TrainctlError::CloudProvider {
+            provider: "docker".to_string(),
+            message: "No Dockerfile found in project root".to_string(),
+            source: None,
         })?;
 
     // Build image
@@ -382,7 +381,7 @@ pub async fn detect_ebs_mounts(
     ssm_client: &aws_sdk_ssm::Client,
 ) -> Result<Vec<(String, String)>> {
     use crate::aws_utils::execute_ssm_command;
-    
+
     // First, get attached volumes from EC2 API
     let response = ec2_client
         .describe_instances()
@@ -401,13 +400,12 @@ pub async fn detect_ebs_mounts(
     // Check for attached EBS volumes
     let block_devices = instance.block_device_mappings();
     let mut ebs_volumes = Vec::new();
-    
+
     for device in block_devices {
         if let Some(ebs) = device.ebs() {
             if let Some(_volume_id) = ebs.volume_id() {
                 // Check if volume is mounted on the instance
-                let check_mount_cmd = format!(
-                    r#"
+                let check_mount_cmd = r#"
 # Check common mount points for EBS volumes
 for mount in /mnt/data /mnt/checkpoints /data /checkpoints; do
     if mountpoint -q "$mount" 2>/dev/null; then
@@ -415,11 +413,12 @@ for mount in /mnt/data /mnt/checkpoints /data /checkpoints; do
     fi
 done
 "#
-                );
-                
-                let mount_output = execute_ssm_command(ssm_client, instance_id, &check_mount_cmd).await?;
+                .to_string();
+
+                let mount_output =
+                    execute_ssm_command(ssm_client, instance_id, &check_mount_cmd).await?;
                 let mounts: Vec<&str> = mount_output.lines().filter(|l| !l.is_empty()).collect();
-                
+
                 for mount in mounts {
                     // Use same path in container for simplicity
                     ebs_volumes.push((mount.to_string(), mount.to_string()));
@@ -427,7 +426,7 @@ done
             }
         }
     }
-    
+
     Ok(ebs_volumes)
 }
 
@@ -444,7 +443,10 @@ pub async fn run_training_in_container(
     ssm_client: &aws_sdk_ssm::Client,
     ec2_client: Option<&aws_sdk_ec2::Client>,
 ) -> Result<()> {
-    info!("Running training in Docker container: {} on instance {}", ecr_image, instance_id);
+    info!(
+        "Running training in Docker container: {} on instance {}",
+        ecr_image, instance_id
+    );
 
     // Get relative path from project root to script
     let script_relative = script_path
@@ -464,7 +466,10 @@ pub async fn run_training_in_container(
         match detect_ebs_mounts(instance_id, ec2_client, ssm_client).await {
             Ok(mounts) => {
                 if !mounts.is_empty() {
-                    info!("Detected {} EBS volume(s), mounting in container", mounts.len());
+                    info!(
+                        "Detected {} EBS volume(s), mounting in container",
+                        mounts.len()
+                    );
                     warn!(
                         "⚠️  EBS Volume Safety: {} EBS volume(s) detected and will be mounted in container. \
                          Ensure these volumes are NOT attached to other instances. \
@@ -476,7 +481,8 @@ pub async fn run_training_in_container(
                             "Mounting EBS volume: {} -> {} (container)",
                             host_path, container_path
                         );
-                        volume_mounts.push_str(&format!("    -v {}:{} \\\n", host_path, container_path));
+                        volume_mounts
+                            .push_str(&format!("    -v {}:{} \\\n", host_path, container_path));
                     }
                     println!("   ⚠️  WARNING: EBS volumes mounted in container. Ensure volumes are not shared with other instances.");
                 } else {
@@ -484,7 +490,10 @@ pub async fn run_training_in_container(
                 }
             }
             Err(e) => {
-                warn!("Failed to detect EBS mounts: {}, continuing without EBS volumes", e);
+                warn!(
+                    "Failed to detect EBS mounts: {}, continuing without EBS volumes",
+                    e
+                );
             }
         }
     }
@@ -569,11 +578,11 @@ mod tests {
     #[test]
     fn test_detect_dockerfile_priority_order() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create multiple Dockerfiles - should return first match in priority order
         let root_dockerfile = temp_dir.path().join("Dockerfile");
         std::fs::write(&root_dockerfile, "FROM ubuntu:22.04\n").unwrap();
-        
+
         let training_dir = temp_dir.path().join("training");
         std::fs::create_dir_all(&training_dir).unwrap();
         let training_dockerfile = training_dir.join("Dockerfile");
@@ -623,11 +632,11 @@ mod tests {
     #[test]
     fn test_detect_dockerfile_priority_across_all_locations() {
         let temp_dir = TempDir::new().unwrap();
-        
+
         // Create Dockerfiles in multiple locations
         let root_dockerfile = temp_dir.path().join("Dockerfile");
         std::fs::write(&root_dockerfile, "FROM ubuntu:22.04\n").unwrap();
-        
+
         let training_dir = temp_dir.path().join("training");
         std::fs::create_dir_all(&training_dir).unwrap();
         let training_dockerfile = training_dir.join("Dockerfile");
@@ -650,4 +659,3 @@ mod tests {
         assert_eq!(result, None);
     }
 }
-

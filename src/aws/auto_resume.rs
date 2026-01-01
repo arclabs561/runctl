@@ -29,7 +29,11 @@ use tracing::{info, warn};
 /// * `script_path`: Training script to resume
 /// * `config`: Configuration
 /// * `aws_config`: AWS SDK configuration
+///
+/// # Returns
+///
 /// Returns: (new_instance_id, train_options) - caller should start training
+///
 /// NOTE: Currently used by CLI command handler
 pub async fn prepare_auto_resume(
     original_instance_id: &str,
@@ -58,7 +62,7 @@ pub async fn prepare_auto_resume(
         if let Some(bucket) = &aws_cfg.s3_bucket {
             let s3_client = aws_sdk_s3::Client::new(aws_config);
             let prefix = format!("checkpoints/spot-interruptions/{}/", original_instance_id);
-            
+
             // List objects in S3 to find latest checkpoint
             match find_latest_checkpoint_in_s3(&s3_client, bucket, &prefix).await {
                 Ok(Some(checkpoint)) => {
@@ -70,7 +74,10 @@ pub async fn prepare_auto_resume(
                     None
                 }
                 Err(e) => {
-                    warn!("Failed to find checkpoint in S3: {}, will start from beginning", e);
+                    warn!(
+                        "Failed to find checkpoint in S3: {}, will start from beginning",
+                        e
+                    );
                     None
                 }
             }
@@ -82,7 +89,7 @@ pub async fn prepare_auto_resume(
 
     // Step 2: Create new spot instance
     info!("Creating new spot instance to resume training...");
-    
+
     let create_options = CreateInstanceOptions {
         wait: true,
         instance_type: aws_cfg.default_instance_type.clone(),
@@ -147,8 +154,11 @@ pub async fn handle_auto_resume_command(
     aws_config: &SdkConfig,
     output_format: &str,
 ) -> Result<()> {
-    info!("Auto-resuming training after interruption of instance {}", original_instance_id);
-    
+    info!(
+        "Auto-resuming training after interruption of instance {}",
+        original_instance_id
+    );
+
     // Use prepare_auto_resume to get instance and training options
     let (new_instance_id, train_options) = prepare_auto_resume(
         &original_instance_id,
@@ -158,25 +168,23 @@ pub async fn handle_auto_resume_command(
         aws_config,
     )
     .await?;
-    
+
     if output_format != "json" {
         println!("Created new instance: {}", new_instance_id);
         println!("Starting training on new instance...");
     }
-    
+
     // Start training on the new instance
-    crate::aws::training::train_on_instance(
-        train_options,
-        config,
-        aws_config,
-        output_format,
-    )
-    .await?;
-    
+    crate::aws::training::train_on_instance(train_options, config, aws_config, output_format)
+        .await?;
+
     if output_format != "json" {
-        println!("Training resumed successfully on instance: {}", new_instance_id);
+        println!(
+            "Training resumed successfully on instance: {}",
+            new_instance_id
+        );
     }
-    
+
     Ok(())
 }
 
@@ -251,9 +259,7 @@ async fn find_newest_spot_instance(
                 if instance.spot_instance_request_id().is_some() {
                     if let Some(launch_time) = instance.launch_time() {
                         let dt = chrono::DateTime::from_timestamp(launch_time.secs(), 0)
-                            .ok_or_else(|| {
-                                TrainctlError::Aws("Invalid launch time".to_string())
-                            })?;
+                            .ok_or_else(|| TrainctlError::Aws("Invalid launch time".to_string()))?;
                         instances.push((instance_id.to_string(), dt));
                     }
                 }
@@ -267,11 +273,9 @@ async fn find_newest_spot_instance(
     instances
         .first()
         .map(|(id, _)| id.clone())
-        .ok_or_else(|| {
-            TrainctlError::CloudProvider {
-                provider: "aws".to_string(),
-                message: "No new spot instance found after creation".to_string(),
-                source: None,
-            }
+        .ok_or_else(|| TrainctlError::CloudProvider {
+            provider: "aws".to_string(),
+            message: "No new spot instance found after creation".to_string(),
+            source: None,
         })
 }

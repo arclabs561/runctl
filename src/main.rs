@@ -283,9 +283,11 @@ async fn main() -> Result<()> {
         Commands::Aws { subcommand } => aws::handle_command(subcommand, &config, &cli.output)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Docker { subcommand } => docker_cli::handle_command(subcommand, &config, &cli.output)
-            .await
-            .map_err(anyhow::Error::from),
+        Commands::Docker { subcommand } => {
+            docker_cli::handle_command(subcommand, &config, &cli.output)
+                .await
+                .map_err(anyhow::Error::from)
+        }
         Commands::Monitor {
             log,
             checkpoint,

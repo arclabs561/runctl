@@ -101,7 +101,7 @@ pub async fn handle_command(
                 include_patterns: vec![],
                 project_name: get_project_name(None, config),
                 script_args,
-                wait: true, // Always wait for training to complete
+                wait: true,           // Always wait for training to complete
                 timeout_minutes: 120, // Default 2 hour timeout
                 docker: false,
                 docker_image: None,

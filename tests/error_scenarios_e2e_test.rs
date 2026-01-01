@@ -237,7 +237,7 @@ async fn test_auto_resume_failure_scenarios() {
 }
 
 /// Test auto-resume command directly (without actual interruption)
-/// 
+///
 /// This test verifies that the auto-resume command can be invoked and handles
 /// edge cases like missing checkpoints gracefully.
 #[tokio::test]
@@ -254,7 +254,7 @@ async fn test_auto_resume_command_handles_missing_checkpoint() {
     // Even if checkpoint doesn't exist, it should handle gracefully
     let test_instance_id = "i-test1234567890";
     let test_script = std::path::PathBuf::from("training/train_mnist.py");
-    
+
     // Try to call auto-resume with a non-existent instance ID
     // This should fail gracefully with a clear error message
     let output = std::process::Command::new("cargo")
@@ -274,10 +274,15 @@ async fn test_auto_resume_command_handles_missing_checkpoint() {
             // Command should fail (instance doesn't exist), but with clear error
             if !result.status.success() {
                 let stderr = String::from_utf8_lossy(&result.stderr);
-                info!("Auto-resume correctly failed for non-existent instance: {}", stderr);
+                info!(
+                    "Auto-resume correctly failed for non-existent instance: {}",
+                    stderr
+                );
                 // Verify error message is helpful
                 assert!(
-                    stderr.contains("instance") || stderr.contains("not found") || stderr.contains("error"),
+                    stderr.contains("instance")
+                        || stderr.contains("not found")
+                        || stderr.contains("error"),
                     "Error message should mention instance or error: {}",
                     stderr
                 );
