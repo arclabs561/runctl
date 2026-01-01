@@ -462,6 +462,7 @@ struct InterruptionInfo {
 ///
 /// Note: This function takes the AWS SDK config and creates new clients internally.
 #[allow(dead_code)]
+#[allow(clippy::too_many_arguments)]
 pub fn start_spot_monitoring(
     instance_id: String,
     checkpoint_dir: String,
