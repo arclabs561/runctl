@@ -65,7 +65,7 @@ async fn execute_ssm_command(
         .send_command()
         .instance_ids(instance_id)
         .document_name("AWS-RunShellScript")
-        .parameters("commands", vec![command])
+        .parameters("commands", vec![command.to_string()])
         .send()
         .await?
         .command()
