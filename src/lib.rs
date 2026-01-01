@@ -106,6 +106,6 @@ pub use training::{TrainingSession, TrainingStatus};
 pub use validation::{validate_path, validate_path_path};
 
 // Re-export commonly used types for convenience
-pub use config::Config;
 pub use aws::{CreateInstanceOptions, TrainInstanceOptions};
+pub use config::Config;
 pub use resources::estimate_instance_cost;

@@ -51,10 +51,7 @@ pub async fn sync_code_shell(
 
     // Create tar archive
     let mut tar_cmd = Command::new("tar");
-    tar_cmd
-        .arg("-czf")
-        .arg("-")
-        .current_dir(project_root);
+    tar_cmd.arg("-czf").arg("-").current_dir(project_root);
 
     for exclude in &exclude_args {
         tar_cmd.arg(exclude);
@@ -121,14 +118,10 @@ pub async fn sync_code_shell(
     .await;
 
     let exit_status = match wait_result {
-        Ok(Ok(status_result)) => status_result.map_err(|e| {
-            TrainctlError::Ssm(format!("Failed to wait for SSH process: {}", e))
-        })?,
+        Ok(Ok(status_result)) => status_result
+            .map_err(|e| TrainctlError::Ssm(format!("Failed to wait for SSH process: {}", e)))?,
         Ok(Err(e)) => {
-            return Err(TrainctlError::Ssm(format!(
-                "Failed to write to SSH: {}",
-                e
-            )));
+            return Err(TrainctlError::Ssm(format!("Failed to write to SSH: {}", e)));
         }
         Err(_) => {
             return Err(TrainctlError::Ssm(
@@ -205,47 +198,70 @@ pub async fn sync_code_native(
         std::time::Duration::from_secs(300), // 5 minute timeout
         tokio::task::spawn_blocking(move || {
             // Connect via SSH
-            let tcp = TcpStream::connect(format!("{}:22", ip_clone))
-                .map_err(|e| TrainctlError::Ssm(format!("Failed to connect to {}:22: {}", ip_clone, e)))?;
-
-        let mut sess = Session::new()
-            .map_err(|e| TrainctlError::Ssm(format!("Failed to create SSH session: {}", e)))?;
-
-        sess.set_tcp_stream(tcp);
-        sess.handshake()
-            .map_err(|e| TrainctlError::Ssm(format!("SSH handshake failed: {}", e)))?;
-
-        // Authenticate with private key
-        sess.userauth_pubkey_file(&user_clone, None, Path::new(&key_path_clone), None)
-            .map_err(|e| {
-                TrainctlError::Ssm(format!(
-                    "SSH authentication failed: {}. Check key permissions (chmod 600 {})",
-                    e, key_path_clone
-                ))
+            let tcp = TcpStream::connect(format!("{}:22", ip_clone)).map_err(|e| {
+                TrainctlError::Ssm(format!("Failed to connect to {}:22: {}", ip_clone, e))
             })?;
 
-        if !sess.authenticated() {
-            return Err(TrainctlError::Ssm(format!(
-                "SSH authentication failed. Check key permissions: chmod 600 {}",
-                key_path_clone
-            )));
-        }
+            let mut sess = Session::new()
+                .map_err(|e| TrainctlError::Ssm(format!("Failed to create SSH session: {}", e)))?;
 
-        if let Some(ref p) = pb_clone {
-            p.set_message("Checking if code exists on instance...");
-        }
+            sess.set_tcp_stream(tcp);
+            sess.handshake()
+                .map_err(|e| TrainctlError::Ssm(format!("SSH handshake failed: {}", e)))?;
 
-        // Check if code exists (for incremental sync)
-        let check_cmd = format!("test -d {} && echo EXISTS || echo NOT_FOUND", project_dir_clone);
-        let use_incremental = check_remote_directory(&sess, &check_cmd)?;
+            // Authenticate with private key
+            sess.userauth_pubkey_file(&user_clone, None, Path::new(&key_path_clone), None)
+                .map_err(|e| {
+                    TrainctlError::Ssm(format!(
+                        "SSH authentication failed: {}. Check key permissions (chmod 600 {})",
+                        e, key_path_clone
+                    ))
+                })?;
 
-        if use_incremental {
-            if let Some(ref p) = pb_clone {
-                p.set_message("Code exists, using incremental sync...");
+            if !sess.authenticated() {
+                return Err(TrainctlError::Ssm(format!(
+                    "SSH authentication failed. Check key permissions: chmod 600 {}",
+                    key_path_clone
+                )));
             }
 
-            // Incremental sync: compare files and sync only changes
-            sync_incremental_blocking(
+            if let Some(ref p) = pb_clone {
+                p.set_message("Checking if code exists on instance...");
+            }
+
+            // Check if code exists (for incremental sync)
+            let check_cmd = format!(
+                "test -d {} && echo EXISTS || echo NOT_FOUND",
+                project_dir_clone
+            );
+            let use_incremental = check_remote_directory(&sess, &check_cmd)?;
+
+            if use_incremental {
+                if let Some(ref p) = pb_clone {
+                    p.set_message("Code exists, using incremental sync...");
+                }
+
+                // Incremental sync: compare files and sync only changes
+                sync_incremental_blocking(
+                    &sess,
+                    &project_root_clone,
+                    &project_dir_clone,
+                    &pb_clone,
+                    &include_patterns_clone,
+                )?;
+
+                if let Some(ref p) = pb_clone {
+                    p.finish_with_message("Code synced (incremental)");
+                }
+                return Ok(());
+            }
+
+            // Full sync: create tar archive and transfer
+            if let Some(ref p) = pb_clone {
+                p.set_message("Performing full sync (tar archive)...");
+            }
+
+            sync_full_tar_blocking(
                 &sess,
                 &project_root_clone,
                 &project_dir_clone,
@@ -254,27 +270,8 @@ pub async fn sync_code_native(
             )?;
 
             if let Some(ref p) = pb_clone {
-                p.finish_with_message("Code synced (incremental)");
+                p.finish_with_message("Code synced successfully");
             }
-            return Ok(());
-        }
-
-        // Full sync: create tar archive and transfer
-        if let Some(ref p) = pb_clone {
-            p.set_message("Performing full sync (tar archive)...");
-        }
-
-        sync_full_tar_blocking(
-            &sess,
-            &project_root_clone,
-            &project_dir_clone,
-            &pb_clone,
-            &include_patterns_clone,
-        )?;
-
-        if let Some(ref p) = pb_clone {
-            p.finish_with_message("Code synced successfully");
-        }
 
             Ok(())
         }),

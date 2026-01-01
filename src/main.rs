@@ -274,9 +274,11 @@ async fn main() -> Result<()> {
         Commands::Runpod { subcommand } => runctl::runpod::handle_command(subcommand, &config)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Aws { subcommand } => runctl::aws::handle_command(subcommand, &config, &cli.output)
-            .await
-            .map_err(anyhow::Error::from),
+        Commands::Aws { subcommand } => {
+            runctl::aws::handle_command(subcommand, &config, &cli.output)
+                .await
+                .map_err(anyhow::Error::from)
+        }
         Commands::Docker { subcommand } => {
             docker_cli::handle_command(subcommand, &config, &cli.output)
                 .await
@@ -289,9 +291,11 @@ async fn main() -> Result<()> {
         } => runctl::monitor::monitor(log, checkpoint, follow)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Checkpoint { subcommand } => runctl::checkpoint::handle_command(subcommand, &cli.output)
-            .await
-            .map_err(anyhow::Error::from),
+        Commands::Checkpoint { subcommand } => {
+            runctl::checkpoint::handle_command(subcommand, &cli.output)
+                .await
+                .map_err(anyhow::Error::from)
+        }
         Commands::Config { subcommand } => {
             runctl::config::handle_command(subcommand, cli.config.as_deref(), &cli.output)
                 .await

@@ -4,11 +4,11 @@
 //!
 //! This is a binary-only module that uses the runctl library for core functionality.
 
+use aws_config::BehaviorVersion;
+use clap::Subcommand;
 use runctl::config::Config;
 use runctl::docker::{build_and_push_to_ecr, build_image, detect_dockerfile, push_to_ecr};
 use runctl::error::{Result, TrainctlError};
-use aws_config::BehaviorVersion;
-use clap::Subcommand;
 use std::path::PathBuf;
 use tracing::info;
 
