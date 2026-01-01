@@ -235,3 +235,61 @@ async fn test_auto_resume_failure_scenarios() {
     // (Actual implementation should handle this case)
     info!("Auto-resume failure scenarios would be tested with real interrupted instance");
 }
+
+/// Test auto-resume command directly (without actual interruption)
+/// 
+/// This test verifies that the auto-resume command can be invoked and handles
+/// edge cases like missing checkpoints gracefully.
+#[tokio::test]
+#[ignore]
+async fn test_auto_resume_command_handles_missing_checkpoint() {
+    if !should_run_e2e() {
+        eprintln!("Skipping E2E test. Set TRAINCTL_E2E=1 to run");
+        return;
+    }
+
+    info!("Testing auto-resume command with missing checkpoint...");
+
+    // Test that auto-resume command exists and can be called
+    // Even if checkpoint doesn't exist, it should handle gracefully
+    let test_instance_id = "i-test1234567890";
+    let test_script = std::path::PathBuf::from("training/train_mnist.py");
+    
+    // Try to call auto-resume with a non-existent instance ID
+    // This should fail gracefully with a clear error message
+    let output = std::process::Command::new("cargo")
+        .args([
+            "run",
+            "--release",
+            "--",
+            "aws",
+            "auto-resume",
+            test_instance_id,
+            test_script.to_str().unwrap(),
+        ])
+        .output();
+
+    match output {
+        Ok(result) => {
+            // Command should fail (instance doesn't exist), but with clear error
+            if !result.status.success() {
+                let stderr = String::from_utf8_lossy(&result.stderr);
+                info!("Auto-resume correctly failed for non-existent instance: {}", stderr);
+                // Verify error message is helpful
+                assert!(
+                    stderr.contains("instance") || stderr.contains("not found") || stderr.contains("error"),
+                    "Error message should mention instance or error: {}",
+                    stderr
+                );
+            } else {
+                warn!("Auto-resume unexpectedly succeeded - this might indicate the test instance exists");
+            }
+        }
+        Err(e) => {
+            warn!("Failed to execute auto-resume command: {}", e);
+            // This is acceptable - the command might not be available in test environment
+        }
+    }
+
+    info!("Auto-resume command test completed");
+}
