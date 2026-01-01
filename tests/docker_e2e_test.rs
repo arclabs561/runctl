@@ -62,13 +62,15 @@ async fn execute_ssm_command(
     instance_id: &str,
     command: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let command_id = ssm_client
+    let command_vec = vec![command.to_string()];
+    let response = ssm_client
         .send_command()
         .instance_ids(instance_id)
         .document_name("AWS-RunShellScript")
-        .parameters("commands", vec![command.to_string()])
+        .parameters("commands", command_vec)
         .send()
-        .await?
+        .await?;
+    let command_id = response
         .command()
         .and_then(|c| c.command_id())
         .ok_or("No command ID returned")?;
