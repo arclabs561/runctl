@@ -49,99 +49,86 @@ pub async fn sync_code_shell(
     exclude_args.push("--exclude=target".to_string());
     exclude_args.push("--exclude=.DS_Store".to_string());
 
-    // Create tar archive
-    let mut tar_cmd = Command::new("tar");
-    tar_cmd.arg("-czf").arg("-").current_dir(project_root);
-
-    for exclude in &exclude_args {
-        tar_cmd.arg(exclude);
-    }
-
-    // Add include patterns (override excludes)
+    // Build tar command arguments
+    let mut tar_args = vec!["-czf".to_string(), "-".to_string()];
+    tar_args.extend(exclude_args.iter().cloned());
     for pattern in include_patterns {
-        tar_cmd.arg("--include").arg(pattern);
+        tar_args.push("--include".to_string());
+        tar_args.push(pattern.clone());
     }
-
-    // Add all files in project root
-    tar_cmd.arg(".");
+    tar_args.push(".".to_string());
 
     // Create SSH command to extract on remote
     let ssh_cmd = format!(
-        "mkdir -p {} && cd {} && tar -xzf -",
+        "mkdir -p {} && cd {} && tar -xzf - 2>&1",
         project_dir, project_dir
     );
 
-    let mut ssh = Command::new("ssh");
-    ssh.arg("-o")
-        .arg("StrictHostKeyChecking=no")
-        .arg("-o")
-        .arg("ConnectTimeout=10")
-        .arg("-i")
-        .arg(key_path)
-        .arg(format!("{}@{}", user, ip))
-        .arg(&ssh_cmd);
+    // Use shell to pipe tar directly to ssh (streaming, no buffering)
+    let project_root_str = project_root.to_string_lossy().to_string();
+    let key_path_clone = key_path.to_string();
+    let ip_clone = ip.to_string();
+    let user_clone = user.to_string();
+    let output_format_clone = output_format.to_string();
 
-    // Pipe tar output to ssh
-    let tar_output = tar_cmd
-        .output()
-        .map_err(|e| TrainctlError::Ssm(format!("Failed to create tar archive: {}", e)))?;
+    // Build the full command: cd project_root && tar ... | ssh ...
+    let tar_cmd_str = format!(
+        "cd {} && tar {}",
+        project_root_str,
+        tar_args.join(" ")
+    );
 
-    if !tar_output.status.success() {
-        let stderr = String::from_utf8_lossy(&tar_output.stderr);
-        return Err(TrainctlError::Ssm(format!(
-            "Tar archive creation failed: {}",
-            stderr
-        )));
+    let full_cmd = format!(
+        "{} | ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -i {} {}@{} '{}'",
+        tar_cmd_str, key_path_clone, user_clone, ip_clone, ssh_cmd
+    );
+
+    if output_format != "json" {
+        println!("   Executing streaming sync (tar | ssh)...");
     }
 
-    // Execute SSH with tar data as stdin
-    let mut ssh_process = ssh
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| TrainctlError::Ssm(format!("Failed to start SSH command: {}", e)))?;
-
-    // Write tar data to SSH stdin in blocking task
-    let tar_data = tar_output.stdout;
-    let wait_result = tokio::time::timeout(
+    // Execute in blocking task with timeout
+    let sync_result = tokio::time::timeout(
         Duration::from_secs(300),
-        tokio::task::spawn_blocking(move || {
-            use std::io::Write;
-            if let Some(mut stdin) = ssh_process.stdin.take() {
-                stdin.write_all(&tar_data)?;
-                drop(stdin);
+        tokio::task::spawn_blocking(move || -> Result<()> {
+            use std::process::Command;
+            let output = Command::new("sh")
+                .arg("-c")
+                .arg(&full_cmd)
+                .output()
+                .map_err(|e| {
+                    TrainctlError::Ssm(format!("Failed to execute sync command: {}", e))
+                })?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return Err(TrainctlError::Ssm(format!(
+                    "Sync failed: stderr={}, stdout={}",
+                    stderr, stdout
+                )));
             }
-            ssh_process.wait()
+
+            Ok(())
         }),
     )
     .await;
 
-    let exit_status = match wait_result {
-        Ok(Ok(status_result)) => status_result
-            .map_err(|e| TrainctlError::Ssm(format!("Failed to wait for SSH process: {}", e)))?,
-        Ok(Err(e)) => {
-            return Err(TrainctlError::Ssm(format!("Failed to write to SSH: {}", e)));
+    match sync_result {
+        Ok(Ok(Ok(()))) => {
+            if output_format != "json" {
+                println!("   Code synced successfully (shell-based)");
+            }
+            Ok(())
         }
-        Err(_) => {
-            return Err(TrainctlError::Ssm(
-                "SSH sync timed out after 5 minutes".to_string(),
-            ));
-        }
-    };
-
-    if !exit_status.success() {
-        return Err(TrainctlError::Ssm(format!(
-            "SSH sync failed with exit code: {:?}",
-            exit_status.code()
-        )));
+        Ok(Ok(Err(e))) => Err(e),
+        Ok(Err(_join_err)) => Err(TrainctlError::Ssm(
+            "Task join error during sync".to_string(),
+        )),
+        Err(_) => Err(TrainctlError::Ssm(
+            "SSH sync timed out after 5 minutes".to_string(),
+        )),
     }
-
-    if output_format != "json" {
-        println!("   Code synced successfully (shell-based)");
-    }
-
-    Ok(())
 }
 
 /// Sync code to instance using native Rust SSH and tar
@@ -198,70 +185,47 @@ pub async fn sync_code_native(
         std::time::Duration::from_secs(300), // 5 minute timeout
         tokio::task::spawn_blocking(move || {
             // Connect via SSH
-            let tcp = TcpStream::connect(format!("{}:22", ip_clone)).map_err(|e| {
-                TrainctlError::Ssm(format!("Failed to connect to {}:22: {}", ip_clone, e))
+            let tcp = TcpStream::connect(format!("{}:22", ip_clone))
+                .map_err(|e| TrainctlError::Ssm(format!("Failed to connect to {}:22: {}", ip_clone, e)))?;
+
+        let mut sess = Session::new()
+            .map_err(|e| TrainctlError::Ssm(format!("Failed to create SSH session: {}", e)))?;
+
+        sess.set_tcp_stream(tcp);
+        sess.handshake()
+            .map_err(|e| TrainctlError::Ssm(format!("SSH handshake failed: {}", e)))?;
+
+        // Authenticate with private key
+        sess.userauth_pubkey_file(&user_clone, None, Path::new(&key_path_clone), None)
+            .map_err(|e| {
+                TrainctlError::Ssm(format!(
+                    "SSH authentication failed: {}. Check key permissions (chmod 600 {})",
+                    e, key_path_clone
+                ))
             })?;
 
-            let mut sess = Session::new()
-                .map_err(|e| TrainctlError::Ssm(format!("Failed to create SSH session: {}", e)))?;
+        if !sess.authenticated() {
+            return Err(TrainctlError::Ssm(format!(
+                "SSH authentication failed. Check key permissions: chmod 600 {}",
+                key_path_clone
+            )));
+        }
 
-            sess.set_tcp_stream(tcp);
-            sess.handshake()
-                .map_err(|e| TrainctlError::Ssm(format!("SSH handshake failed: {}", e)))?;
+        if let Some(ref p) = pb_clone {
+            p.set_message("Checking if code exists on instance...");
+        }
 
-            // Authenticate with private key
-            sess.userauth_pubkey_file(&user_clone, None, Path::new(&key_path_clone), None)
-                .map_err(|e| {
-                    TrainctlError::Ssm(format!(
-                        "SSH authentication failed: {}. Check key permissions (chmod 600 {})",
-                        e, key_path_clone
-                    ))
-                })?;
+        // Check if code exists (for incremental sync)
+        let check_cmd = format!("test -d {} && echo EXISTS || echo NOT_FOUND", project_dir_clone);
+        let use_incremental = check_remote_directory(&sess, &check_cmd)?;
 
-            if !sess.authenticated() {
-                return Err(TrainctlError::Ssm(format!(
-                    "SSH authentication failed. Check key permissions: chmod 600 {}",
-                    key_path_clone
-                )));
-            }
-
+        if use_incremental {
             if let Some(ref p) = pb_clone {
-                p.set_message("Checking if code exists on instance...");
+                p.set_message("Code exists, using incremental sync...");
             }
 
-            // Check if code exists (for incremental sync)
-            let check_cmd = format!(
-                "test -d {} && echo EXISTS || echo NOT_FOUND",
-                project_dir_clone
-            );
-            let use_incremental = check_remote_directory(&sess, &check_cmd)?;
-
-            if use_incremental {
-                if let Some(ref p) = pb_clone {
-                    p.set_message("Code exists, using incremental sync...");
-                }
-
-                // Incremental sync: compare files and sync only changes
-                sync_incremental_blocking(
-                    &sess,
-                    &project_root_clone,
-                    &project_dir_clone,
-                    &pb_clone,
-                    &include_patterns_clone,
-                )?;
-
-                if let Some(ref p) = pb_clone {
-                    p.finish_with_message("Code synced (incremental)");
-                }
-                return Ok(());
-            }
-
-            // Full sync: create tar archive and transfer
-            if let Some(ref p) = pb_clone {
-                p.set_message("Performing full sync (tar archive)...");
-            }
-
-            sync_full_tar_blocking(
+            // Incremental sync: compare files and sync only changes
+            sync_incremental_blocking(
                 &sess,
                 &project_root_clone,
                 &project_dir_clone,
@@ -270,8 +234,27 @@ pub async fn sync_code_native(
             )?;
 
             if let Some(ref p) = pb_clone {
-                p.finish_with_message("Code synced successfully");
+                p.finish_with_message("Code synced (incremental)");
             }
+            return Ok(());
+        }
+
+        // Full sync: create tar archive and transfer
+        if let Some(ref p) = pb_clone {
+            p.set_message("Performing full sync (tar archive)...");
+        }
+
+        sync_full_tar_blocking(
+            &sess,
+            &project_root_clone,
+            &project_dir_clone,
+            &pb_clone,
+            &include_patterns_clone,
+        )?;
+
+        if let Some(ref p) = pb_clone {
+            p.finish_with_message("Code synced successfully");
+        }
 
             Ok(())
         }),
