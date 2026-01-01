@@ -28,7 +28,12 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
     if gitignore_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&gitignore_path) {
             for line in content.lines() {
-                let _ = builder.add_line(None, line);
+                builder.add_line(None, line).map_err(|e| {
+                    TrainctlError::Io(std::io::Error::other(format!(
+                        "Failed to add gitignore line: {}",
+                        e
+                    )))
+                })?;
             }
         }
     }
@@ -40,7 +45,12 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
         } else {
             format!("!{}", pattern)
         };
-        let _ = builder.add_line(None, &normalized_pattern);
+        builder.add_line(None, &normalized_pattern).map_err(|e| {
+            TrainctlError::Io(std::io::Error::other(format!(
+                "Failed to add include pattern '{}': {}",
+                pattern, e
+            )))
+        })?;
     }
 
     let gitignore = builder.build().map_err(|e| {
@@ -259,7 +269,13 @@ pub async fn sync_code_via_ssm(
     info!("Uploaded code archive to {}", s3_path);
 
     // Clean up local archive
-    let _ = std::fs::remove_file(&temp_archive);
+    if let Err(e) = std::fs::remove_file(&temp_archive) {
+        warn!(
+            "Failed to cleanup temporary archive {}: {}",
+            temp_archive.display(),
+            e
+        );
+    }
 
     // Step 3: Download and extract on instance via SSM
     if let Some(ref p) = pb {

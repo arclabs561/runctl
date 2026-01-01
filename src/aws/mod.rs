@@ -29,9 +29,11 @@
 //! - Spot instance fallback to on-demand (unless `--no-fallback`)
 //! - Automatic Deep Learning AMI detection for GPU instances
 
+mod auto_resume;
 mod helpers;
 mod instance;
 mod processes;
+mod spot_monitor;
 mod ssm_sync;
 mod training;
 mod types;
@@ -127,11 +129,18 @@ pub enum AwsCommands {
 
         /// IAM instance profile name for SSM access
         ///
-        /// Enables Systems Manager (SSM) for secure command execution without SSH keys.
+        /// Enables SSM (AWS Systems Manager) for secure command execution without SSH keys.
         /// Requires an IAM instance profile with AmazonSSMManagedInstanceCore policy.
         /// If not provided, instances will use SSH (requires --key-name).
         ///
-        /// Example: runctl aws create t3.micro --iam-instance-profile runctl-ssm-profile
+        /// Quick setup (one-time):
+        ///   ./scripts/setup-ssm-role.sh
+        ///
+        /// Then use:
+        ///   runctl aws create t3.micro --iam-instance-profile runctl-ssm-profile
+        ///
+        /// If not provided and no SSH key, training commands will fail. SSM is recommended
+        /// as it's more secure and doesn't require managing SSH keys.
         #[arg(long, value_name = "PROFILE_NAME")]
         iam_instance_profile: Option<String>,
 
@@ -211,6 +220,31 @@ pub enum AwsCommands {
         /// Without this flag, training starts in background and command returns immediately.
         #[arg(long)]
         wait: bool,
+
+        /// Training timeout in minutes (default: 120 minutes / 2 hours)
+        ///
+        /// Maximum time to wait for training completion when using --wait.
+        /// **Note**: This only stops waiting - training continues running in the background.
+        /// If training doesn't complete within this time, the command will return with an error,
+        /// but the training process will continue on the instance.
+        /// Set to 0 to disable timeout (not recommended).
+        #[arg(long, value_name = "MINUTES", default_value = "120")]
+        timeout: u64,
+
+        /// Run training in Docker container
+        ///
+        /// If provided, training will run in a Docker container using an ECR image.
+        /// Requires Dockerfile in project root and ECR repository configured.
+        /// Automatically detects Dockerfile and builds/pushes if needed.
+        #[arg(long)]
+        docker: bool,
+
+        /// ECR image to use for Docker training (default: auto-detect from Dockerfile)
+        ///
+        /// If not provided, will build and push image from Dockerfile.
+        /// Format: <account-id>.dkr.ecr.<region>.amazonaws.com/<repository>:<tag>
+        #[arg(long, value_name = "ECR_IMAGE")]
+        docker_image: Option<String>,
     },
     /// Monitor training progress on an instance
     ///
@@ -343,6 +377,25 @@ pub enum AwsCommands {
         #[arg(value_name = "INSTANCE_ID")]
         instance_id: String,
     },
+    /// Auto-resume training on a new instance after spot interruption
+    ///
+    /// This command is typically called internally by the spot monitoring system.
+    /// It creates a new instance and resumes training from the latest checkpoint.
+    ///
+    /// Examples:
+    ///   runctl aws auto-resume i-1234567890abcdef0 train.py --checkpoint s3://my-bucket/checkpoints/latest.pt
+    #[command(hide = true)] // Hide from main help, as it's for internal use or advanced users
+    AutoResume {
+        /// Original instance ID that was interrupted
+        #[arg(value_name = "ORIGINAL_INSTANCE_ID")]
+        original_instance_id: String,
+        /// Training script path
+        #[arg(value_name = "SCRIPT")]
+        script: PathBuf,
+        /// Path to the checkpoint to resume from (S3 path)
+        #[arg(long, value_name = "S3_PATH")]
+        checkpoint: Option<String>,
+    },
 }
 
 pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &str) -> Result<()> {
@@ -391,6 +444,9 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
             project_name,
             script_args,
             wait,
+            timeout,
+            docker,
+            docker_image,
         } => {
             crate::validation::validate_instance_id(&instance_id)?;
             let final_project_name = helpers::get_project_name(project_name, config);
@@ -404,6 +460,9 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
                 project_name: final_project_name,
                 script_args,
                 wait,
+                timeout_minutes: timeout,
+                docker,
+                docker_image,
             };
             train_on_instance(options, config, &aws_config, output_format).await
         }
@@ -453,6 +512,22 @@ pub async fn handle_command(cmd: AwsCommands, config: &Config, output_format: &s
         }
         AwsCommands::Ebs { subcommand } => {
             crate::ebs::handle_command(subcommand, config, output_format).await
+        }
+        AwsCommands::AutoResume {
+            original_instance_id,
+            script,
+            checkpoint,
+        } => {
+            crate::validation::validate_instance_id(&original_instance_id)?;
+            crate::aws::auto_resume::handle_auto_resume_command(
+                original_instance_id,
+                script,
+                checkpoint,
+                config,
+                &aws_config,
+                output_format,
+            )
+            .await
         }
     }
 }

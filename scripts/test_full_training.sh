@@ -2,7 +2,7 @@
 # Full E2E training test script
 # Tests the complete workflow: create → sync → train → verify → cleanup
 
-set -e
+set -euo pipefail
 
 echo "=========================================="
 echo "Full Training E2E Test"

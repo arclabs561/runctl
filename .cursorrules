@@ -98,6 +98,24 @@ let running = tracker.get_running().await;
 2. Replace `anyhow::bail!` with `TrainctlError`
 3. Update error handling
 
+## Shell Scripts
+
+- Use `shellcheck` to lint all shell scripts before committing
+- Run `just shellcheck` to check all scripts
+- Follow shellcheck recommendations for best practices
+- Use `set -euo pipefail` in all scripts for error handling
+- Quote all variables: `"$VAR"` not `$VAR`
+
+## Dockerfiles
+
+- Use `hadolint` to lint all Dockerfiles before committing
+- Run `just hadolint` to check all Dockerfiles
+- Follow hadolint recommendations for best practices
+- Use specific tags instead of `latest`
+- Combine RUN commands to reduce layers
+- Use multi-stage builds when appropriate
+- Don't run as root unless necessary
+
 ## Don'ts
 
 - Don't use `unwrap()` in production code
@@ -105,4 +123,5 @@ let running = tracker.get_running().await;
 - Don't delete resources without safety checks
 - Don't hardcode costs (use cost tracking)
 - Don't skip retry logic for cloud API calls
+- Don't commit shell scripts without running shellcheck
 

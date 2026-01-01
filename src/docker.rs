@@ -5,9 +5,7 @@
 
 use crate::error::{Result, TrainctlError};
 use aws_config::SdkConfig;
-use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ecr::Client as EcrClient;
-use aws_sdk_ssm::Client as SsmClient;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, warn};
@@ -406,7 +404,7 @@ pub async fn detect_ebs_mounts(
     
     for device in block_devices {
         if let Some(ebs) = device.ebs() {
-            if let Some(volume_id) = ebs.volume_id() {
+            if let Some(_volume_id) = ebs.volume_id() {
                 // Check if volume is mounted on the instance
                 let check_mount_cmd = format!(
                     r#"

@@ -15,6 +15,8 @@ mod config;
 mod dashboard;
 mod data_transfer;
 mod diagnostics;
+mod docker;
+mod docker_cli;
 mod ebs;
 mod ebs_optimization;
 mod error;
@@ -92,6 +94,18 @@ enum Commands {
     Aws {
         #[command(subcommand)]
         subcommand: aws::AwsCommands,
+    },
+    /// Docker operations (build, push, container training)
+    ///
+    /// Build and push Docker images to ECR, and run training in containers.
+    ///
+    /// Examples:
+    ///   runctl docker build
+    ///   runctl docker build --push --repository runctl-training
+    ///   runctl docker build-push --repository runctl-training --tag v1.0
+    Docker {
+        #[command(subcommand)]
+        subcommand: docker_cli::DockerCommands,
     },
     /// Monitor training progress
     ///
@@ -267,6 +281,9 @@ async fn main() -> Result<()> {
             .await
             .map_err(anyhow::Error::from),
         Commands::Aws { subcommand } => aws::handle_command(subcommand, &config, &cli.output)
+            .await
+            .map_err(anyhow::Error::from),
+        Commands::Docker { subcommand } => docker_cli::handle_command(subcommand, &config, &cli.output)
             .await
             .map_err(anyhow::Error::from),
         Commands::Monitor {

@@ -17,9 +17,12 @@ use crate::error::{Result, TrainctlError};
 use crate::safe_cleanup::{safe_cleanup, CleanupSafety};
 use aws_sdk_ec2::types::InstanceType as Ec2InstanceType;
 use aws_sdk_ec2::Client as Ec2Client;
+use aws_sdk_s3::Client as S3Client;
 use aws_sdk_ssm::Client as SsmClient;
 use base64::Engine;
 use chrono::Utc;
+use indicatif::{ProgressBar, ProgressStyle};
+use std::time::Duration;
 use tracing::{info, warn};
 
 /// Create an EC2 instance and return the instance ID
@@ -82,7 +85,7 @@ pub async fn create_instance_and_get_id(
             root_volume_size: options.root_volume_size.unwrap_or(30),
             iam_instance_profile: options.iam_instance_profile.clone(),
         };
-        create_spot_instance(&client, spot_options).await?
+        create_spot_instance(&client, spot_options, "text").await?
     } else {
         create_ondemand_instance(
             &client,
@@ -98,13 +101,20 @@ pub async fn create_instance_and_get_id(
     };
 
     // Tag instance
-    let _ = tag_instance(&client, &instance_id, &options.project_name, config).await;
+    if let Err(e) = tag_instance(&client, &instance_id, &options.project_name, config).await {
+        warn!("Failed to tag instance {}: {}", instance_id, e);
+        // Continue - instance is created, tagging is non-critical
+    }
 
     // Wait if requested
     if options.wait {
-        let _ =
+        if let Err(e) =
             crate::aws_utils::wait_for_instance_running(&client, &instance_id, Some(aws_config))
-                .await;
+                .await
+        {
+            warn!("Failed to wait for instance ready: {}", e);
+            // Continue - instance is created, just may not be ready yet
+        }
     }
 
     Ok(instance_id)
@@ -173,6 +183,20 @@ pub async fn create_instance(
         options.instance_type, options.use_spot
     );
 
+    // Validate IAM instance profile if provided
+    if let Some(ref profile_name) = options.iam_instance_profile {
+        if profile_name.trim().is_empty() {
+            return Err(TrainctlError::Aws(
+                "IAM instance profile name cannot be empty".to_string(),
+            ));
+        }
+        if output_format != "json" {
+            info!("Using IAM instance profile: {}", profile_name);
+            println!("   Note: Ensure profile has AmazonSSMManagedInstanceCore policy");
+            println!("   Verify: aws iam get-instance-profile --instance-profile-name {}", profile_name);
+        }
+    }
+
     // Check if IAM instance profile is needed but not provided
     // If no SSH key and no IAM profile, warn user
     if options.iam_instance_profile.is_none()
@@ -187,14 +211,104 @@ pub async fn create_instance(
         println!();
     }
 
+    // Validate S3 bucket if using IAM profile (needed for SSM code sync)
+    if options.iam_instance_profile.is_some() {
+        let has_s3_bucket = config
+            .aws
+            .as_ref()
+            .and_then(|c| c.s3_bucket.as_ref())
+            .is_some();
+        
+        if !has_s3_bucket && output_format != "json" {
+            println!("⚠️  WARNING: IAM instance profile provided but S3 bucket not configured.");
+            println!("   SSM-based code sync requires an S3 bucket for temporary storage.");
+            println!("   To resolve:");
+            println!("     1. Add S3 bucket to .runctl.toml:");
+            println!("        [aws]");
+            println!("        s3_bucket = \"your-bucket-name\"");
+            println!();
+            println!("     2. Or use SSH instead:");
+            println!("        Remove --iam-instance-profile and add --key-name <your-key-name>");
+            println!();
+            println!("   Note: Training will fail if you try to use --sync-code without S3 bucket.");
+            println!();
+        } else if has_s3_bucket {
+            // Validate S3 bucket exists and is accessible
+            if let Some(bucket_name) = config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()) {
+                let s3_client = S3Client::new(aws_config);
+                
+                // Check if bucket exists and is accessible
+                match s3_client
+                    .head_bucket()
+                    .bucket(bucket_name)
+                    .send()
+                    .await
+                {
+                    Ok(_) => {
+                        // Bucket exists and is accessible
+                        if output_format != "json" {
+                            info!("S3 bucket validated: {}", bucket_name);
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("{}", e);
+                        if output_format != "json" {
+                            println!("⚠️  WARNING: S3 bucket '{}' validation failed: {}", bucket_name, error_msg);
+                            println!("   SSM code sync may fail if bucket is not accessible.");
+                            println!("   To resolve:");
+                            if error_msg.contains("NotFound") || error_msg.contains("NoSuchBucket") {
+                                println!("     1. Create the bucket: aws s3 mb s3://{}", bucket_name);
+                                println!("     2. Or use a different bucket name");
+                            } else if error_msg.contains("AccessDenied") || error_msg.contains("Forbidden") {
+                                println!("     1. Check IAM permissions for S3 access");
+                                println!("     2. Verify bucket exists: aws s3 ls s3://{}", bucket_name);
+                                println!("     3. Check bucket policy allows your IAM user/role");
+                            } else {
+                                println!("     1. Verify bucket name is correct");
+                                println!("     2. Check AWS credentials and permissions");
+                                println!("     3. Verify bucket exists: aws s3 ls s3://{}", bucket_name);
+                            }
+                            println!();
+                        } else {
+                            // In JSON mode, return error immediately
+                            return Err(TrainctlError::Aws(format!(
+                                "S3 bucket '{}' validation failed: {}\n\n\
+                                SSM code sync requires an accessible S3 bucket.\n\n\
+                                To resolve:\n\
+                                  1. Verify bucket exists: aws s3 ls s3://{}\n\
+                                  2. Check IAM permissions for S3 access\n\
+                                  3. Verify bucket name is correct in .runctl.toml",
+                                bucket_name, error_msg, bucket_name
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Auto-detect AMI if not provided
     let final_ami = if let Some(ami) = &options.ami_id {
         ami.clone()
     } else {
+        // Validate instance type format (basic validation - AWS API will validate fully)
+        // Instance types follow pattern: [family][generation].[size] (e.g., t3.micro, g4dn.xlarge)
+        let instance_type_lower = options.instance_type.to_lowercase();
+        let is_valid_format = instance_type_lower.matches('.').count() == 1
+            && instance_type_lower.len() >= 5 // Minimum: "t3.x"
+            && instance_type_lower.chars().next().map(|c| c.is_alphabetic()).unwrap_or(false);
+        
+        if !is_valid_format && output_format != "json" {
+            warn!(
+                "Instance type '{}' may be invalid. Expected format: [family][generation].[size] (e.g., t3.micro)",
+                options.instance_type
+            );
+        }
+
         // Check if GPU instance (g4dn, p3, p4, etc.)
-        let is_gpu = options.instance_type.starts_with("g")
-            || options.instance_type.starts_with("p")
-            || options.instance_type.contains("gpu");
+        let is_gpu = instance_type_lower.starts_with("g")
+            || instance_type_lower.starts_with("p")
+            || instance_type_lower.contains("gpu");
 
         if is_gpu {
             // Try to find Deep Learning AMI
@@ -238,7 +352,7 @@ pub async fn create_instance(
             root_volume_size: root_size,
             iam_instance_profile: options.iam_instance_profile.clone(),
         };
-        match create_spot_instance(&client, spot_options).await {
+        match create_spot_instance(&client, spot_options, output_format).await {
             Ok(instance_id) => {
                 if output_format == "json" {
                     let instance_info =
@@ -338,8 +452,24 @@ pub async fn create_instance(
                 return Ok(());
             }
             Err(e) if !options.no_fallback => {
-                println!("WARNING: Spot instance failed: {}", e);
-                println!("Falling back to on-demand...");
+                // Calculate cost difference for user awareness
+                let spot_cost = crate::utils::get_instance_cost(&options.instance_type) * 0.1; // Assume 90% discount
+                let ondemand_cost = crate::utils::get_instance_cost(&options.instance_type);
+                let cost_multiplier = (ondemand_cost / spot_cost).round() as u32;
+
+                println!();
+                println!("⚠️  WARNING: Spot instance failed: {}", e);
+                println!();
+                println!("   Cost impact:");
+                println!("   - Spot (requested):   ~${:.4}/hour", spot_cost);
+                println!("   - On-demand (fallback): ${:.4}/hour", ondemand_cost);
+                println!("   - On-demand is ~{}x more expensive", cost_multiplier);
+                println!();
+                println!("   Falling back to on-demand instance...");
+                println!(
+                    "   (Use --no-fallback to fail instead, or try different instance type/region)"
+                );
+                println!();
             }
             Err(e) => {
                 return Err(TrainctlError::CloudProvider {
@@ -422,7 +552,25 @@ pub async fn create_instance(
                 println!("  Check status: runctl aws wait {}", instance_id);
             }
         } else if output_format != "json" {
-            println!("Instance ready and SSM connected (if IAM profile configured)");
+            // Check if instance actually has IAM profile for more specific message
+            let has_iam = if let Ok(instance_response) = client
+                .describe_instances()
+                .instance_ids(&instance_id)
+                .send()
+                .await
+            {
+                crate::aws::helpers::find_instance_in_response(&instance_response, &instance_id)
+                    .and_then(|i| i.iam_instance_profile())
+                    .is_some()
+            } else {
+                false
+            };
+
+            if has_iam {
+                println!("Instance ready and SSM connected");
+            } else {
+                println!("Instance ready (SSM not available - use --iam-instance-profile for SSM)");
+            }
         }
     }
 
@@ -765,6 +913,7 @@ async fn auto_attach_data_volume(
 async fn create_spot_instance(
     client: &Ec2Client,
     options: CreateSpotInstanceOptions,
+    output_format: &str,
 ) -> Result<String> {
     // Base64 encode user data
     let user_data_b64 = base64::engine::general_purpose::STANDARD.encode(&options.user_data);
@@ -849,6 +998,23 @@ async fn create_spot_instance(
         .to_string();
 
     // Wait for spot instance to be fulfilled
+    const MAX_ATTEMPTS: u32 = 60; // 5 minutes (60 * 5 seconds)
+    const POLL_INTERVAL: Duration = Duration::from_secs(5);
+    
+    // Use progress bar for non-JSON output
+    let pb = if output_format != "json" {
+        let pb = ProgressBar::new(MAX_ATTEMPTS as u64);
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} [{elapsed_precise}] {msg}")
+                .expect("Progress bar template should be valid"),
+        );
+        pb.set_message(format!("Waiting for spot instance (request: {})...", spot_request_id));
+        Some(pb)
+    } else {
+        None
+    };
+
     info!(
         "Waiting for spot instance to be fulfilled (request ID: {})",
         spot_request_id
@@ -856,8 +1022,15 @@ async fn create_spot_instance(
 
     let mut attempts = 0;
     loop {
-        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(POLL_INTERVAL).await;
         attempts += 1;
+        if let Some(ref p) = pb {
+            p.set_position(attempts as u64);
+            p.set_message(format!(
+                "Waiting for spot instance... (attempt {}/{})",
+                attempts, MAX_ATTEMPTS
+            ));
+        }
 
         let describe_response = client
             .describe_spot_instance_requests()
@@ -875,6 +1048,9 @@ async fn create_spot_instance(
 
         match state {
             Some("fulfilled") => {
+                if let Some(ref p) = pb {
+                    p.finish_with_message("Spot instance fulfilled!");
+                }
                 let instance_id = request
                     .instance_id()
                     .ok_or_else(|| {
@@ -885,10 +1061,26 @@ async fn create_spot_instance(
             }
             Some("open") | Some("active") => {
                 // Still waiting
-                if attempts > 60 {
+                if attempts >= MAX_ATTEMPTS {
+                    if let Some(ref p) = pb {
+                        p.finish_with_message("Spot request timed out");
+                    }
                     return Err(TrainctlError::CloudProvider {
                         provider: "aws".to_string(),
-                        message: "Spot request timed out after 5 minutes".to_string(),
+                        message: format!(
+                            "Spot request timed out after {} minutes ({} attempts).\n\n\
+                            Spot instances may be unavailable due to:\n\
+                              - High demand for this instance type\n\
+                              - Current spot price exceeds your max price\n\
+                              - Limited capacity in this region/zone\n\n\
+                            Suggestions:\n\
+                              1. Try on-demand instance (remove --spot flag)\n\
+                              2. Try a different instance type\n\
+                              3. Try a different region\n\
+                              4. Increase --spot-max-price if using it",
+                            (MAX_ATTEMPTS as u64 * POLL_INTERVAL.as_secs()) / 60,
+                            MAX_ATTEMPTS
+                        ),
                         source: None,
                     });
                 }
@@ -906,7 +1098,10 @@ async fn create_spot_instance(
                 });
             }
             _ => {
-                if attempts > 60 {
+                if attempts >= MAX_ATTEMPTS {
+                    if let Some(ref p) = pb {
+                        p.finish_with_message("Spot request timed out (unknown state)");
+                    }
                     return Err(TrainctlError::CloudProvider {
                         provider: "aws".to_string(),
                         message: format!("Spot request in unknown state: {:?}", state),
@@ -1093,6 +1288,11 @@ pub async fn terminate_instance(
 
     // Check for running training jobs and resource usage (unless force is used)
     if !force {
+        // Check for checkpoints before termination
+        // Training metadata retrieval temporarily disabled
+        // TODO: Re-enable when lifecycle module is properly integrated
+        // This would check for checkpoints before termination
+
         if let Some(_iam_profile) = instance.iam_instance_profile() {
             // Check for high resource usage (warns but doesn't block)
             match crate::diagnostics::check_high_resource_usage(&ssm_client, &instance_id).await {

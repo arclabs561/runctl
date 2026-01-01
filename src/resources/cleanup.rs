@@ -308,9 +308,17 @@ else
 fi
 "#;
 
-        // Try graceful shutdown (ignore errors - instance might not have SSM)
-        let _ = crate::aws_utils::execute_ssm_command(&ssm_client, instance_id, graceful_stop_cmd)
-            .await;
+        // Try graceful shutdown (non-critical - instance might not have SSM)
+        if let Err(e) =
+            crate::aws_utils::execute_ssm_command(&ssm_client, instance_id, graceful_stop_cmd).await
+        {
+            // Log but don't fail - instance might not have SSM configured
+            tracing::warn!(
+                "Failed to send graceful shutdown command to {} (non-critical): {}",
+                instance_id,
+                e
+            );
+        }
 
         // Then stop the instance
         match client

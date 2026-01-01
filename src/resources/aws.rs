@@ -402,6 +402,31 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, config: &Config) -
                 ""
             };
 
+            // Cost warnings for high-cost or long-running instances
+            let cost_warnings: Vec<String> = if inst.state == "running" {
+                let mut warnings = Vec::new();
+                let uptime_hours = inst.launch_time
+                    .map(|lt| {
+                        let runtime = chrono::Utc::now()
+                            .signed_duration_since(lt.with_timezone(&chrono::Utc));
+                        runtime.num_hours().max(0)
+                    })
+                    .unwrap_or(0);
+                
+                if uptime_hours > 24 {
+                    warnings.push(format!("⚠️  Running {} hours (${:.2} accumulated)", uptime_hours, inst.accumulated_cost));
+                }
+                if inst.accumulated_cost > 10.0 {
+                    warnings.push(format!("⚠️  High cost: ${:.2} accumulated", inst.accumulated_cost));
+                }
+                if inst.cost_per_hour > 5.0 {
+                    warnings.push(format!("⚠️  High hourly cost: ${:.4}/hr", inst.cost_per_hour));
+                }
+                warnings
+            } else {
+                Vec::new()
+            };
+
             if options.detailed {
                 let old_warning_display = if !old_warning_str.is_empty() {
                     style(old_warning_str).red().bold()
@@ -419,6 +444,13 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, config: &Config) -
                         .unwrap_or_else(|| "N/A".to_string()),
                     old_warning_display
                 );
+
+                // Display cost warnings
+                if !cost_warnings.is_empty() {
+                    for warning in &cost_warnings {
+                        println!("      {}", style(warning).yellow().bold());
+                    }
+                }
 
                 if let Some(public_ip) = &inst.public_ip {
                     println!("      {} {}", style("Public IP:").dim(), public_ip);
@@ -500,6 +532,13 @@ async fn list_aws_instances(options: ListAwsInstancesOptions, config: &Config) -
                     ip_display,
                     old_warning_display
                 );
+
+                // Display cost warnings
+                if !cost_warnings.is_empty() {
+                    for warning in &cost_warnings {
+                        println!("      {}", style(warning).yellow().bold());
+                    }
+                }
 
                 // Show key tags in summary (Name, project, runctl tags)
                 if !inst.tags.is_empty() {

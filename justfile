@@ -20,6 +20,10 @@ test:
 lint:
     cargo clippy -- -D warnings
     cargo fmt --check
+    @echo "Checking shell scripts..."
+    @shellcheck examples/*.sh scripts/*.sh 2>/dev/null || echo "Note: Install shellcheck with 'brew install shellcheck' for shell script linting"
+    @echo "Checking Dockerfiles..."
+    @find . -name "Dockerfile*" -o -name "*.dockerfile" 2>/dev/null | xargs -r hadolint 2>/dev/null || echo "Note: Install hadolint with 'brew install hadolint' for Dockerfile linting"
 
 # Format
 fmt:
@@ -73,4 +77,27 @@ docs:
 # Run with tracing
 trace *args:
     RUST_LOG=debug cargo run -- {{args}}
+
+# Lint shell scripts
+shellcheck:
+    @echo "Checking shell scripts with shellcheck..."
+    @shellcheck examples/*.sh scripts/*.sh || echo "Some issues found. Run 'shellcheck examples/*.sh scripts/*.sh' for details."
+
+# Format shell scripts (using shfmt if available)
+shfmt:
+    @if command -v shfmt >/dev/null 2>&1; then \
+        shfmt -w examples/*.sh scripts/*.sh; \
+        echo "Formatted shell scripts"; \
+    else \
+        echo "shfmt not installed. Install with: brew install shfmt"; \
+    fi
+
+# Lint Dockerfiles
+hadolint:
+    @echo "Checking Dockerfiles with hadolint..."
+    @if find . -name "Dockerfile*" -o -name "*.dockerfile" 2>/dev/null | grep -q .; then \
+        find . -name "Dockerfile*" -o -name "*.dockerfile" 2>/dev/null | xargs hadolint || echo "Some issues found. Run 'hadolint Dockerfile' for details."; \
+    else \
+        echo "No Dockerfiles found to lint"; \
+    fi
 

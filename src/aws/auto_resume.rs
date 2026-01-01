@@ -6,7 +6,6 @@
 //! 3. Resume training from the checkpoint
 
 use crate::aws::instance::create_instance;
-use crate::aws::training::train_on_instance;
 use crate::aws::types::{CreateInstanceOptions, TrainInstanceOptions};
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
@@ -30,13 +29,15 @@ use tracing::{info, warn};
 /// * `script_path`: Training script to resume
 /// * `config`: Configuration
 /// * `aws_config`: AWS SDK configuration
-pub async fn auto_resume_after_interruption(
+/// Returns: (new_instance_id, train_options) - caller should start training
+/// NOTE: Currently used by CLI command handler
+pub async fn prepare_auto_resume(
     original_instance_id: &str,
     checkpoint_s3_path: Option<&str>,
     script_path: PathBuf,
     config: &Config,
     aws_config: &SdkConfig,
-) -> Result<String> {
+) -> Result<(String, TrainInstanceOptions)> {
     info!(
         "Auto-resuming training after interruption of instance {}",
         original_instance_id
@@ -83,6 +84,7 @@ pub async fn auto_resume_after_interruption(
     info!("Creating new spot instance to resume training...");
     
     let create_options = CreateInstanceOptions {
+        wait: true,
         instance_type: aws_cfg.default_instance_type.clone(),
         use_spot: true, // Always use spot for auto-resume
         spot_max_price: aws_cfg.spot_max_price.clone(),
@@ -122,19 +124,64 @@ pub async fn auto_resume_after_interruption(
         include_patterns: vec![],
         project_name: "runctl-auto-resume".to_string(),
         script_args,
-        hyperparams: None,
-        auto_stop: false,
-        auto_terminate: false,
+        wait: true,
+        timeout_minutes: 120,
+        docker: false,
+        docker_image: None,
     };
 
-    train_on_instance(train_options, config, aws_config, "text").await?;
+    // Return the instance ID and training options instead of starting training
+    // The caller will start training, breaking the circular dependency
+    Ok((new_instance_id, train_options))
+}
 
-    info!("Training resumed on instance: {}", new_instance_id);
-
-    Ok(new_instance_id)
+/// Handle auto-resume CLI command
+///
+/// This is called when `runctl aws auto-resume` is invoked.
+/// It creates a new instance and resumes training from the checkpoint.
+pub async fn handle_auto_resume_command(
+    original_instance_id: String,
+    script: PathBuf,
+    checkpoint: Option<String>,
+    config: &Config,
+    aws_config: &SdkConfig,
+    output_format: &str,
+) -> Result<()> {
+    info!("Auto-resuming training after interruption of instance {}", original_instance_id);
+    
+    // Use prepare_auto_resume to get instance and training options
+    let (new_instance_id, train_options) = prepare_auto_resume(
+        &original_instance_id,
+        checkpoint.as_deref(),
+        script,
+        config,
+        aws_config,
+    )
+    .await?;
+    
+    if output_format != "json" {
+        println!("Created new instance: {}", new_instance_id);
+        println!("Starting training on new instance...");
+    }
+    
+    // Start training on the new instance
+    crate::aws::training::train_on_instance(
+        train_options,
+        config,
+        aws_config,
+        output_format,
+    )
+    .await?;
+    
+    if output_format != "json" {
+        println!("Training resumed successfully on instance: {}", new_instance_id);
+    }
+    
+    Ok(())
 }
 
 /// Find the latest checkpoint in S3
+/// NOTE: Currently used by prepare_auto_resume
 async fn find_latest_checkpoint_in_s3(
     s3_client: &S3Client,
     bucket: &str,
@@ -174,6 +221,7 @@ async fn find_latest_checkpoint_in_s3(
 }
 
 /// Find the newest spot instance (for auto-resume)
+/// NOTE: Currently used by prepare_auto_resume
 async fn find_newest_spot_instance(
     ec2_client: &Ec2Client,
     exclude_instance_id: &str,
@@ -227,4 +275,3 @@ async fn find_newest_spot_instance(
             }
         })
 }
-

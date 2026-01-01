@@ -1,22 +1,28 @@
 # Archived Documentation
 
-This directory contains older documentation that has been superseded or consolidated into the main docs.
+This directory contains historical documentation that has been organized for reference but is no longer actively maintained.
 
-## Files
+## Organization
 
-- `FLOW_CRITIQUE.md` - Initial flow critique (consolidated into main docs)
-- `IMPLEMENTATION_STATUS.md` - Implementation status (see main README)
-- `SUMMARY.md` - Project summary (see main README)
-- `FEATURES.md` - Features list (see main README and feature-specific docs)
+- **refinements/**: Historical refinement and improvement documentation
+- **testing/**: Historical E2E testing results and analysis
+- **reviews/**: Historical code reviews and analysis
+- **status/**: Historical status and completion reports
+
+## Current Documentation
+
+For up-to-date documentation, see:
+- **[README.md](../../README.md)** - Main project documentation
+- **[docs/EXAMPLES.md](../EXAMPLES.md)** - Usage examples
+- **[docs/ARCHITECTURE.md](../ARCHITECTURE.md)** - Architecture overview
+- **[docs/DOCUMENTATION_INDEX.md](../DOCUMENTATION_INDEX.md)** - Complete documentation index
 
 ## Why Archived?
 
-These docs were useful during development but have been:
-- Consolidated into main README.md
-- Split into feature-specific docs (S3_OPERATIONS.md, RESOURCE_MANAGEMENT.md, etc.)
+These documents were useful during development but have been:
+- Consolidated into main documentation
+- Superseded by more recent analysis
 - Made redundant by better organized documentation
+- Completed and no longer actively maintained
 
-## Reference
-
-These files are kept for historical reference but should not be updated. For current documentation, see the main [README.md](../../README.md) and docs in the root directory.
-
+These files are kept for historical reference but should not be updated.

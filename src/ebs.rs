@@ -193,6 +193,7 @@ pub async fn handle_command(cmd: EbsCommands, config: &Config, output_format: &s
                 config,
                 &client,
                 &ssm_client,
+                Some(&aws_config),
             )
             .await
         }
@@ -379,6 +380,9 @@ async fn create_volume(
     // Pre-warm if requested
     if let Some(s3_path) = pre_warm {
         println!("   Pre-warming from {}...", s3_path);
+        // Note: aws_config not available in create_volume scope
+        // We could load it here, but pre-warming from create_volume is rare
+        // For now, pass None (SSM verification will be skipped)
         pre_warm_volume(
             volume_id.to_string(),
             s3_path,
@@ -387,6 +391,7 @@ async fn create_volume(
             config,
             client,
             ssm_client,
+            None,
         )
         .await?;
     }
@@ -730,6 +735,7 @@ async fn delete_volume(volume_id: String, force: bool, client: &Ec2Client) -> Re
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)] // TODO: Refactor to use a struct for parameters
 async fn pre_warm_volume(
     volume_id: String,
     s3_source: String,
@@ -738,6 +744,7 @@ async fn pre_warm_volume(
     config: &Config,
     client: &Ec2Client,
     ssm_client: &SsmClient,
+    aws_config: Option<&aws_config::SdkConfig>,
 ) -> Result<()> {
     info!("Pre-warming volume {} from {}", volume_id, s3_source);
 
@@ -818,8 +825,8 @@ async fn pre_warm_volume(
         println!("Created temporary instance: {}", temp_instance);
 
         // Wait for instance to be running
-        // Note: aws_config not available here, pass None (SSM verification skipped)
-        wait_for_instance_running(client, &temp_instance, None).await?;
+        // Pass aws_config if available for SSM verification
+        wait_for_instance_running(client, &temp_instance, aws_config).await?;
 
         temp_instance
     };

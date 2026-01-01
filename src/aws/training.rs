@@ -2,14 +2,17 @@
 //!
 //! Handles starting training jobs, syncing code, and monitoring training progress.
 
+// Use fully qualified path for spot_monitor to minimize circular dependency risk
 use crate::aws::ssm_sync::sync_code_via_ssm;
 use crate::aws::types::{TrainInstanceOptions, TrainingInfo};
 use crate::aws_utils::execute_ssm_command;
 use crate::config::Config;
+use crate::docker::{detect_dockerfile, run_training_in_container};
 use crate::error::{Result, TrainctlError};
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_ssm::Client as SsmClient;
+use std::time::Duration;
 use tracing::{info, warn};
 
 /// Start training on an instance
@@ -185,7 +188,78 @@ pub async fn train_on_instance(
         "ec2-user"
     };
 
-    let project_dir = format!("/home/{}/{}", user, options.project_name);
+        let project_dir = format!("/home/{}/{}", user, options.project_name);
+
+        // Validate script path exists before starting training
+        let script_path = options.script.as_path().to_string_lossy();
+        let validate_script_cmd = format!(
+            "if [ -f {}/{} ]; then echo 'SCRIPT_EXISTS'; else echo 'SCRIPT_NOT_FOUND'; fi",
+            project_dir, script_path
+        );
+        
+        if use_ssm_for_sync {
+            match crate::aws_utils::execute_ssm_command(&ssm_client, &options.instance_id, &validate_script_cmd).await {
+                Ok(output) => {
+                    if output.trim() == "SCRIPT_NOT_FOUND" {
+                        return Err(TrainctlError::Aws(format!(
+                            "Training script not found: {}/{}\n\n\
+                            The script may not have been synced to the instance yet.\n\
+                            Try:\n\
+                              1. Ensure --sync-code is enabled (default)\n\
+                              2. Check script path: {}\n\
+                              3. Verify project directory: {}",
+                            project_dir, script_path, options.script.display(), project_dir
+                        )));
+                    }
+                }
+                Err(e) => {
+                    warn!("Could not validate script path (SSM error): {}. Proceeding anyway.", e);
+                }
+            }
+        }
+
+        // Check if training is already running on this instance (prevent concurrent training)
+    if use_ssm_for_sync {
+        let check_training_cmd = format!(
+            "if [ -f {}/training.pid ]; then \
+             PID=$(cat {}/training.pid 2>/dev/null); \
+             if ps -p $PID > /dev/null 2>&1; then \
+                 echo 'TRAINING_RUNNING:$PID'; \
+             else \
+                 echo 'NO_TRAINING'; \
+             fi; \
+             else \
+             echo 'NO_TRAINING'; \
+             fi",
+            project_dir, project_dir
+        );
+
+        match crate::aws_utils::execute_ssm_command(&ssm_client, &options.instance_id, &check_training_cmd).await {
+            Ok(output) => {
+                if output.contains("TRAINING_RUNNING") {
+                    let pid = output
+                        .lines()
+                        .find(|l| l.starts_with("TRAINING_RUNNING:"))
+                        .and_then(|l| l.strip_prefix("TRAINING_RUNNING:"))
+                        .unwrap_or("unknown");
+                    
+                    return Err(TrainctlError::Aws(format!(
+                        "Training already running on instance {} (PID: {}).\n\n\
+                        To start new training, either:\n\
+                          1. Wait for current training to complete: runctl aws monitor {}\n\
+                          2. Stop current training gracefully: runctl aws stop {}\n\
+                          3. Check training status: runctl aws monitor {} --follow\n\
+                          4. Force kill existing training (not recommended): runctl aws stop {} --force",
+                        options.instance_id, pid, options.instance_id, options.instance_id, options.instance_id, options.instance_id
+                    )));
+                }
+            }
+            Err(_) => {
+                // If check fails, proceed (might be first training or SSM issue)
+                // Don't block training if we can't check
+            }
+        }
+    }
 
     // use_ssm_for_sync already determined above
 
@@ -201,7 +275,11 @@ pub async fn train_on_instance(
             .parent()
             .ok_or_else(|| TrainctlError::Aws("Script has no parent directory".to_string()))?;
 
+        // Resolve symlinks to get canonical path (handles symlinked directories)
         let mut current = script_dir;
+        let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+        current = canonical_current.as_path();
+        
         let project_root = loop {
             let markers = [
                 "requirements.txt",
@@ -210,19 +288,35 @@ pub async fn train_on_instance(
                 "Cargo.toml",
                 ".git",
             ];
-            if markers.iter().any(|m| current.join(m).exists()) {
-                break current;
+            // Prioritize .git as most authoritative marker
+            if current.join(".git").exists() {
+                break current.to_path_buf();
             }
-            match current.parent() {
-                Some(p) => current = p,
-                None => break script_dir,
+            // Check other markers but continue searching for .git
+            if markers.iter().any(|m| current.join(m).exists()) {
+                // Found a marker, but continue searching upward for .git
+                match current.parent() {
+                    Some(p) => {
+                        current = p;
+                        continue;
+                    }
+                    None => {
+                        // Reached root, return the marker we found
+                        break current.to_path_buf();
+                    }
+                }
+            } else {
+                match current.parent() {
+                    Some(p) => current = p,
+                    None => break script_dir.to_path_buf(),
+                }
             }
         };
 
         if use_ssm_for_sync {
             // Use SSM-based sync (via S3)
             if let Err(e) = sync_code_via_ssm(
-                project_root,
+                &project_root,
                 &options.instance_id,
                 &project_dir,
                 &options.script,
@@ -302,7 +396,12 @@ pub async fn train_on_instance(
         .parent()
         .ok_or_else(|| TrainctlError::Aws("Script has no parent directory".to_string()))?;
 
+    // Resolve symlinks to get canonical path (handles symlinked directories)
     let mut current = script_dir;
+    // Try to canonicalize, but fall back to original if it fails (e.g., path doesn't exist yet)
+    let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+    current = canonical_current.as_path();
+    
     let project_root_for_script = loop {
         let markers = [
             "requirements.txt",
@@ -311,19 +410,35 @@ pub async fn train_on_instance(
             "Cargo.toml",
             ".git",
         ];
-        if markers.iter().any(|m| current.join(m).exists()) {
-            break current;
+        // Prioritize .git as most authoritative marker
+        if current.join(".git").exists() {
+            break current.to_path_buf();
         }
-        match current.parent() {
-            Some(p) => current = p,
-            None => break script_dir,
+        // Check other markers but continue searching for .git
+        if markers.iter().any(|m| current.join(m).exists()) {
+            // Found a marker, but continue searching upward for .git
+            match current.parent() {
+                Some(p) => {
+                    current = p;
+                    continue;
+                }
+                None => {
+                    // Reached root, return the marker we found
+                    break current.to_path_buf();
+                }
+            }
+        } else {
+            match current.parent() {
+                Some(p) => current = p,
+                None => break script_dir.to_path_buf(),
+            }
         }
     };
 
     // Get relative path from project root to script
     let script_relative = options
         .script
-        .strip_prefix(project_root_for_script)
+        .strip_prefix(&project_root_for_script)
         .map_err(|_| {
             TrainctlError::Aws(format!(
                 "Script {:?} is not under detected project root {:?}.\n\n\
@@ -345,6 +460,7 @@ pub async fn train_on_instance(
     // Build training command with proper error handling
     // Use nohup to run in background and capture output
     // Properly quote/escape script arguments to handle spaces and special characters
+    // Save PID to training.pid for process tracking and cleanup
     let script_args_str = if options.script_args.is_empty() {
         String::new()
     } else {
@@ -382,15 +498,97 @@ pub async fn train_on_instance(
 
     // Run setup first (best effort - don't fail if it doesn't work)
     if use_ssm {
-        let _ = execute_ssm_command(&ssm_client, &options.instance_id, &setup_cmd).await;
+        if output_format != "json" {
+            println!("   Installing dependencies (this may take a few minutes)...");
+        }
+        if let Err(e) = execute_ssm_command(&ssm_client, &options.instance_id, &setup_cmd).await {
+            warn!("Setup command failed (non-critical): {}", e);
+        }
     } else if let (Some(kp), Some(ip)) = (key_path.as_ref(), public_ip.as_ref()) {
-        let _ = execute_via_ssh(kp, ip, user, &setup_cmd).await;
+        if let Err(e) = execute_via_ssh(kp, ip, user, &setup_cmd).await {
+            warn!("Setup command failed (non-critical): {}", e);
+        }
+    }
+
+    // Check if Docker training is requested
+    if options.docker {
+        if !use_ssm {
+            return Err(TrainctlError::Aws(
+                "Docker training requires SSM. Use --iam-instance-profile when creating instance.".to_string()
+            ));
+        }
+
+        // Determine ECR image
+        let ecr_image = if let Some(img) = &options.docker_image {
+            img.clone()
+        } else {
+            // Auto-detect: build and push from Dockerfile
+            let project_root = std::env::current_dir().map_err(|e| {
+                TrainctlError::Io(std::io::Error::other(format!("Failed to get current directory: {}", e)))
+            })?;
+
+            let _dockerfile = detect_dockerfile(&project_root).ok_or_else(|| {
+                TrainctlError::CloudProvider {
+                    provider: "docker".to_string(),
+                    message: "No Dockerfile found. Use --docker-image to specify ECR image, or create a Dockerfile.".to_string(),
+                    source: None,
+                }
+            })?;
+
+            let aws_cfg = config.aws.as_ref().ok_or_else(|| {
+                TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string()))
+            })?;
+
+            let region = aws_cfg.region.as_str();
+            let repository_name = options.project_name.clone();
+            let tag = "latest";
+
+            if output_format != "json" {
+                println!("Building and pushing Docker image to ECR...");
+            }
+
+            crate::docker::build_and_push_to_ecr(
+                &project_root,
+                &repository_name,
+                tag,
+                region,
+                aws_config,
+            )
+            .await?
+        };
+
+        // Run training in Docker container
+        run_training_in_container(
+            &options.instance_id,
+            &ecr_image,
+            &options.script,
+            &options.script_args,
+            &project_dir,
+            &ssm_client,
+            Some(&ec2_client),
+        )
+        .await?;
+
+        if output_format == "json" {
+            println!("{{\"success\": true, \"method\": \"docker\", \"ecr_image\": \"{}\"}}", ecr_image);
+        } else {
+            println!("✅ Training completed in Docker container: {}", ecr_image);
+        }
+
+        // Wait for completion if requested (Docker runs synchronously, so this is a no-op)
+        if options.wait {
+            if output_format != "json" {
+                println!("Training completed in Docker container");
+            }
+        }
+
+        return Ok(());
     }
 
     let command = format!(
         "cd {} && \
         export PATH=\"$HOME/.local/bin:$PATH\" && \
-        nohup python3 {}{} > training.log 2>&1 & \
+        (nohup python3 {}{} > training.log 2>&1; echo $? > training_exit_code.txt) & \
         echo $! > training.pid && \
         sleep 2 && \
         if ps -p $(cat training.pid 2>/dev/null) > /dev/null 2>&1; then \
@@ -471,6 +669,54 @@ pub async fn train_on_instance(
         println!("   Or: runctl aws monitor {}", options.instance_id);
     }
 
+    // Automatically start spot monitoring if instance is a spot instance
+    let is_spot = instance.spot_instance_request_id().is_some();
+    if is_spot && use_ssm {
+        let checkpoint_dir = format!("{}/checkpoints", project_dir);
+        let s3_bucket = config.aws.as_ref().and_then(|c| c.s3_bucket.as_ref()).map(|s| s.clone());
+        let s3_prefix = Some("checkpoints/spot-interruptions".to_string());
+        let poll_interval = Duration::from_secs(30);
+        let graceful_shutdown_timeout = Duration::from_secs(90);
+        // Auto-resume is enabled via environment variable
+        // It uses process spawning to break circular dependency
+        let auto_resume = std::env::var("TRAINCTL_AUTO_RESUME").is_ok();
+        let script_path = Some(options.script.clone());
+        
+        let instance_id = options.instance_id.clone();
+        let ec2_client_clone = ec2_client.clone();
+        let ssm_client_clone = ssm_client.clone();
+        let s3_client_opt = s3_bucket.as_ref().map(|_| s3_client.clone());
+        // Clone configs for the spawned task (Config and SdkConfig implement Clone)
+        let config_clone = config.clone();
+        let aws_config_clone = aws_config.clone();
+        
+        if output_format != "json" {
+            println!("   Spot instance detected - starting automatic interruption monitoring...");
+        }
+        
+        // Spawn background task for spot monitoring
+        // Auto-resume uses process spawning to break circular dependency
+        tokio::spawn(async move {
+            if let Err(e) = crate::aws::spot_monitor::monitor_spot_interruption(
+                &instance_id,
+                &checkpoint_dir,
+                s3_bucket.as_deref(),
+                s3_prefix.as_deref(),
+                poll_interval,
+                graceful_shutdown_timeout,
+                &ssm_client_clone,
+                &ec2_client_clone,
+                s3_client_opt.as_ref(),
+                auto_resume,
+                script_path,
+                Some(&config_clone),
+                Some(&aws_config_clone),
+            ).await {
+                warn!("Spot monitoring failed for instance {}: {}", instance_id, e);
+            }
+        });
+    }
+
     // Wait for training to complete if requested
     if options.wait {
         if use_ssm {
@@ -479,6 +725,7 @@ pub async fn train_on_instance(
                 &options.instance_id,
                 &project_dir,
                 output_format,
+                options.timeout_minutes,
             )
             .await?;
         } else {
@@ -509,7 +756,11 @@ async fn sync_code_to_instance(
         .ok_or_else(|| TrainctlError::Aws("Script has no parent directory: {}".to_string()))?;
 
     // Find project root (look for requirements.txt, setup.py, pyproject.toml, etc.)
+    // Resolve symlinks to get canonical path (handles symlinked directories)
     let mut current = script_dir;
+    let canonical_current = current.canonicalize().unwrap_or_else(|_| current.to_path_buf());
+    current = canonical_current.as_path();
+    
     let project_root = loop {
         let markers = [
             "requirements.txt",
@@ -518,12 +769,28 @@ async fn sync_code_to_instance(
             "Cargo.toml",
             ".git",
         ];
-        if markers.iter().any(|m| current.join(m).exists()) {
-            break current;
+        // Prioritize .git as most authoritative marker
+        if current.join(".git").exists() {
+            break current.to_path_buf();
         }
-        match current.parent() {
-            Some(p) => current = p,
-            None => break script_dir, // Fallback to script directory
+        // Check other markers but continue searching for .git
+        if markers.iter().any(|m| current.join(m).exists()) {
+            // Found a marker, but continue searching upward for .git
+            match current.parent() {
+                Some(p) => {
+                    current = p;
+                    continue;
+                }
+                None => {
+                    // Reached root, return the marker we found
+                    break current.to_path_buf();
+                }
+            }
+        } else {
+            match current.parent() {
+                Some(p) => current = p,
+                None => break script_dir.to_path_buf(), // Fallback to script directory
+            }
         }
     };
 
@@ -537,7 +804,7 @@ async fn sync_code_to_instance(
         ip,
         user,
         project_dir,
-        project_root,
+        &project_root,
         output_format,
         include_patterns,
     )
@@ -727,14 +994,48 @@ async fn check_training_completion(
     project_dir: &str,
 ) -> Result<bool> {
     // Method 1: Check for training_complete.txt marker
+    // Use atomic check: verify file exists AND is readable (not being written)
+    // Also check file size > 0 to avoid false positives from empty files
     let check_marker_cmd = format!(
-        "test -f {}/training_complete.txt && echo 'COMPLETE' || echo 'RUNNING'",
-        project_dir
+        "if [ -f {}/training_complete.txt ] && [ -r {}/training_complete.txt ] && [ -s {}/training_complete.txt ]; then \
+         echo 'COMPLETE'; \
+         else \
+         echo 'RUNNING'; \
+         fi",
+        project_dir, project_dir, project_dir
     );
     match crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &check_marker_cmd).await {
         Ok(output) => {
             if output.trim() == "COMPLETE" {
                 info!("Training completion detected via marker file");
+                
+                // Verify marker file is stable (not being written) by checking modification time
+                // If file was modified < 2 seconds ago, might still be writing
+                let verify_stable_cmd = format!(
+                    "if [ -f {}/training_complete.txt ]; then \
+                     MOD_TIME=$(stat -c %Y {}/training_complete.txt 2>/dev/null || stat -f %m {}/training_complete.txt 2>/dev/null || echo '0'); \
+                     NOW=$(date +%s); \
+                     AGE=$((NOW - MOD_TIME)); \
+                     if [ $AGE -ge 2 ]; then \
+                         echo 'STABLE'; \
+                     else \
+                         echo 'UNSTABLE'; \
+                     fi; \
+                     else \
+                     echo 'MISSING'; \
+                     fi",
+                    project_dir, project_dir, project_dir
+                );
+                
+                // Check if marker is stable (not being written)
+                if let Ok(stable_output) = crate::aws_utils::execute_ssm_command(ssm_client, instance_id, &verify_stable_cmd).await {
+                    if stable_output.trim() == "UNSTABLE" {
+                        warn!("Marker file exists but was recently modified, waiting for stability...");
+                        // Return false to continue checking - file might still be written
+                        return Ok(false);
+                    }
+                }
+                
                 // Also check exit code if available
                 let exit_code_cmd = format!(
                     "if [ -f {}/training_exit_code.txt ]; then cat {}/training_exit_code.txt; else echo '0'; fi",
@@ -826,18 +1127,26 @@ async fn wait_for_training_completion(
     instance_id: &str,
     project_dir: &str,
     output_format: &str,
+    timeout_minutes: u64,
 ) -> Result<()> {
     use serde_json::json;
     use std::time::Duration;
     use tokio::time::sleep;
 
     if output_format != "json" {
-        println!("Waiting for training to complete...");
+        println!("Waiting for training to complete (timeout: {} minutes)...", timeout_minutes);
+        println!("Note: Timeout only stops waiting - training continues running in the background.");
     }
 
     let mut check_count = 0;
-    let max_checks = 3600; // 2 hours max (2 second intervals)
     let check_interval = Duration::from_secs(2);
+    // Calculate max checks based on timeout
+    let max_checks = if timeout_minutes > 0 {
+        (timeout_minutes * 60) / check_interval.as_secs()
+    } else {
+        u64::MAX / check_interval.as_secs() // Effectively no timeout, but prevent overflow
+    };
+    let max_timeout_minutes = timeout_minutes;
 
     loop {
         sleep(check_interval).await;
@@ -860,10 +1169,12 @@ async fn wait_for_training_completion(
             Ok(false) => {
                 // Still running
                 if check_count % 30 == 0 && output_format != "json" {
-                    // Print status every minute
+                    // Print status every minute (30 checks * 2 seconds = 60 seconds)
+                    let elapsed_minutes = (check_count as u64 * check_interval.as_secs()) / 60;
                     println!(
-                        "Training still in progress... (checked {} times)",
-                        check_count
+                        "Training still in progress... (checked {} times, ~{} minutes elapsed)",
+                        check_count,
+                        elapsed_minutes
                     );
                 }
             }
@@ -879,8 +1190,9 @@ async fn wait_for_training_completion(
                 operation: "wait_for_completion".to_string(),
                 resource_id: Some(instance_id.to_string()),
                 message: format!(
-                    "Training did not complete within {} minutes. Check manually: runctl aws monitor {}",
-                    max_checks * 2 / 60,
+                    "Training did not complete within {} minutes ({} hours). Check manually: runctl aws monitor {}",
+                    max_timeout_minutes,
+                    max_timeout_minutes / 60,
                     instance_id
                 ),
                 source: None,

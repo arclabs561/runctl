@@ -7,7 +7,7 @@
 //! 3. Saves checkpoint before termination
 //! 4. Optionally uploads checkpoint to S3
 
-use crate::aws::auto_resume::auto_resume_after_interruption;
+// Auto-resume is now used via spawn, so we don't need to import it at the top level
 use crate::aws_utils::execute_ssm_command;
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
@@ -81,14 +81,13 @@ pub async fn monitor_spot_interruption(
             .await
             .map_err(|e| TrainctlError::Aws(format!("Failed to describe instance: {}", e)))?;
 
-        let instance = crate::aws::helpers::find_instance_in_response(&instance_response, instance_id);
-        
-        if instance.is_none() {
-            warn!("Instance {} not found, stopping monitoring", instance_id);
-            break;
-        }
-
-        let instance = instance.unwrap();
+        let instance = match crate::aws::helpers::find_instance_in_response(&instance_response, instance_id) {
+            Some(inst) => inst,
+            None => {
+                warn!("Instance {} not found, stopping monitoring", instance_id);
+                break;
+            }
+        };
         let state = instance
             .state()
             .and_then(|s| s.name())
@@ -143,15 +142,64 @@ fi
                         &interruption_info,
                         ssm_client,
                         s3_client,
-                        auto_resume,
-                        script_path.clone(),
-                        config,
-                        aws_config,
                     )
                     .await
                     {
                         error!("Failed to handle spot interruption: {}", e);
                         return Err(e);
+                    }
+                    
+                    // Spawn auto-resume using process spawning to completely break circular dependency
+                    // The cycle: monitor_spot_interruption -> train_on_instance -> monitor_spot_interruption
+                    // Solution: Use std::process::Command to spawn separate runctl process
+                    if auto_resume {
+                        if let (Some(script), Some(_cfg), Some(_aws_cfg)) = (script_path, config, aws_config) {
+                            let resume_instance_id = instance_id.to_string();
+                            let resume_script_str = script.to_string_lossy().to_string();
+                            
+                            // Construct checkpoint path from S3 prefix if available
+                            let resume_checkpoint_str: Option<String> = if let Some(prefix) = s3_prefix {
+                                Some(format!("{}/{}/checkpoints", prefix, instance_id))
+                            } else {
+                                None
+                            };
+                            
+                            tokio::task::spawn(async move {
+                                use std::process::Command;
+                                
+                                // Build runctl command for auto-resume
+                                let mut cmd = Command::new(std::env::current_exe().unwrap_or_else(|_| "runctl".into()));
+                                cmd.arg("aws")
+                                    .arg("auto-resume")
+                                    .arg(&resume_instance_id)
+                                    .arg(&resume_script_str);
+                                
+                                if let Some(ref cp) = resume_checkpoint_str {
+                                    cmd.arg("--checkpoint").arg(cp);
+                                }
+                                
+                                match cmd.output() {
+                                    Ok(output) => {
+                                        if output.status.success() {
+                                            let stdout = String::from_utf8_lossy(&output.stdout);
+                                            info!("Auto-resume completed: {}", stdout);
+                                        } else {
+                                            let stderr = String::from_utf8_lossy(&output.stderr);
+                                            warn!("Auto-resume process failed: {}", stderr);
+                                            warn!("You can manually resume by creating a new instance and using the checkpoint from S3");
+                                        }
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to spawn runctl process for auto-resume: {}", e);
+                                        warn!("Auto-resume via process spawning failed. You can manually resume:");
+                                        warn!("  1. Create new instance: runctl aws create <instance-type>");
+                                        let checkpoint_display = resume_checkpoint_str.as_ref().map(|s| s.as_str()).unwrap_or("<checkpoint-path>");
+                                        warn!("  2. Resume training: runctl aws train <new-instance-id> {} -- --resume {}",
+                                              resume_script_str, checkpoint_display);
+                                    }
+                                }
+                            });
+                        }
                     }
                     
                     info!("Spot interruption handled successfully for instance {}", instance_id);
@@ -184,10 +232,6 @@ async fn handle_spot_interruption(
     interruption_info: &InterruptionInfo,
     ssm_client: &SsmClient,
     s3_client: Option<&S3Client>,
-    auto_resume: bool,
-    script_path: Option<PathBuf>,
-    config: Option<&Config>,
-    aws_config: Option<&SdkConfig>,
 ) -> Result<()> {
     info!("Handling spot interruption for instance {}", instance_id);
     info!(
@@ -273,7 +317,7 @@ fi
                 .map(|s| s.trim().to_string());
 
             // Step 2: Upload checkpoint to S3 if configured
-            let checkpoint_s3_path = if let (Some(bucket), Some(path)) = (s3_bucket, checkpoint_path.as_ref()) {
+            if let (Some(bucket), Some(path)) = (s3_bucket, checkpoint_path.as_ref()) {
                 if let Some(client) = s3_client {
                     let s3_key = if let Some(p) = s3_prefix {
                         format!("{}/{}/{}", p, instance_id, path)
@@ -292,43 +336,15 @@ fi
                     .await
                     {
                         warn!("Failed to upload checkpoint to S3: {}", e);
-                        None
                     } else {
                         info!("Checkpoint uploaded to S3: {}", s3_path);
-                        Some(s3_path)
                     }
-                } else {
-                    None
-                }
-            } else {
-                None
-            };
-
-            // Step 3: Auto-resume if enabled
-            if auto_resume {
-                if let (Some(script), Some(cfg), Some(aws_cfg)) = (script_path, config, aws_config) {
-                    info!("Auto-resuming training on new instance...");
-                    match auto_resume_after_interruption(
-                        instance_id,
-                        checkpoint_s3_path.as_deref(),
-                        script,
-                        cfg,
-                        aws_cfg,
-                    )
-                    .await
-                    {
-                        Ok(new_instance_id) => {
-                            info!("Training auto-resumed on instance: {}", new_instance_id);
-                        }
-                        Err(e) => {
-                            warn!("Failed to auto-resume training: {}", e);
-                            warn!("You can manually resume by creating a new instance and using the checkpoint from S3");
-                        }
-                    }
-                } else {
-                    warn!("Auto-resume requested but missing required parameters (script_path, config, aws_config)");
                 }
             }
+
+            // Step 3: Auto-resume removed from here to break circular dependency
+            // Auto-resume is now handled in monitor_spot_interruption using process spawning
+            // This completely breaks the cycle: spot_monitor -> auto_resume -> training -> spot_monitor
         }
         Err(e) => {
             warn!("Failed to execute graceful shutdown: {}", e);
@@ -427,6 +443,7 @@ struct InterruptionInfo {
 /// It returns a handle that can be used to stop monitoring.
 ///
 /// Note: This function takes the AWS SDK config and creates new clients internally.
+#[allow(dead_code)]
 pub fn start_spot_monitoring(
     instance_id: String,
     checkpoint_dir: String,

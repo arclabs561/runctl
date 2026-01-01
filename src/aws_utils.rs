@@ -13,14 +13,25 @@ use tokio::time::sleep;
 use tracing::{info, warn};
 
 /// Polling configuration constants
+///
+/// These constants control retry and timeout behavior for AWS operations.
+/// Timeouts are calculated as: max_attempts * poll_interval (or max_delay for exponential backoff).
+
+/// SSM command execution timeout: 60 attempts * 10s max delay = ~10 minutes max
 const SSM_COMMAND_MAX_ATTEMPTS: u32 = 60;
 const SSM_COMMAND_INITIAL_DELAY_SECS: u64 = 2;
 const SSM_COMMAND_MAX_DELAY_SECS: u64 = 10;
+
+/// Instance wait timeout: 60 attempts * 5s = 5 minutes max
 const INSTANCE_WAIT_MAX_ATTEMPTS: u32 = 60;
 const INSTANCE_WAIT_POLL_INTERVAL_SECS: u64 = 5;
 // Removed: INSTANCE_SSM_READY_DELAY_SECS - now using actual SSM connectivity test instead of fixed delay
+
+/// Volume attach timeout: 30 attempts * 2s = 1 minute max
 const VOLUME_ATTACH_MAX_ATTEMPTS: u32 = 30;
 const VOLUME_ATTACH_POLL_INTERVAL_SECS: u64 = 2;
+
+/// Volume detach timeout: 30 attempts * 2s = 1 minute max
 const VOLUME_DETACH_MAX_ATTEMPTS: u32 = 30;
 const VOLUME_DETACH_POLL_INTERVAL_SECS: u64 = 2;
 
@@ -116,7 +127,13 @@ pub async fn execute_ssm_command(
                         .send()
                         .await
                         .map_err(|e| {
-                            TrainctlError::Ssm(format!("Failed to get command invocation: {}", e))
+                            let error_msg = format!("{}", e);
+                            let detailed_msg = if error_msg.contains("does not exist") || error_msg.contains("not found") {
+                                format!("Failed to get command invocation: {}\n\nTo resolve:\n  1. Verify instance has IAM instance profile\n  2. Wait 60-90 seconds after instance start for SSM to be ready\n  3. Check SSM agent status: aws ssm describe-instance-information", error_msg)
+                            } else {
+                                format!("Failed to get command invocation: {}", error_msg)
+                            };
+                            TrainctlError::Ssm(detailed_msg)
                         })
                 }
             })
@@ -180,6 +197,8 @@ pub async fn execute_ssm_command(
     }
 
     pb.finish_with_message("Command timed out");
+    let timeout_seconds = (max_attempts as u64) * SSM_COMMAND_MAX_DELAY_SECS;
+    let instance_id_for_error = instance_id.to_string();
     Err(TrainctlError::Ssm(format!(
         "SSM command timed out after {} attempts ({} seconds).\n\n\
         To resolve:\n\
@@ -188,9 +207,9 @@ pub async fn execute_ssm_command(
           3. Check instance logs: aws ec2 get-console-output --instance-id {}\n\
           4. The command may still be running - check AWS Console SSM Run Command history",
         max_attempts,
-        max_attempts as u64 * SSM_COMMAND_MAX_DELAY_SECS,
-        instance_id,
-        instance_id
+        timeout_seconds,
+        instance_id_for_error,
+        instance_id_for_error
     )))
 }
 

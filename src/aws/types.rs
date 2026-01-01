@@ -168,6 +168,9 @@ pub struct TrainInstanceOptions {
     pub project_name: String,
     pub script_args: Vec<String>,
     pub wait: bool,
+    pub timeout_minutes: u64,
+    pub docker: bool,
+    pub docker_image: Option<String>,
 }
 
 #[derive(Debug, Clone)]

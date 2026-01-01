@@ -102,6 +102,9 @@ pub async fn handle_command(
                 project_name: get_project_name(None, config),
                 script_args,
                 wait: true, // Always wait for training to complete
+                timeout_minutes: 120, // Default 2 hour timeout
+                docker: false,
+                docker_image: None,
             };
 
             train_on_instance(train_options, config, &aws_config, output_format).await?;

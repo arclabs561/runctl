@@ -7,16 +7,17 @@
 ### Quick Start
 
 ```bash
-# 1. Create spot instance (cost-effective)
-INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
+# 1. Create spot instance (cost-effective) - with --wait to ensure it's ready
+INSTANCE_ID=$(runctl aws create g4dn.xlarge --spot --wait --output instance-id)
 
-# 2. Train with automatic code sync
+# 2. Train with automatic code sync - with --wait to ensure completion
 runctl aws train $INSTANCE_ID training/train.py \
     --sync-code \
     --data-s3 s3://my-bucket/data/ \
-    --output-s3 s3://my-bucket/outputs/
+    --output-s3 s3://my-bucket/outputs/ \
+    --wait
 
-# 3. Monitor training logs
+# 3. Monitor training logs (if not using --wait)
 runctl aws monitor $INSTANCE_ID --follow
 
 # 4. Check processes and resource usage
@@ -32,26 +33,24 @@ runctl aws terminate $INSTANCE_ID
 ### Complete Training Workflow
 
 ```bash
-# Create instance with data volume
-INSTANCE_ID=$(runctl aws create \
+# Create instance with data volume - with --wait to ensure it's ready
+INSTANCE_ID=$(runctl aws create g4dn.xlarge \
     --spot \
-    --instance-type g4dn.xlarge \
     --data-volume-size 100 \
-    | grep -o 'i-[a-z0-9]*')
+    --wait \
+    --output instance-id)
 
-# Wait for instance to be ready
 echo "Instance: $INSTANCE_ID"
-echo "Waiting for instance to be ready..."
-sleep 60
 
-# Train with code sync and S3 data
+# Train with code sync and S3 data - with --wait to ensure completion
 runctl aws train $INSTANCE_ID training/train.py \
     --sync-code \
     --data-s3 s3://my-bucket/datasets/imagenet/ \
     --output-s3 s3://my-bucket/checkpoints/ \
-    --script-args "--epochs 100 --batch-size 64"
+    --script-args "--epochs" "100" "--batch-size" "64" \
+    --wait
 
-# Monitor in real-time
+# Monitor in real-time (optional, if not using --wait)
 runctl aws monitor $INSTANCE_ID --follow
 
 # Check resource usage
@@ -65,8 +64,8 @@ runctl aws stop $INSTANCE_ID
 ### EBS Volume Management
 
 ```bash
-# Create persistent volume
-VOLUME_ID=$(runctl aws ebs create --size 500 --persistent | grep -o 'vol-[a-z0-9]*')
+# Create persistent volume - use --output volume-id for structured output
+VOLUME_ID=$(runctl aws ebs create --size 500 --persistent --output volume-id)
 
 # Pre-warm volume with data from S3
 runctl aws ebs pre-warm $VOLUME_ID --s3-source s3://my-bucket/datasets/
@@ -118,8 +117,8 @@ runctl local training/train.py --checkpoint-dir ./my_checkpoints
 > **Note**: RunPod support is experimental and less tested than AWS.
 
 ```bash
-# 1. Create a pod
-POD_ID=$(runctl runpod create --gpu "RTX 4080 SUPER" | grep -o 'pod-[a-z0-9]*')
+# 1. Create a pod - use --output pod-id for structured output
+POD_ID=$(runctl runpod create --gpu "RTX 4080 SUPER" --output pod-id)
 
 # 2. Train on the pod
 runctl runpod train $POD_ID training/train_cloud.py --background
@@ -132,15 +131,16 @@ runctl runpod download $POD_ID /workspace/checkpoints/best.pt ./best.pt
 ```
 
 ```bash
-# 1. Create spot instance (cost-effective)
-INSTANCE_ID=$(runctl aws create --spot --instance-type t3.medium | grep -o 'i-[a-z0-9]*')
+# 1. Create spot instance (cost-effective) - with --wait to ensure it's ready
+INSTANCE_ID=$(runctl aws create t3.medium --spot --wait --output instance-id)
 
-# 2. Train with S3 data
+# 2. Train with S3 data - with --wait to ensure completion
 runctl aws train $INSTANCE_ID training/train.py \
     --data-s3 s3://bucket/data.csv \
-    --output-s3 s3://bucket/output/
+    --output-s3 s3://bucket/output/ \
+    --wait
 
-# 3. Monitor
+# 3. Monitor (optional, if not using --wait)
 runctl aws monitor $INSTANCE_ID --follow
 
 # 4. Terminate when done

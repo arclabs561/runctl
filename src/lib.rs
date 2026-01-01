@@ -38,6 +38,7 @@ pub mod config;
 pub mod dashboard;
 pub mod data_transfer;
 pub mod diagnostics;
+pub mod docker;
 pub mod ebs;
 pub mod ebs_optimization;
 pub mod error;

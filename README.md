@@ -31,13 +31,13 @@ cargo build --release
 # Initialize config
 runctl init
 
-# Create spot instance
-INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge | grep -o 'i-[a-z0-9]*')
+# Create spot instance (waits until ready)
+INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge --wait --output instance-id)
 
-# Train with automatic code sync
-runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code
+# Train with automatic code sync (waits until complete)
+runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code --wait
 
-# Monitor training
+# Monitor training (optional, if not using --wait)
 runctl aws monitor $INSTANCE_ID --follow
 
 # Check resource usage
@@ -49,6 +49,32 @@ runctl aws stop $INSTANCE_ID
 # Restart a stopped instance
 runctl aws start $INSTANCE_ID --wait
 ```
+
+### Even Simpler: Use Workflow Command
+
+```bash
+# Complete workflow in one command
+runctl workflow train training/train_mnist.py \
+    --instance-type g4dn.xlarge \
+    --spot
+```
+
+### Try the Examples
+
+We provide ready-to-use example scripts:
+
+```bash
+# Complete workflow with error handling
+./examples/complete_workflow.sh
+
+# Quick test
+./examples/quick_test.sh
+
+# Workflow command example
+./examples/workflow_train_example.sh
+```
+
+See [examples/README.md](examples/README.md) for details.
 
 ### Example Training Script
 
