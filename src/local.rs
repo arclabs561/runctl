@@ -1,7 +1,27 @@
 //! Local training execution
 //!
-//! Provides functionality for running training scripts locally.
-//! Automatically detects and uses `uv` for Python scripts when available.
+//! Provides functionality for running training scripts locally on your machine.
+//! Automatically detects and uses `uv` for Python scripts when available, falling
+//! back to `python3` if `uv` is not installed.
+//!
+//! ## Features
+//!
+//! - **Automatic Python detection**: Detects `.py` files and uses appropriate interpreter
+//! - **Environment variables**: Sets `TRAINCTL_CHECKPOINT_DIR` and `TRAINCTL_DEVICE` from config
+//! - **Session tracking**: Creates and saves training session metadata
+//! - **Helpful error messages**: Provides suggestions when scripts fail or are not found
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::{local, Config};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! let config = Config::load(None)?;
+//! local::train("train.py".into(), vec!["--epochs".to_string(), "10".to_string()], &config).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};
@@ -11,6 +31,42 @@ use std::path::PathBuf;
 use std::process::Command;
 use tracing::info;
 
+/// Execute a training script locally
+///
+/// Runs the specified script with the given arguments. For Python scripts,
+/// automatically uses `uv` if available, otherwise falls back to `python3`.
+/// For other scripts, assumes they are executable.
+///
+/// # Arguments
+///
+/// * `script` - Path to the training script (Python `.py` file or executable)
+/// * `args` - Additional arguments to pass to the script
+/// * `config` - Configuration containing checkpoint directory and device settings
+///
+/// # Errors
+///
+/// Returns `TrainctlError::ResourceNotFound` if the script doesn't exist,
+/// or `TrainctlError::Resource` if the script execution fails.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use runctl::{local, Config};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let config = Config::load(None)?;
+/// // Run a Python training script
+/// local::train("train.py".into(), vec![], &config).await?;
+///
+/// // Run with arguments
+/// local::train(
+///     "train.py".into(),
+///     vec!["--epochs".to_string(), "50".to_string()],
+///     &config
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn train(script: PathBuf, args: Vec<String>, config: &Config) -> Result<()> {
     crate::validation::validate_path_path(&script)?;
 

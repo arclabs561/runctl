@@ -9,8 +9,9 @@ homepage = "https://github.com/arclabs561/runctl"
 readme = "README.md"
 keywords = ["ml", "training", "aws", "ec2", "orchestration"]
 categories = ["command-line-utilities", "development-tools"]
-# Not yet published to crates.io - keeping private for now
-publish = false
+authors = ["arclabs561 <arclabs561@users.noreply.github.com>"]
+# Ready for crates.io publication
+# publish = []  # Empty array allows publishing to crates.io
 
 [[bin]]
 name = "runctl"

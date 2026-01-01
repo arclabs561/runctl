@@ -1,37 +1,30 @@
 # Security Quick Start
 
-## Current Status
+## Setup
 
-Run `./scripts/check-aws-credentials.sh` to check your current security status.
-
-## Quick Improvements
-
-### 1. Use Temporary Credentials (Recommended)
 ```bash
+# Check current status
+./scripts/check-aws-credentials.sh
+
+# Use temporary credentials (recommended)
 source scripts/assume-test-role.sh
-# Now using temporary credentials (expire in 1 hour)
-```
 
-### 2. Enable CloudTrail
-```bash
+# Enable CloudTrail
 ./scripts/setup-cloudtrail.sh
-```
 
-### 3. Set Up OIDC for CI/CD
-```bash
+# Set up OIDC for CI/CD
 ./scripts/setup-github-oidc.sh
 ```
 
-## Security Checklist
+## Checklist
 
-- [ ] MFA enabled on admin user ✅
-- [ ] Only 1 access key ✅
-- [ ] CloudTrail enabled (run setup-cloudtrail.sh)
+- [ ] MFA enabled on admin user
+- [ ] Only 1 access key
+- [ ] CloudTrail enabled
 - [ ] Using IAM roles for development (optional)
 - [ ] OIDC for CI/CD (optional)
 
 ## See Also
 
-- `docs/AWS_SECURITY_RECOMMENDATIONS.md` - Detailed recommendations
-- `docs/AWS_SECURITY_REVIEW_RESULTS.md` - Current status
-- `scripts/check-aws-credentials.sh` - Security check script
+- [AWS_SECURITY_BEST_PRACTICES.md](AWS_SECURITY_BEST_PRACTICES.md)
+- `scripts/check-aws-credentials.sh`

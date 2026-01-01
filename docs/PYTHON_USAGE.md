@@ -1,10 +1,10 @@
 # Using runctl from Python
 
-This guide shows how to use runctl programmatically from Python without requiring PyO3 bindings.
+Use runctl programmatically from Python without PyO3 bindings.
 
 ## Quick Start
 
-### Option 1: Python Wrapper (Recommended)
+### Option 1: Python Wrapper
 
 Use the provided wrapper script:
 
@@ -38,9 +38,9 @@ tc.aws.train(
 tc.aws.monitor(instance["instance_id"], follow=True)
 ```
 
-### Option 2: Direct Subprocess (Simple)
+### Option 2: Direct Subprocess
 
-For simple use cases, call runctl directly:
+Call runctl directly:
 
 ```python
 import subprocess

@@ -1,17 +1,17 @@
 # Implementation Plan: Missing Paradigms
 
-This document provides a concrete, step-by-step plan for implementing the missing architectural patterns identified in `MISSING_PARADIGMS.md`.
+Step-by-step plan for implementing the missing architectural patterns identified in `MISSING_PARADIGMS.md`.
 
 ## Implementation Order (Dependencies)
 
-1. **Custom Error Types** (Foundation - needed by everything else)
-2. **Configuration Validation** (Early validation - prevents runtime errors)
-3. **Retry Logic** (Uses custom error types)
-4. **Resource Lifecycle Management** (Uses retry logic and error types)
-5. **Graceful Shutdown** (Uses resource lifecycle)
-6. **Cost Tracking** (Uses resource lifecycle)
-7. **Observability** (Can be added incrementally)
-8. **Advanced Testing** (Tests everything above)
+1. Custom Error Types (Foundation - needed by everything else)
+2. Configuration Validation (Early validation - prevents runtime errors)
+3. Retry Logic (Uses custom error types)
+4. Resource Lifecycle Management (Uses retry logic and error types)
+5. Graceful Shutdown (Uses resource lifecycle)
+6. Cost Tracking (Uses resource lifecycle)
+7. Observability (Can be added incrementally)
+8. Advanced Testing (Tests everything above)
 
 ## Phase 1: Custom Error Types (Week 1)
 

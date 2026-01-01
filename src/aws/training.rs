@@ -601,7 +601,7 @@ pub async fn train_on_instance(
                 ecr_image
             );
         } else {
-            println!("✅ Training completed in Docker container: {}", ecr_image);
+            println!("Training completed in Docker container: {}", ecr_image);
         }
 
         // Wait for completion if requested (Docker runs synchronously, so this is a no-op)

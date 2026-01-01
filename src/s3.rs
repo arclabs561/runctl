@@ -1,15 +1,45 @@
 //! S3 operations module
 //!
-//! Provides native Rust implementations for S3 operations including:
-//! - Upload/download files and directories
-//! - Sync local directories with S3
-//! - List S3 objects
-//! - Cleanup old objects
-//! - Watch S3 paths for changes
-//! - Review S3 usage and costs
+//! Provides native Rust implementations for S3 operations with parallel transfers
+//! for optimal performance. Optionally supports s5cmd for users who prefer external tools.
 //!
-//! Uses parallel transfers by default (10 concurrent transfers) for optimal performance.
-//! Optionally supports s5cmd for users who prefer external tools.
+//! ## Features
+//!
+//! - **Upload/Download**: Transfer files and directories to/from S3
+//! - **Sync**: Keep local directories synchronized with S3 buckets
+//! - **List**: Enumerate S3 objects with filtering and pagination
+//! - **Cleanup**: Remove old objects based on age or count
+//! - **Watch**: Monitor S3 paths for changes (like `tail -f` for S3)
+//! - **Review**: Analyze S3 usage and estimate costs
+//!
+//! ## Performance
+//!
+//! Uses parallel transfers by default (10 concurrent transfers) for optimal
+//! performance. This is significantly faster than sequential transfers for
+//! large directories or many files.
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::{s3, Config};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! let config = Config::load(None)?;
+//!
+//! // Upload a directory
+//! s3::handle_command(
+//!     s3::S3Commands::Upload {
+//!         source: "./checkpoints".into(),
+//!         destination: "s3://my-bucket/checkpoints/".to_string(),
+//!         use_s5cmd: false,
+//!         recursive: true,
+//!     },
+//!     &config,
+//!     "text"
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::config::Config;
 use crate::error::{Result, TrainctlError};

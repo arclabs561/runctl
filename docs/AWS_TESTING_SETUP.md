@@ -1,13 +1,13 @@
 # AWS Testing Setup with Temporary Credentials
 
-This guide explains how to set up isolated AWS testing environments using temporary credentials and IAM roles, following AWS security best practices.
+Set up isolated AWS testing environments using temporary credentials and IAM roles.
 
 ## Overview
 
-Instead of using long-term access keys (which pose security risks), we use:
-- **IAM Roles** with least-privilege permissions
-- **Temporary credentials** via AWS STS (Security Token Service)
-- **Resource tagging** for isolation
+Instead of long-term access keys, use:
+- IAM Roles with least-privilege permissions
+- Temporary credentials via AWS STS (Security Token Service)
+- Resource tagging for isolation
 - **Permission boundaries** for additional protection
 
 ## Prerequisites

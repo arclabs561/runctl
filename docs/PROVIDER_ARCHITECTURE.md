@@ -6,10 +6,10 @@
 
 ## Design Principles
 
-1. **Provider Trait**: All providers implement the `TrainingProvider` trait
-2. **Unified Interface**: Common operations (create, train, monitor, terminate) work the same across providers
-3. **Easy Extension**: Adding a new provider only requires implementing the trait
-4. **No Lock-in**: Core logic doesn't depend on provider-specific code
+1. Provider Trait: All providers implement the `TrainingProvider` trait
+2. Unified Interface: Common operations (create, train, monitor, terminate) work the same across providers
+3. Easy Extension: Adding a new provider only requires implementing the trait
+4. No Lock-in: Core logic doesn't depend on provider-specific code
 
 ## Architecture
 
@@ -23,7 +23,7 @@ src/
     └── lyceum_provider.rs # Lyceum AI implementation (skeleton, not yet used)
 ```
 
-**Note**: The provider trait system is defined but not yet fully integrated. The CLI currently uses direct AWS implementation in `src/aws/`. See `docs/PROVIDER_TRAIT_DECISION.md` for details.
+Note: The provider trait system is defined but not yet fully integrated. The CLI currently uses direct AWS implementation in `src/aws/`. See `docs/PROVIDER_TRAIT_DECISION.md` for details.
 
 ## Core Traits
 

@@ -8,7 +8,7 @@ We currently support the latest version of runctl. Security updates will be back
 
 If you discover a security vulnerability, please email the maintainers directly rather than opening a public issue.
 
-**Do not** open a public GitHub issue for security vulnerabilities.
+Do not open a public GitHub issue for security vulnerabilities.
 
 For security issues:
 1. Email the maintainers with details

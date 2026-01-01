@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document consolidates AWS security best practices specifically for runctl usage, based on AWS recommendations and security research.
+AWS security best practices for runctl usage.
 
 ## Root Credentials: Never Use
 
@@ -16,14 +16,14 @@ This document consolidates AWS security best practices specifically for runctl u
 
 ### Root Credential Best Practices
 
-✅ **DO:**
+Do:
 - Enable MFA on root account (REQUIRED)
 - Use root only for account-level operations (billing, account recovery)
 - Store root password securely (password manager)
 - Use group email for root account (not individual)
 - Implement multi-person approval for root sign-in
 
-❌ **DON'T:**
+Don't:
 - Never use root for programmatic access
 - Never share root credentials
 - Never commit root credentials to git
@@ -45,7 +45,7 @@ This document consolidates AWS security best practices specifically for runctl u
 - Can be compromised if leaked
 - Require MFA for security
 
-### IAM Roles (Temporary Credentials) ⭐ RECOMMENDED
+### IAM Roles (Temporary Credentials)
 
 **Use for:**
 - CI/CD pipelines
@@ -232,12 +232,12 @@ Set up CloudWatch alarms for:
 
 ### When to Use MFA
 
-✅ **REQUIRED:**
+Required:
 - Root account (mandatory)
 - IAM users with admin permissions
 - Production accounts
 
-✅ **RECOMMENDED:**
+Recommended:
 - All IAM users
 - Console access
 - Sensitive operations

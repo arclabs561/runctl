@@ -55,14 +55,67 @@ const DEFAULT_JITTER_FACTOR: f64 = 0.1;
 const DEFAULT_MAX_ATTEMPTS: u32 = 3;
 const CLOUD_API_MAX_ATTEMPTS: u32 = 5;
 
-/// Retry policy trait
+/// Retry policy trait for handling transient failures
 ///
-/// Note: Using async fn in traits generates a clippy warning about auto trait bounds,
+/// Defines the interface for retry policies that can execute operations with
+/// automatic retry on failure. Implementations determine retry behavior (number
+/// of attempts, backoff strategy, etc.).
+///
+/// ## When to Retry
+///
+/// Only errors that implement `IsRetryable` are retried. Non-retryable errors
+/// (e.g., validation errors, authentication failures) fail immediately.
+///
+/// ## Note on Async Traits
+///
+/// Using `async fn` in traits generates a clippy warning about auto trait bounds,
 /// but this is acceptable for our use case. The alternative (explicit Future return types)
 /// adds significant complexity without clear benefits for this API.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use runctl::retry::{ExponentialBackoffPolicy, RetryPolicy};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let policy = ExponentialBackoffPolicy::for_cloud_api();
+/// let result = policy.execute_with_retry(|| async {
+///     // Operation that might fail transiently
+///     Ok::<(), runctl::error::TrainctlError>(())
+/// }).await?;
+/// # Ok(())
+/// # }
+/// ```
 #[allow(async_fn_in_trait)]
 pub trait RetryPolicy: Send + Sync {
     /// Execute a function with retry logic
+    ///
+    /// Attempts to execute the provided function, retrying on retryable errors
+    /// according to the policy's strategy. Non-retryable errors fail immediately.
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - Closure that returns a Future producing a `Result<T>`
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(T)` if the operation succeeds on any attempt, or the last
+    /// error if all retries are exhausted.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use runctl::retry::{ExponentialBackoffPolicy, RetryPolicy};
+    ///
+    /// # async fn example() -> runctl::error::Result<()> {
+    /// let policy = ExponentialBackoffPolicy::for_cloud_api();
+    /// let result = policy.execute_with_retry(|| async {
+    ///     // Your operation
+    ///     Ok::<(), runctl::error::TrainctlError>(())
+    /// }).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     async fn execute_with_retry<F, Fut, T>(&self, f: F) -> Result<T>
     where
         F: Fn() -> Fut + Send + Sync,
@@ -70,6 +123,34 @@ pub trait RetryPolicy: Send + Sync {
 }
 
 /// Exponential backoff retry policy
+///
+/// Retries operations with exponentially increasing delays between attempts.
+/// Includes jitter to prevent thundering herd problems when multiple clients
+/// retry simultaneously.
+///
+/// ## Backoff Strategy
+///
+/// - Initial delay: 100ms
+/// - Exponential growth: Each retry doubles the delay (100ms → 200ms → 400ms → ...)
+/// - Maximum delay: 30 seconds (capped to prevent excessive waits)
+/// - Jitter: 10% randomization to spread out retry attempts
+///
+/// ## Default Policies
+///
+/// - `for_cloud_api()`: 5 attempts (recommended for AWS EC2, S3, SSM calls)
+/// - `new(n)`: Custom number of attempts
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use runctl::retry::ExponentialBackoffPolicy;
+///
+/// // Use default cloud API policy (5 attempts)
+/// let policy = ExponentialBackoffPolicy::for_cloud_api();
+///
+/// // Custom policy with 3 attempts
+/// let policy = ExponentialBackoffPolicy::new(3);
+/// ```
 pub struct ExponentialBackoffPolicy {
     max_attempts: u32,
     initial_delay: Duration,

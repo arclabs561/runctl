@@ -36,7 +36,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-/// Resource usage metrics
+/// Resource usage metrics at a point in time
+///
+/// Captures CPU, memory, GPU, and network usage for a resource at a specific
+/// timestamp. Used to track resource utilization over time and calculate costs.
+///
+/// ## Usage
+///
+/// Metrics are typically collected periodically (e.g., every 5 seconds) and
+/// added to a resource's usage history via `ResourceTracker::update_usage()`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceUsage {
     pub cpu_percent: f64,
@@ -47,7 +55,18 @@ pub struct ResourceUsage {
     pub timestamp: DateTime<Utc>,
 }
 
-/// Tracked resource with usage history
+/// Tracked resource with usage history and cost information
+///
+/// Extends `ResourceStatus` with tracking-specific information:
+/// - Creation timestamp for cost calculation
+/// - Usage history for monitoring and analysis
+/// - Accumulated cost based on runtime
+/// - Tags for organization and filtering
+///
+/// ## Cost Calculation
+///
+/// `accumulated_cost` is calculated on-demand when accessing resources. It's
+/// based on the resource's `cost_per_hour` and time elapsed since `created_at`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrackedResource {
     pub status: ResourceStatus,
@@ -57,7 +76,51 @@ pub struct TrackedResource {
     pub tags: HashMap<String, String>,
 }
 
-/// Resource tracker for cost awareness
+/// Resource tracker for cost awareness and lifecycle management
+///
+/// Maintains an in-memory registry of resources with their states, usage history,
+/// and accumulated costs. Designed for single-process use (CLI tool).
+///
+/// ## Thread Safety
+///
+/// Uses `Arc<Mutex<HashMap>>` internally for thread-safe access. All methods
+/// are async to avoid blocking on the mutex.
+///
+/// ## Resource Lifecycle
+///
+/// 1. **Register**: Resources are registered when created via `register()`
+/// 2. **Update State**: State changes are tracked via `update_state()`
+/// 3. **Update Usage**: Usage metrics are added via `update_usage()`
+/// 4. **Query**: Access resources via `get_running()`, `get_by_id()`, etc.
+///
+/// ## Cost Calculation
+///
+/// Accumulated cost is calculated on-demand when accessing resources. This
+/// ensures costs are always current based on `launch_time` and `cost_per_hour`,
+/// without requiring periodic background tasks.
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use runctl::resource_tracking::ResourceTracker;
+/// use runctl::provider::{ResourceStatus, ResourceState};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let tracker = ResourceTracker::new();
+///
+/// // Register a new resource
+/// let status = ResourceStatus {
+///     id: "i-123".to_string(),
+///     state: ResourceState::Running,
+///     // ... other fields
+/// };
+/// tracker.register(status).await?;
+///
+/// // Get all running resources with costs
+/// let running = tracker.get_running().await;
+/// # Ok(())
+/// # }
+/// ```
 pub struct ResourceTracker {
     resources: Arc<Mutex<HashMap<ResourceId, TrackedResource>>>,
 }

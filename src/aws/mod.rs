@@ -242,7 +242,7 @@ pub enum AwsCommands {
         /// ECR image to use for Docker training (default: auto-detect from Dockerfile)
         ///
         /// If not provided, will build and push image from Dockerfile.
-        /// Format: <account-id>.dkr.ecr.<region>.amazonaws.com/<repository>:<tag>
+        /// Format: `{account-id}.dkr.ecr.{region}.amazonaws.com/{repository}:{tag}`
         #[arg(long, value_name = "ECR_IMAGE")]
         docker_image: Option<String>,
     },

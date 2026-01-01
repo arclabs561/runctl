@@ -4,7 +4,7 @@
 
 ### Current Status
 
-✅ **No secrets found in codebase**
+No secrets found in codebase:
 - No AWS access keys (AKIA*)
 - No AWS secret keys
 - No private keys
@@ -14,19 +14,19 @@
 
 ### Automated Scanning
 
-We provide multiple layers of secret detection:
+Secret detection layers:
 
-1. **Manual Script**: `./scripts/check-secrets.sh`
+1. Manual Script: `./scripts/check-secrets.sh`
    - Scans for common secret patterns
    - Verifies .gitignore coverage
    - Checks for credential files
 
-2. **GitHub Actions**: `.github/workflows/security.yml`
+2. GitHub Actions: `.github/workflows/security.yml`
    - Runs on every push/PR
    - Weekly scheduled scans
    - Checks for secrets in code and history
 
-3. **Pre-commit Hooks**: `.pre-commit-config.yaml`
+3. Pre-commit Hooks: `.pre-commit-config.yaml`
    - gitleaks integration
    - AWS credential detection
    - Private key detection

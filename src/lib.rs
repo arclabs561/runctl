@@ -17,14 +17,47 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
-//! use runctl::{config::Config, TrainingProvider, ResourceTracker};
+//! ### Basic Example
 //!
-//! # fn example() -> runctl::error::Result<()> {
+//! ```rust,no_run
+//! use runctl::{Config, ResourceTracker};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
 //! // Load configuration
 //! let config = Config::load(None)?;
 //!
-//! // Use provider trait (when multi-cloud support is enabled)
+//! // Track resources
+//! let tracker = ResourceTracker::new();
+//! let running = tracker.get_running().await;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Using Convenience Re-exports
+//!
+//! Common types are re-exported at the crate root for convenience:
+//!
+//! ```rust,no_run
+//! use runctl::{Config, Result, TrainctlError};
+//! use runctl::{CreateInstanceOptions, TrainInstanceOptions};
+//!
+//! # async fn example() -> runctl::Result<()> {
+//! let config = Config::load(None)?;
+//! // Use re-exported types directly
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Provider Trait (Future)
+//!
+//! The provider trait system is defined but not yet used by the CLI. When
+//! multi-cloud support is enabled:
+//!
+//! ```rust,no_run
+//! use runctl::{Config, TrainingProvider};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! let config = Config::load(None)?;
 //! // let provider = config.get_provider("aws")?;
 //! // let resource_id = provider.create_resource("g4dn.xlarge", options).await?;
 //! # Ok(())
@@ -58,6 +91,7 @@ pub mod ssh_sync;
 pub mod training;
 pub mod utils;
 pub mod validation;
+pub mod workflow;
 
 // Re-export commonly used types
 pub use error::{ConfigError, IsRetryable, Result, TrainctlError};
@@ -70,3 +104,8 @@ pub use retry::{ExponentialBackoffPolicy, RetryPolicy};
 pub use safe_cleanup::{safe_cleanup, CleanupResult, CleanupSafety};
 pub use training::{TrainingSession, TrainingStatus};
 pub use validation::{validate_path, validate_path_path};
+
+// Re-export commonly used types for convenience
+pub use config::Config;
+pub use aws::{CreateInstanceOptions, TrainInstanceOptions};
+pub use resources::estimate_instance_cost;

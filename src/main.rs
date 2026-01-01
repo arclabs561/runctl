@@ -2,42 +2,36 @@
 //!
 //! This is the main binary for the runctl command-line interface.
 //! It parses command-line arguments and dispatches to appropriate modules.
+//!
+//! ## Architecture
+//!
+//! This binary uses the runctl library for all core functionality, with only
+//! CLI-specific modules (like `docker_cli`) defined here. This separation
+//! allows the library to be used independently while keeping the CLI lightweight.
+//!
+//! ## Command Structure
+//!
+//! Commands are organized by platform and functionality:
+//!
+//! - **Platform commands**: `local`, `aws`, `runpod` - Execute training on different platforms
+//! - **Resource management**: `resources`, `status`, `top` - Monitor and manage resources
+//! - **Data operations**: `s3`, `transfer` - Handle data movement
+//! - **Training utilities**: `checkpoint`, `monitor`, `workflow` - Training-specific tools
+//! - **Configuration**: `config`, `init` - Manage settings
+//!
+//! ## Error Handling
+//!
+//! The binary uses `anyhow::Result` for top-level error handling, converting
+//! library errors (`TrainctlError`) to `anyhow::Error` at the boundary. This
+//! preserves error chains while providing user-friendly error messages.
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
 
-mod aws;
-mod aws_utils;
-mod checkpoint;
-mod config;
-mod dashboard;
-mod data_transfer;
-mod diagnostics;
-mod docker;
+// Only binary-specific modules are declared here
 mod docker_cli;
-mod ebs;
-mod ebs_optimization;
-mod error;
-mod error_helpers;
-mod local;
-mod monitor;
-mod provider;
-mod providers;
-mod resource_tracking;
-mod resources;
-mod retry;
-mod runpod;
-mod s3;
-mod safe_cleanup;
-mod ssh_sync;
-mod training;
-mod utils;
-mod validation;
-mod workflow;
-
-use crate::config::Config;
 
 #[derive(Parser)]
 #[command(name = "runctl")]
@@ -88,12 +82,12 @@ enum Commands {
     /// Train on RunPod
     Runpod {
         #[command(subcommand)]
-        subcommand: runpod::RunpodCommands,
+        subcommand: runctl::runpod::RunpodCommands,
     },
     /// Train on AWS EC2
     Aws {
         #[command(subcommand)]
-        subcommand: aws::AwsCommands,
+        subcommand: runctl::aws::AwsCommands,
     },
     /// Docker operations (build, push, container training)
     ///
@@ -132,17 +126,17 @@ enum Commands {
     /// Manage checkpoints
     Checkpoint {
         #[command(subcommand)]
-        subcommand: checkpoint::CheckpointCommands,
+        subcommand: runctl::checkpoint::CheckpointCommands,
     },
     /// S3 operations (upload, download, sync, cleanup)
     S3 {
         #[command(subcommand)]
-        subcommand: s3::S3Commands,
+        subcommand: runctl::s3::S3Commands,
     },
     /// Review and manage resources (AWS, RunPod, local)
     Resources {
         #[command(subcommand)]
-        subcommand: resources::ResourceCommands,
+        subcommand: runctl::resources::ResourceCommands,
     },
     /// Manage configuration
     ///
@@ -154,7 +148,7 @@ enum Commands {
     ///   runctl config validate
     Config {
         #[command(subcommand)]
-        subcommand: config::ConfigCommands,
+        subcommand: runctl::config::ConfigCommands,
     },
     /// Initialize training configuration
     ///
@@ -195,7 +189,7 @@ enum Commands {
     ///   runctl workflow train training/train.py --instance-type g4dn.xlarge
     Workflow {
         #[command(subcommand)]
-        subcommand: workflow::WorkflowCommands,
+        subcommand: runctl::workflow::WorkflowCommands,
     },
     /// Data transfer operations (local ↔ S3 ↔ training instances)
     ///
@@ -269,18 +263,18 @@ async fn main() -> Result<()> {
         .init();
 
     // Load config
-    let config = Config::load(cli.config.as_deref())?;
+    let config = runctl::config::Config::load(cli.config.as_deref())?;
 
     // Execute command with error handling for JSON output
     // Preserve error context by using anyhow::Error::from which preserves the error chain
     let result: anyhow::Result<()> = match cli.command {
-        Commands::Local { script, args } => local::train(script, args, &config)
+        Commands::Local { script, args } => runctl::local::train(script, args, &config)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Runpod { subcommand } => runpod::handle_command(subcommand, &config)
+        Commands::Runpod { subcommand } => runctl::runpod::handle_command(subcommand, &config)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Aws { subcommand } => aws::handle_command(subcommand, &config, &cli.output)
+        Commands::Aws { subcommand } => runctl::aws::handle_command(subcommand, &config, &cli.output)
             .await
             .map_err(anyhow::Error::from),
         Commands::Docker { subcommand } => {
@@ -292,39 +286,39 @@ async fn main() -> Result<()> {
             log,
             checkpoint,
             follow,
-        } => monitor::monitor(log, checkpoint, follow)
+        } => runctl::monitor::monitor(log, checkpoint, follow)
             .await
             .map_err(anyhow::Error::from),
-        Commands::Checkpoint { subcommand } => checkpoint::handle_command(subcommand, &cli.output)
+        Commands::Checkpoint { subcommand } => runctl::checkpoint::handle_command(subcommand, &cli.output)
             .await
             .map_err(anyhow::Error::from),
         Commands::Config { subcommand } => {
-            config::handle_command(subcommand, cli.config.as_deref(), &cli.output)
+            runctl::config::handle_command(subcommand, cli.config.as_deref(), &cli.output)
                 .await
                 .map_err(anyhow::Error::from)
         }
-        Commands::S3 { subcommand } => s3::handle_command(subcommand, &config, &cli.output)
+        Commands::S3 { subcommand } => runctl::s3::handle_command(subcommand, &config, &cli.output)
             .await
             .map_err(anyhow::Error::from),
         Commands::Resources { subcommand } => {
-            resources::handle_command(subcommand, &config, &cli.output)
+            runctl::resources::handle_command(subcommand, &config, &cli.output)
                 .await
                 .map_err(anyhow::Error::from)
         }
         Commands::Init { config_path } => {
-            config::init_config(&config_path).map_err(anyhow::Error::from)?;
+            runctl::config::init_config(&config_path).map_err(anyhow::Error::from)?;
             Ok(())
         }
         Commands::Status { detailed } => {
-            resources::show_quick_status(detailed, &config, &cli.output)
+            runctl::resources::show_quick_status(detailed, &config, &cli.output)
                 .await
                 .map_err(anyhow::Error::from)
         }
-        Commands::Top { interval } => dashboard::run_dashboard(&config, interval)
+        Commands::Top { interval } => runctl::dashboard::run_dashboard(&config, interval)
             .await
             .map_err(anyhow::Error::from),
         Commands::Workflow { subcommand } => {
-            workflow::handle_command(subcommand, &config, &cli.output)
+            runctl::workflow::handle_command(subcommand, &config, &cli.output)
                 .await
                 .map_err(anyhow::Error::from)
         }
@@ -335,7 +329,7 @@ async fn main() -> Result<()> {
             compress,
             verify,
             resume,
-        } => data_transfer::handle_transfer(
+        } => runctl::data_transfer::handle_transfer(
             source,
             destination,
             parallel,
@@ -350,7 +344,7 @@ async fn main() -> Result<()> {
             // Exec command - run arbitrary command with runctl environment
             // For now, treat as local training with the command as script
             let script = PathBuf::from(&command);
-            local::train(script, args, &config)
+            runctl::local::train(script, args, &config)
                 .await
                 .map_err(anyhow::Error::from)
         }

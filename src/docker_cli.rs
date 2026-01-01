@@ -1,10 +1,12 @@
 //! Docker CLI commands for runctl
 //!
 //! Provides CLI interface for Docker operations including build, push, and training in containers.
+//!
+//! This is a binary-only module that uses the runctl library for core functionality.
 
-use crate::config::Config;
-use crate::docker::{build_and_push_to_ecr, build_image, detect_dockerfile, push_to_ecr};
-use crate::error::{Result, TrainctlError};
+use runctl::config::Config;
+use runctl::docker::{build_and_push_to_ecr, build_image, detect_dockerfile, push_to_ecr};
+use runctl::error::{Result, TrainctlError};
 use aws_config::BehaviorVersion;
 use clap::Subcommand;
 use std::path::PathBuf;
@@ -91,7 +93,7 @@ pub async fn handle_command(
     })?;
 
     let aws_cfg = config.aws.as_ref().ok_or_else(|| {
-        TrainctlError::Config(crate::error::ConfigError::MissingField("aws".to_string()))
+        TrainctlError::Config(runctl::error::ConfigError::MissingField("aws".to_string()))
     })?;
 
     let region = aws_cfg.region.as_str();
@@ -128,7 +130,7 @@ pub async fn handle_command(
             build_image(&dockerfile_path, &image_tag, &project_root)?;
 
             if output_format != "json" {
-                println!("✅ Docker image built: {}", image_tag);
+                println!("Docker image built: {}", image_tag);
             }
 
             if push {
@@ -142,7 +144,7 @@ pub async fn handle_command(
                     push_to_ecr(&image_tag, &repo, "latest", region, &aws_config).await?;
 
                 if output_format != "json" {
-                    println!("✅ Pushed to ECR: {}", ecr_image);
+                    println!("Pushed to ECR: {}", ecr_image);
                 } else {
                     println!("{{\"ecr_image\": \"{}\"}}", ecr_image);
                 }
@@ -160,7 +162,7 @@ pub async fn handle_command(
             if output_format == "json" {
                 println!("{{\"ecr_image\": \"{}\"}}", ecr_image);
             } else {
-                println!("✅ Pushed to ECR: {}", ecr_image);
+                println!("Pushed to ECR: {}", ecr_image);
             }
         }
         DockerCommands::BuildPush {
@@ -185,7 +187,7 @@ pub async fn handle_command(
             if output_format == "json" {
                 println!("{{\"ecr_image\": \"{}\"}}", ecr_image);
             } else {
-                println!("✅ Built and pushed to ECR: {}", ecr_image);
+                println!("Built and pushed to ECR: {}", ecr_image);
             }
         }
     }

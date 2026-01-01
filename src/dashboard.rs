@@ -1,10 +1,38 @@
 //! Interactive dashboard for monitoring resources and processes
 //!
-//! Provides a ratatui-based dashboard showing:
+//! Provides a ratatui-based TUI (Terminal User Interface) dashboard showing:
 //! - Running resources (instances, pods, processes)
-//! - Current costs and billing
+//! - Current costs and billing estimates
 //! - Process resource usage (top-like view)
-//! - Real-time updates
+//! - Real-time updates with configurable refresh interval
+//!
+//! ## Features
+//!
+//! - **Multi-tab interface**: Switch between resources, processes, and cost views
+//! - **Real-time updates**: Automatically refreshes at specified intervals
+//! - **Interactive navigation**: Use arrow keys and tab to navigate
+//! - **Cost tracking**: Shows per-instance and total costs
+//! - **Process monitoring**: Displays CPU, memory, and GPU usage
+//!
+//! ## Controls
+//!
+//! - `q` or `Ctrl+C`: Quit the dashboard
+//! - `Tab`: Switch between tabs
+//! - Arrow keys: Navigate within tabs
+//! - `Enter`: Select instance (in resources tab)
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::{dashboard, Config};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! let config = Config::load(None)?;
+//! // Run dashboard with 5 second refresh interval
+//! dashboard::run_dashboard(&config, 5).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::aws_utils;
 use crate::config::Config;
@@ -79,6 +107,34 @@ struct ProcessInfo {
     instance_id: Option<String>,
 }
 
+/// Run the interactive resource monitoring dashboard
+///
+/// Launches a full-screen TUI dashboard showing running resources, processes,
+/// and cost information. The dashboard updates automatically at the specified
+/// interval.
+///
+/// # Arguments
+///
+/// * `config` - Configuration containing AWS and resource tracking settings
+/// * `update_interval_secs` - Refresh interval in seconds (default: 5)
+///
+/// # Errors
+///
+/// Returns `TrainctlError` if terminal initialization fails, AWS API calls fail,
+/// or if the dashboard cannot be rendered.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use runctl::{dashboard, Config};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let config = Config::load(None)?;
+/// // Run with 2 second refresh interval
+/// dashboard::run_dashboard(&config, 2).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn run_dashboard(config: &Config, update_interval_secs: u64) -> Result<()> {
     let mut terminal = init_terminal()?;
     let mut state = DashboardState {

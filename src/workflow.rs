@@ -1,7 +1,47 @@
 //! Workflow commands for complete training workflows
 //!
 //! High-level commands that orchestrate multiple operations to provide
-//! a streamlined developer experience.
+//! a streamlined developer experience. Workflows combine instance creation,
+//! code syncing, training execution, and monitoring into single commands.
+//!
+//! ## Design Philosophy
+//!
+//! Workflows abstract away the complexity of multi-step operations. Instead
+//! of manually creating an instance, syncing code, starting training, and
+//! monitoring progress, workflows handle all steps automatically.
+//!
+//! ## Current Workflows
+//!
+//! - **Train**: Complete training workflow (create instance → sync code → train → wait)
+//!
+//! ## Future Workflows
+//!
+//! - **Resume**: Resume training from checkpoint on new instance
+//! - **Hyperparameter Search**: Run multiple training jobs with different hyperparameters
+//! - **Distributed Training**: Set up multi-instance distributed training
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::{workflow, Config};
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! let config = Config::load(None)?;
+//!
+//! // Complete training workflow
+//! workflow::handle_command(
+//!     workflow::WorkflowCommands::Train {
+//!         script: "train.py".into(),
+//!         instance_type: "g4dn.xlarge".to_string(),
+//!         spot: true,
+//!         script_args: vec!["--epochs".to_string(), "50".to_string()],
+//!     },
+//!     &config,
+//!     "text"
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::aws::{
     create_instance_and_get_id, get_project_name, train_on_instance, CreateInstanceOptions,
@@ -45,6 +85,44 @@ pub enum WorkflowCommands {
     },
 }
 
+/// Handle workflow command execution
+///
+/// Executes high-level workflows that orchestrate multiple operations.
+/// Currently supports the `Train` workflow which creates an instance,
+/// syncs code, starts training, and waits for completion.
+///
+/// # Arguments
+///
+/// * `cmd` - The workflow command to execute
+/// * `config` - Configuration containing AWS and training settings
+/// * `output_format` - Output format ("text" or "json")
+///
+/// # Errors
+///
+/// Returns `TrainctlError` if any step of the workflow fails (instance
+/// creation, code sync, training execution, etc.).
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use runctl::{workflow, Config};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let config = Config::load(None)?;
+///
+/// workflow::handle_command(
+///     workflow::WorkflowCommands::Train {
+///         script: "train.py".into(),
+///         instance_type: "g4dn.xlarge".to_string(),
+///         spot: true,
+///         script_args: vec![],
+///     },
+///     &config,
+///     "text"
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn handle_command(
     cmd: WorkflowCommands,
     config: &Config,

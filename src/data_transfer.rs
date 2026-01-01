@@ -13,7 +13,26 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
-/// Data transfer source/destination
+/// Data transfer source or destination location
+///
+/// Represents different types of storage locations that can be used as sources
+/// or destinations for data transfers.
+///
+/// ## Supported Locations
+///
+/// - **Local**: File system paths on the local machine
+/// - **S3**: S3 buckets and keys (format: `s3://bucket/key`)
+/// - **TrainingInstance**: Paths on remote training instances (format: `instance-id:/path`)
+///
+/// ## Examples
+///
+/// ```rust,no_run
+/// use runctl::data_transfer::DataLocation;
+///
+/// let local = DataLocation::Local("./data".into());
+/// let s3 = DataLocation::S3("s3://my-bucket/data/".to_string());
+/// let instance = DataLocation::TrainingInstance("i-123".to_string(), "/mnt/data".into());
+/// ```
 #[derive(Debug, Clone)]
 pub enum DataLocation {
     Local(PathBuf),
@@ -99,7 +118,60 @@ fn parse_location(loc: &str) -> Result<DataLocation> {
     }
 }
 
-/// CLI handler for transfer command
+/// Handle data transfer between different storage locations
+///
+/// Transfers data between local storage, S3 buckets, and training instances.
+/// Supports parallel transfers, compression, checksum verification, and resumable
+/// operations.
+///
+/// # Arguments
+///
+/// * `source` - Source location (local path, `s3://bucket/key`, or `instance-id:/path`)
+/// * `destination` - Destination location (same formats as source)
+/// * `parallel` - Number of parallel transfers (default: 10)
+/// * `compress` - Enable compression during transfer (not yet implemented)
+/// * `verify` - Verify checksums after transfer (default: true)
+/// * `resume` - Resume interrupted transfers (default: true)
+/// * `config` - Configuration containing AWS and transfer settings
+///
+/// # Errors
+///
+/// Returns `TrainctlError::Validation` if location strings are invalid,
+/// `TrainctlError::CloudProvider` for AWS API failures, or `TrainctlError::Io`
+/// for local file system errors.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use runctl::{data_transfer, Config};
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// let config = Config::load(None)?;
+///
+/// // Transfer from local to S3
+/// data_transfer::handle_transfer(
+///     "./data".to_string(),
+///     "s3://my-bucket/data/".to_string(),
+///     Some(10),
+///     false,
+///     true,
+///     true,
+///     &config
+/// ).await?;
+///
+/// // Transfer from instance to local
+/// data_transfer::handle_transfer(
+///     "i-123:/mnt/data".to_string(),
+///     "./local_data/".to_string(),
+///     None,
+///     false,
+///     true,
+///     true,
+///     &config
+/// ).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn handle_transfer(
     source: String,
     destination: String,

@@ -1,18 +1,18 @@
 //! Checkpoint management
 //!
-//! Provides functionality for managing training checkpoints.
+//! Provides functionality for managing training checkpoints, including listing,
+//! inspecting, cleaning up, and resuming from checkpoints.
 //!
 //! ## Design Philosophy
 //!
 //! Checkpoints are treated as files on disk. This module provides operations
 //! for listing, inspecting, cleaning up, and resuming from checkpoints.
+//! Metadata parsing (epoch, loss) is left to the training framework.
 //!
 //! ## Checkpoint Format
 //!
 //! Checkpoints are typically PyTorch `.pt` files or similar model serialization
 //! formats. Metadata (epoch, loss) may be embedded in the file or stored separately.
-//! This module focuses on file-level operations; metadata parsing is left to
-//! the training framework.
 //!
 //! ## Operations
 //!
@@ -20,6 +20,32 @@
 //! - **Info**: Display checkpoint metadata (size, modification time, embedded data)
 //! - **Resume**: Run training script with checkpoint path as argument
 //! - **Cleanup**: Remove old checkpoints (keeps last N, removes others)
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::checkpoint;
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! // List checkpoints
+//! checkpoint::handle_command(
+//!     checkpoint::CheckpointCommands::List {
+//!         dir: "./checkpoints".into(),
+//!     },
+//!     "text"
+//! ).await?;
+//!
+//! // Resume from checkpoint
+//! checkpoint::handle_command(
+//!     checkpoint::CheckpointCommands::Resume {
+//!         path: "./checkpoints/epoch_10.pt".into(),
+//!         script: "train.py".into(),
+//!     },
+//!     "text"
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::error::{Result, TrainctlError};
 use chrono::{DateTime, Utc};

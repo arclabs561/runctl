@@ -1,137 +1,44 @@
-# SSM Quick Start Guide
+# SSM Quick Start
 
-## Overview
+AWS Systems Manager (SSM) for secure command execution on EC2 instances without SSH keys.
 
-Systems Manager (SSM) enables secure command execution on EC2 instances without SSH keys. This guide shows how to set up SSM for runctl.
-
-## Quick Setup
-
-### 1. Create IAM Role and Instance Profile
-
-Run the setup script (one-time):
+## Setup
 
 ```bash
+# One-time setup
 ./scripts/setup-ssm-role.sh
-```
 
-This creates:
-- IAM role: `runctl-ssm-role`
-- Instance profile: `runctl-ssm-profile`
-- Attaches `AmazonSSMManagedInstanceCore` policy
-
-### 2. Create Instance with SSM
-
-```bash
+# Create instance with SSM
 runctl aws create t3.micro --iam-instance-profile runctl-ssm-profile
 ```
 
-### 3. Use SSM Features
+## Usage
 
-Once the instance has SSM configured, you can use:
+Commands use SSM automatically when the instance has an IAM profile with SSM permissions:
 
 ```bash
-# Process monitoring (no SSH needed)
 runctl aws processes <instance-id>
-
-# Training execution (uses SSM instead of SSH)
 runctl aws train <instance-id> train.py --sync-code
-
-# All SSM-based commands work automatically
 ```
 
-## Manual Setup
-
-If you prefer to set up manually:
+## Verify
 
 ```bash
-# 1. Create trust policy
-cat > trust-policy.json << 'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": {"Service": "ec2.amazonaws.com"},
-    "Action": "sts:AssumeRole"
-  }]
-}
-EOF
-
-# 2. Create IAM role
-aws iam create-role \
-    --role-name runctl-ssm-role \
-    --assume-role-policy-document file://trust-policy.json
-
-# 3. Attach SSM policy
-aws iam attach-role-policy \
-    --role-name runctl-ssm-role \
-    --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-
-# 4. Create instance profile
-aws iam create-instance-profile --instance-profile-name runctl-ssm-profile
-
-# 5. Add role to profile
-aws iam add-role-to-instance-profile \
-    --instance-profile-name runctl-ssm-profile \
-    --role-name runctl-ssm-role
-```
-
-## Verify Setup
-
-```bash
-# Check instance profile exists
 aws iam get-instance-profile --instance-profile-name runctl-ssm-profile
-
-# Check role has SSM policy
-aws iam list-attached-role-policies --role-name runctl-ssm-role
-
-# Check SSM connectivity (after instance is running)
-aws ssm describe-instance-information \
-    --filters "Key=InstanceIds,Values=i-1234567890abcdef0"
+aws ssm describe-instance-information --filters "Key=InstanceIds,Values=i-xxx"
 ```
-
-## Benefits
-
-- **No SSH keys needed**: More secure, no key management
-- **Automatic**: SSM agent pre-installed on Amazon Linux/Ubuntu AMIs
-- **Audit trail**: All commands logged in CloudTrail
-- **Works through VPN**: No need for public IPs or security group rules
-- **Session Manager**: Can also use AWS Console Session Manager
 
 ## Troubleshooting
 
-### SSM Not Working
+- Check IAM profile attached: `aws ec2 describe-instances --instance-ids i-xxx --query 'Reservations[0].Instances[0].IamInstanceProfile'`
+- Check SSM agent: `sudo systemctl status amazon-ssm-agent` (via SSH)
+- Wait 1-2 minutes after instance start for agent to connect
+- Ensure role has `AmazonSSMManagedInstanceCore` policy
 
-1. **Check IAM profile attached**:
-   ```bash
-   aws ec2 describe-instances --instance-ids i-xxx \
-       --query 'Reservations[0].Instances[0].IamInstanceProfile'
-   ```
+## Notes
 
-2. **Check SSM agent status** (via SSH if available):
-   ```bash
-   sudo systemctl status amazon-ssm-agent
-   ```
-
-3. **Wait for agent**: SSM agent may take 1-2 minutes after instance start
-
-4. **Check permissions**: Ensure role has `AmazonSSMManagedInstanceCore` policy
-
-### Fallback to SSH
-
-If SSM is not available, runctl will:
-- Use SSH if `--key-name` is provided
-- Show helpful error messages with setup instructions
-
-## Current Auth Status
-
-Your current AWS identity:
-- **User**: `admin` (AIDAXOZXBE6RHJ5ZKZG6O)
-- **Account**: 512827140002
-- **Permissions**: Can create IAM roles, EC2 instances, SSM commands
-
-## Next Steps
-
-1. ✅ Run `./scripts/setup-ssm-role.sh` (one-time setup)
-2. ✅ Create instances with `--iam-instance-profile runctl-ssm-profile`
-3. ✅ Use SSM features (processes, training, monitoring)
+- No SSH keys required
+- SSM agent pre-installed on Amazon Linux/Ubuntu AMIs
+- Commands logged in CloudTrail
+- Works through VPN (no public IPs required)
 

@@ -42,21 +42,21 @@ TRAIN_OPS_E2E=1 cargo test --test aws_resources_test --features e2e
 
 ## Adding Features
 
-1. **Create feature branch**: `git checkout -b feature/my-feature`
-2. **Write tests first**: Add tests in appropriate test file
-3. **Implement feature**: Add code in `src/`
-4. **Update docs**: Update README.md and EXAMPLES.md
-5. **Run tests**: Ensure all tests pass
-6. **Submit PR**: Create pull request with description
+1. Create feature branch: `git checkout -b feature/my-feature`
+2. Write tests first: Add tests in appropriate test file
+3. Implement feature: Add code in `src/`
+4. Update docs: Update README.md and EXAMPLES.md
+5. Run tests: Ensure all tests pass
+6. Submit PR: Create pull request with description
 
 ## AWS Testing
 
 When testing with AWS:
-- Use **dry-run mode** when possible
-- **Tag resources** with `runctl-test` for identification
-- **Clean up** all resources after tests
-- Use **test accounts** when available
-- Respect **rate limits** and quotas
+- Use dry-run mode when possible
+- Tag resources with `runctl-test` for identification
+- Clean up all resources after tests
+- Use test accounts when available
+- Respect rate limits and quotas
 
 ## Documentation
 

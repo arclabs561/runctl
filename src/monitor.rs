@@ -1,7 +1,37 @@
 //! Training monitoring
 //!
 //! Provides log file monitoring and checkpoint progress tracking.
-//! Supports following log files in real-time and detecting checkpoint saves.
+//! Supports following log files in real-time (like `tail -f`) and detecting
+//! checkpoint saves in real-time.
+//!
+//! ## Features
+//!
+//! - **Log file monitoring**: Watch log files for new entries in real-time
+//! - **Checkpoint detection**: Monitor checkpoint directories for new `.pt` files
+//! - **Follow mode**: Continuous updates (similar to `tail -f`)
+//! - **One-time mode**: Display last N lines and exit
+//!
+//! ## Usage
+//!
+//! ```rust,no_run
+//! use runctl::monitor;
+//!
+//! # async fn example() -> runctl::error::Result<()> {
+//! // Monitor a log file in follow mode
+//! monitor::monitor(Some("training.log".into()), None, true).await?;
+//!
+//! // Monitor checkpoints
+//! monitor::monitor(None, Some("./checkpoints".into()), false).await?;
+//!
+//! // Monitor both simultaneously
+//! monitor::monitor(
+//!     Some("training.log".into()),
+//!     Some("./checkpoints".into()),
+//!     true
+//! ).await?;
+//! # Ok(())
+//! # }
+//! ```
 
 use crate::error::{Result, TrainctlError};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
@@ -10,6 +40,41 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use tokio::time::{sleep, Duration};
 
+/// Monitor training logs and/or checkpoints
+///
+/// Monitors log files and checkpoint directories for updates. Can operate in
+/// two modes:
+///
+/// - **Follow mode** (`follow = true`): Continuously watches for new entries
+///   and displays them in real-time (similar to `tail -f`)
+/// - **One-time mode** (`follow = false`): Displays the last 20 lines of the
+///   log file and current checkpoints, then exits
+///
+/// # Arguments
+///
+/// * `log` - Optional path to log file to monitor
+/// * `checkpoint` - Optional path to checkpoint directory to monitor
+/// * `follow` - If `true`, continuously monitor for updates; if `false`, display once and exit
+///
+/// # Errors
+///
+/// Returns `TrainctlError::ResourceNotFound` if a specified log file doesn't
+/// exist and cannot be created within 60 seconds.
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use runctl::monitor;
+///
+/// # async fn example() -> runctl::error::Result<()> {
+/// // Follow a log file in real-time
+/// monitor::monitor(Some("training.log".into()), None, true).await?;
+///
+/// // Check current checkpoints once
+/// monitor::monitor(None, Some("./checkpoints".into()), false).await?;
+/// # Ok(())
+/// # }
+/// ```
 pub async fn monitor(
     log: Option<PathBuf>,
     checkpoint: Option<PathBuf>,

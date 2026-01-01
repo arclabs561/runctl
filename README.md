@@ -1,291 +1,139 @@
 # runctl
 
-Modern training orchestration CLI for ML workloads. Supports local, RunPod, and AWS EC2 training with unified checkpoint management and monitoring.
+ML training orchestration CLI for local, RunPod, and AWS EC2 with unified checkpoint management.
 
-## Features
+## Prerequisites
 
-- **AWS EC2** (Primary): Full-featured, well-tested, production-ready
-- **Local training**: Quick local development
-- **RunPod** (Experimental): GPU pods (less tested)
-- **Checkpoint management**: List, inspect, resume from checkpoints
-- **Real-time monitoring**: Interactive `top` command with ratatui dashboard
-- **Native S3 operations**: Parallel uploads/downloads without external tools
-- **EBS optimization**: Auto-configured IOPS/throughput for data loading
-- **SSM integration**: Secure command execution without SSH keys
-- **Cost optimization**: Spot instances, efficient resource usage
-- **Auto-resume**: Automatically resume training after spot interruption (see [docs/AUTO_RESUME.md](docs/AUTO_RESUME.md))
-- **Modern tooling**: Rust CLI with `uv`, `just` integration
+- Rust 1.70+
+- AWS credentials configured (`aws configure` or IAM role)
+- SSM agent enabled on EC2 (default on Amazon Linux 2)
 
 ## Installation
 
 ```bash
-# Using cargo
 cargo install --path .
-
-# Or build from source
+# or
 cargo build --release
 ```
 
-## Quick Start (AWS EC2)
+## Quick Start
 
 ```bash
 # Initialize config
 runctl init
 
-# Create spot instance (waits until ready)
-INSTANCE_ID=$(runctl aws create --spot --instance-type g4dn.xlarge --wait --output instance-id)
+# Create instance (use t3.micro for testing, ~$0.01/hr)
+INSTANCE_ID=$(runctl aws create --spot --instance-type t3.micro --wait --output instance-id)
 
-# Train with automatic code sync (waits until complete)
+# Train (waits until complete)
 runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code --wait
 
-# Monitor training (optional, if not using --wait)
-runctl aws monitor $INSTANCE_ID --follow
-
-# Check resource usage
-runctl aws processes $INSTANCE_ID --watch
-
-# Stop when done (preserves data)
-runctl aws stop $INSTANCE_ID
-
-# Restart a stopped instance
-runctl aws start $INSTANCE_ID --wait
+# Or use workflow command
+runctl workflow train training/train_mnist.py --instance-type t3.micro --spot
 ```
 
-### Even Simpler: Use Workflow Command
+Examples: `./examples/complete_workflow.sh` ([examples/README.md](examples/README.md))
+
+## Commands
+
+### AWS EC2
 
 ```bash
-# Complete workflow in one command
-runctl workflow train training/train_mnist.py \
-    --instance-type g4dn.xlarge \
-    --spot
+runctl aws create [--instance-type TYPE] [--spot] [--wait] [--output FORMAT]
+runctl aws train <instance-id> <script> [--sync-code] [--wait] [--data-s3 PATH] [--output-s3 PATH]
+runctl aws monitor <instance-id> [--follow]
+runctl aws processes <instance-id> [--watch]
+runctl aws start|stop|terminate <instance-id>
+runctl aws status|wait <instance-id>
 ```
 
-### Try the Examples
-
-We provide ready-to-use example scripts:
+### Local
 
 ```bash
-# Complete workflow with error handling
-./examples/complete_workflow.sh
-
-# Quick test
-./examples/quick_test.sh
-
-# Workflow command example
-./examples/workflow_train_example.sh
+runctl local <script> [args...]
 ```
 
-See [examples/README.md](examples/README.md) for details.
+Uses `uv` for Python scripts if available, otherwise falls back to `python3`.
 
-### Example Training Script
-
-We include a working MNIST training example in `training/train_mnist.py`:
+### RunPod
 
 ```bash
-# Test locally (requires PyTorch: pip install torch torchvision)
-python training/train_mnist.py --epochs 5
-
-# Or use runctl local
-runctl local training/train_mnist.py --epochs 5
-
-# Train on AWS
-runctl aws train $INSTANCE_ID training/train_mnist.py --sync-code --epochs 10
+runctl runpod create [--gpu TYPE] [--disk GB]
+runctl runpod train <pod-id> <script>
+runctl runpod monitor <pod-id> [--follow]
+runctl runpod download <pod-id> <remote> <local>
 ```
 
-See [training/README.md](training/README.md) for full documentation.
-
-## Testing with Temporary Credentials
-
-For secure testing, use IAM roles with temporary credentials instead of long-term access keys:
+### Resources
 
 ```bash
-# Setup test environment (one-time)
-./scripts/setup-test-role.sh
-
-# Verify setup is correct
-./scripts/verify-setup.sh
-
-# Run comprehensive test suite
-./scripts/run-all-tests.sh
-
-# Or test individually
-source scripts/assume-test-role.sh
-./scripts/test-auth.sh                    # Basic authentication
-./scripts/test-security-boundaries.sh      # Security verification
-./scripts/test-runctl-integration.sh     # runctl integration
+runctl resources list [--platform aws|runpod|local] [--detailed]
+runctl resources summary
+runctl resources insights
+runctl resources cleanup [--dry-run] [--force]
 ```
 
-See [docs/AWS_TESTING_SETUP.md](docs/AWS_TESTING_SETUP.md) for detailed setup instructions.
+### S3
+
+```bash
+runctl s3 upload <local> <s3://bucket/key> [--recursive]
+runctl s3 download <s3://bucket/key> <local> [--recursive]
+runctl s3 sync <source> <dest> [--direction up|down]
+runctl s3 list <s3://bucket/prefix> [--recursive]
+runctl s3 cleanup <s3://bucket/prefix> --keep-last-n <N> [--dry-run]
+```
+
+### Monitoring & Checkpoints
+
+```bash
+runctl monitor --log <file> [--follow]
+runctl monitor --checkpoint <dir> [--follow]
+runctl checkpoint list <dir>
+runctl checkpoint info <path>
+runctl checkpoint resume <path> <script>
+runctl top
+```
+
+### Workflow
+
+```bash
+runctl workflow train <script> [--instance-type TYPE] [--spot]
+```
+
+### Docker
+
+```bash
+runctl docker build [--push] [--repository NAME]
+runctl docker train <image> <script>
+```
 
 ## Configuration
 
 Create `.runctl.toml` or use `runctl init`:
 
 ```toml
-[runpod]
-api_key = "your-api-key"  # Or read from ~/.cursor/mcp.json
-default_gpu = "NVIDIA GeForce RTX 4080 SUPER"
-default_disk_gb = 30
-
 [aws]
 region = "us-east-1"
 default_instance_type = "t3.medium"
 use_spot = true
 s3_bucket = "your-bucket"
 
+[runpod]
+api_key = "your-key"  # or from ~/.cursor/mcp.json
+default_gpu = "NVIDIA GeForce RTX 4080 SUPER"
+
 [checkpoint]
 dir = "checkpoints"
 save_interval = 5
-keep_last_n = 10
-
-[monitoring]
-log_dir = "logs"
-update_interval_secs = 10
 ```
-
-## Commands
-
-### Local Training
-
-```bash
-runctl local <script> [args...]
-```
-
-Runs training script locally. Automatically uses `uv` for Python scripts if available.
-
-### RunPod
-
-```bash
-# Create pod
-runctl runpod create [--name NAME] [--gpu GPU_TYPE] [--disk GB]
-
-# Train on pod
-runctl runpod train <pod-id> <script> [--background]
-
-# Monitor pod
-runctl runpod monitor <pod-id> [--follow]
-
-# Download results
-runctl runpod download <pod-id> <remote> <local>
-```
-
-### AWS EC2
-
-```bash
-# Create instance
-runctl aws create [--instance-type TYPE] [--spot] [--spot-max-price PRICE]
-
-# Train on instance
-runctl aws train <instance-id> <script> [--data-s3 S3_PATH] [--output-s3 S3_PATH]
-
-# Monitor instance
-runctl aws monitor <instance-id> [--follow]
-
-# Terminate instance
-runctl aws terminate <instance-id>
-```
-
-### Monitoring
-
-```bash
-# Monitor log file
-runctl monitor --log training.log [--follow]
-
-# Monitor checkpoints
-runctl monitor --checkpoint checkpoints/ [--follow]
-```
-
-### Checkpoints
-
-```bash
-# List checkpoints
-runctl checkpoint list <dir>
-
-# Show checkpoint info
-runctl checkpoint info <path>
-
-# Resume from checkpoint
-runctl checkpoint resume <path> <script>
-```
-
-## Modern Scripting Helpers
-
-### Using `just`
-
-```bash
-# Build
-just build
-
-# Train locally
-just train-local training/train.py
-
-# RunPod workflow
-just runpod-create
-just runpod-train <pod-id> training/train.py
-
-# Monitor
-just monitor training.log
-```
-
-### Using `uv`
-
-The CLI automatically uses `uv` for Python scripts:
-
-```bash
-# This automatically uses `uv run` if uv is available
-runctl local training/train.py
-```
-
-## Examples
-
-### Complete AWS Training Workflow
-
-```bash
-# 1. Create spot instance with data volume
-INSTANCE_ID=$(runctl aws create \
-    --spot \
-    --instance-type g4dn.xlarge \
-    --data-volume-size 100 \
-    | grep -o 'i-[a-z0-9]*')
-
-# 2. Train with code sync and S3 data
-runctl aws train $INSTANCE_ID training/train.py \
-    --sync-code \
-    --data-s3 s3://bucket/datasets/ \
-    --output-s3 s3://bucket/checkpoints/
-
-# 3. Monitor in real-time
-runctl aws monitor $INSTANCE_ID --follow
-
-# 4. Check resource usage
-runctl aws processes $INSTANCE_ID --watch
-
-# 5. Stop (preserves data) or terminate
-runctl aws stop $INSTANCE_ID
-```
-
-## Architecture
-
-- **Rust CLI**: Fast, reliable, cross-platform
-- **Async runtime**: Tokio for concurrent operations
-- **AWS SDK**: Native AWS integration
-- **Modular design**: Separate modules for each platform
-- **Error handling**: Custom `TrainctlError` types in library, `anyhow` at CLI boundary
 
 ## Development
 
 ```bash
-# Run tests
-just test
-
-# Lint
-just lint
-
-# Format
-just fmt
-
-# Dev build
-just dev
+just test    # Run tests
+just lint    # Lint
+just fmt     # Format
+just dev     # Dev build
 ```
 
 ## License

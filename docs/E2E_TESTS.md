@@ -2,7 +2,7 @@
 
 ## Overview
 
-Yes, we have E2E tests! They're located in `tests/e2e/` and test real interactions with AWS resources and system components.
+E2E tests are located in `tests/e2e/` and test interactions with AWS resources and system components.
 
 ## Test Structure
 
@@ -20,7 +20,7 @@ tests/e2e/
 
 ### Prerequisites
 
-1. **AWS Credentials**: Configure AWS credentials
+1. AWS Credentials: Configure AWS credentials
    ```bash
    aws configure
    # Or set environment variables:
@@ -28,7 +28,7 @@ tests/e2e/
    export AWS_SECRET_ACCESS_KEY=...
    ```
 
-2. **Permissions**: Your AWS user needs:
+2. Permissions: Your AWS user needs:
    - EC2: `DescribeInstances`, `CreateVolume`, `AttachVolume`, `TerminateInstances`
    - S3: `ListBucket`, `GetObject`, `PutObject`
    - SSM: `SendCommand`, `GetCommandInvocation`
@@ -52,11 +52,11 @@ TRAINCTL_E2E=1 cargo test --features e2e
 ## Test Safety Features
 
 All E2E tests:
-- ✅ **Require explicit opt-in** via `TRAINCTL_E2E=1` environment variable
-- ✅ **Use dry-run mode** when possible
-- ✅ **Clean up resources** they create
-- ✅ **Are marked with `#[ignore]`** by default
-- ✅ **Check for AWS credentials** before running
+- Require explicit opt-in via `TRAINCTL_E2E=1` environment variable
+- Use dry-run mode when possible
+- Clean up resources they create
+- Are marked with `#[ignore]` by default
+- Check for AWS credentials before running
 
 ## New E2E Tests Added
 
@@ -96,12 +96,12 @@ For CI/CD pipelines:
 
 ## Best Practices
 
-1. **Always use dry-run first** in tests
-2. **Tag resources** created by tests (`runctl:test=true`)
-3. **Clean up in test teardown** (even on failure)
-4. **Use temporary resources** when possible
-5. **Verify cleanup** in assertions
-6. **Time out tests** after reasonable duration
+1. Always use dry-run first in tests
+2. Tag resources created by tests (`runctl:test=true`)
+3. Clean up in test teardown (even on failure)
+4. Use temporary resources when possible
+5. Verify cleanup in assertions
+6. Time out tests after reasonable duration
 
 ## Test Coverage
 
@@ -124,14 +124,14 @@ For CI/CD pipelines:
 ## Troubleshooting
 
 ### Tests skip automatically
-- **Solution**: Set `TRAINCTL_E2E=1` environment variable
+- Solution: Set `TRAINCTL_E2E=1` environment variable
 
 ### AWS permission errors
-- **Solution**: Check IAM permissions for your AWS user
+- Solution: Check IAM permissions for your AWS user
 
 ### Tests create resources but don't clean up
-- **Solution**: Check test teardown logic, ensure cleanup runs even on failure
+- Solution: Check test teardown logic, ensure cleanup runs even on failure
 
 ### Tests timeout
-- **Solution**: Increase timeout or check network connectivity
+- Solution: Increase timeout or check network connectivity
 
