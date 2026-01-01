@@ -35,10 +35,9 @@ async fn execute_ssm_command(
     use aws_sdk_ssm::types::CommandInvocationStatus;
 
     let command_vec = vec![command.to_string()];
-    let instance_id_vec = vec![instance_id.to_string()];
     let response = ssm_client
         .send_command()
-        .instance_ids(instance_id_vec)
+        .instance_ids(instance_id)
         .document_name("AWS-RunShellScript")
         .parameters("commands", command_vec)
         .send()
