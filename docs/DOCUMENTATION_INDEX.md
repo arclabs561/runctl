@@ -1,7 +1,9 @@
 # Documentation Index
 
 **Last Updated**: 2025-01-03  
-**Status**: ✅ Organized and up to date
+**Status**: ✅ Organized and up to date  
+**Active Docs**: ~30 core documentation files  
+**Archived**: ~180 historical files in `docs/archive/`
 
 ## Quick Navigation
 

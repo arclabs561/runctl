@@ -8,6 +8,9 @@ This directory contains historical documentation that has been organized for ref
 - **testing/**: Historical E2E testing results and analysis
 - **reviews/**: Historical code reviews and analysis
 - **status/**: Historical status and completion reports
+- **features/**: Historical feature-specific documentation
+- **guides/**: Historical user guides and examples
+- **analysis/**: Historical architectural and design analysis
 
 ## Current Documentation
 
@@ -26,3 +29,9 @@ These documents were useful during development but have been:
 - Completed and no longer actively maintained
 
 These files are kept for historical reference but should not be updated.
+
+## Statistics
+
+- **Total archived files**: ~180 markdown files
+- **Active documentation**: ~30 core files
+- **Last organization**: 2025-01-03
