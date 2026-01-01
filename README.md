@@ -13,6 +13,7 @@ Modern training orchestration CLI for ML workloads. Supports local, RunPod, and 
 - **EBS optimization**: Auto-configured IOPS/throughput for data loading
 - **SSM integration**: Secure command execution without SSH keys
 - **Cost optimization**: Spot instances, efficient resource usage
+- **Auto-resume**: Automatically resume training after spot interruption (see [docs/AUTO_RESUME.md](docs/AUTO_RESUME.md))
 - **Modern tooling**: Rust CLI with `uv`, `just` integration
 
 ## Installation
