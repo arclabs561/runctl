@@ -13,7 +13,7 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Check if E2E tests should run
 fn should_run_e2e() -> bool {
