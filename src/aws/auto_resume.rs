@@ -146,6 +146,7 @@ pub async fn prepare_auto_resume(
 ///
 /// This is called when `runctl aws auto-resume` is invoked.
 /// It creates a new instance and resumes training from the checkpoint.
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_auto_resume_command(
     original_instance_id: String,
     script: PathBuf,

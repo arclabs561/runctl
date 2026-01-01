@@ -112,7 +112,6 @@ fn collect_files_to_sync(project_root: &Path, include_patterns: &[String]) -> Re
 /// 3. Use SSM to download and extract on instance
 /// 4. Clean up S3 temporary file
 #[allow(clippy::too_many_arguments)] // TODO: Refactor to use a struct for parameters
-#[allow(clippy::too_many_arguments)]
 pub async fn sync_code_via_ssm(
     project_root: &Path,
     instance_id: &str,
