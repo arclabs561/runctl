@@ -9,6 +9,7 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
 use aws_sdk_ssm::Client as SsmClient;
+use aws_sdk_ssm::types::CommandInvocationStatus;
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -83,18 +84,20 @@ async fn execute_ssm_command(
 
         let output = ssm_client
             .get_command_invocation()
-            .command_id(&command_id)
+            .command_id(command_id)
             .instance_id(instance_id)
             .send()
             .await?;
 
-        let status = output.status().and_then(|s| s.as_str());
+        let status = output.status();
 
         match status {
-            Some("Success") => {
+            Some(CommandInvocationStatus::Success) => {
                 return Ok(output.standard_output_content().unwrap_or("").to_string());
             }
-            Some("Failed") | Some("Cancelled") | Some("TimedOut") => {
+            Some(CommandInvocationStatus::Failed)
+            | Some(CommandInvocationStatus::Cancelled)
+            | Some(CommandInvocationStatus::TimedOut) => {
                 let error = output.standard_error_content().unwrap_or("");
                 return Err(format!("SSM command failed: {}", error).into());
             }
