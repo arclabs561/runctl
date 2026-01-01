@@ -246,6 +246,7 @@ fi
 /// 1. Save checkpoint
 /// 2. Upload checkpoint to S3 (if configured)
 /// 3. Stop training process gracefully
+#[allow(clippy::too_many_arguments)]
 async fn handle_spot_interruption(
     instance_id: &str,
     checkpoint_dir: &str,
