@@ -8,8 +8,8 @@
 
 use aws_config::BehaviorVersion;
 use aws_sdk_ec2::Client as Ec2Client;
-use aws_sdk_ssm::Client as SsmClient;
 use aws_sdk_ssm::types::CommandInvocationStatus;
+use aws_sdk_ssm::Client as SsmClient;
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
